@@ -580,6 +580,7 @@ class AssignmentService:
                 "Choose either an assessment cycle or a source cycle preview.",
                 code="assessment_cycle_scope_conflict",
             )
+        self._icare_hierarchy_cache.clear()
         cycle = await self._optional_assessment_cycle(
             company_id,
             project_id,
@@ -858,6 +859,7 @@ class AssignmentService:
             payload.project_id,
             allow_archived=False,
         )
+        self._icare_hierarchy_cache.clear()
         cycle = await self._cycle_for_assignment_write(
             company_id,
             payload.project_id,
@@ -1242,12 +1244,41 @@ class AssignmentService:
         )
         if existing:
             actual = {membership.participant_profile_id: membership.role for membership in existing}
-            if actual != expected:
+            removed_members = set(actual.keys()) - set(expected.keys())
+            if removed_members:
                 raise DomainError(
-                    "The team snapshot for this cycle no longer matches the assignment plan.",
-                    code="assessment_cycle_team_snapshot_conflict",
+                    "Cannot remove team members from an assessment cycle team snapshot.",
+                    code="assessment_cycle_team_member_removed",
                 )
+            for member_id, actual_role in actual.items():
+                if expected[member_id] != actual_role:
+                    raise DomainError(
+                        "Cannot change team member roles in an assessment cycle team snapshot.",
+                        code="assessment_cycle_team_role_changed",
+                    )
+            added_member_ids = [m_id for m_id in member_ids if m_id not in actual]
+            if not added_member_ids:
+                return
+            for member_id in added_member_ids:
+                await self._require_company_participant(cycle.company_id, member_id)
+                await self._require_project_participant(
+                    cycle.company_id,
+                    cycle.project_id,
+                    member_id,
+                )
+            await self.assignment_repository.add_cycle_team_memberships(
+                [
+                    AssessmentCycleTeamMembership(
+                        assessment_cycle_id=cycle.id,
+                        team_id=team_id,
+                        participant_profile_id=member_id,
+                        role=expected[member_id],
+                    )
+                    for member_id in added_member_ids
+                ]
+            )
             return
+
         for member_id in member_ids:
             await self._require_company_participant(cycle.company_id, member_id)
             await self._require_project_participant(
@@ -1276,14 +1307,57 @@ class AssignmentService:
             cycle.id,
             team_id,
         )
-        if existing_snapshot:
-            return
         memberships = await self.assignment_repository.list_team_memberships(team_id)
         if not memberships:
             raise DomainError(
                 "The team must include at least one participant.",
                 code="assessment_cycle_team_members_required",
             )
+        expected = {
+            membership.participant_profile_id: membership.role
+            for membership in memberships
+        }
+        if existing_snapshot:
+            actual = {
+                membership.participant_profile_id: membership.role
+                for membership in existing_snapshot
+            }
+            removed_members = set(actual.keys()) - set(expected.keys())
+            if removed_members:
+                raise DomainError(
+                    "Cannot remove team members from an assessment cycle team snapshot.",
+                    code="assessment_cycle_team_member_removed",
+                )
+            for member_id, actual_role in actual.items():
+                if expected[member_id] != actual_role:
+                    raise DomainError(
+                        "Cannot change team member roles in an assessment cycle team snapshot.",
+                        code="assessment_cycle_team_role_changed",
+                    )
+            added_members = [
+                m for m in memberships if m.participant_profile_id not in actual
+            ]
+            if not added_members:
+                return
+            for membership in added_members:
+                await self._require_project_participant(
+                    cycle.company_id,
+                    cycle.project_id,
+                    membership.participant_profile_id,
+                )
+            await self.assignment_repository.add_cycle_team_memberships(
+                [
+                    AssessmentCycleTeamMembership(
+                        assessment_cycle_id=cycle.id,
+                        team_id=team_id,
+                        participant_profile_id=membership.participant_profile_id,
+                        role=expected[membership.participant_profile_id],
+                    )
+                    for membership in added_members
+                ]
+            )
+            return
+
         for membership in memberships:
             await self._require_project_participant(
                 cycle.company_id,
@@ -1312,10 +1386,9 @@ class AssignmentService:
             CompanyMembershipRole.trainer,
         }:
             return
-
         raise DomainError(
-            "You do not have access to manage assignments for this company.",
-            code="company_access_denied",
+            "Only company managers can perform this action.",
+            code="company_manager_required",
         )
 
     async def _require_company_participant(
@@ -1484,7 +1557,7 @@ class AssignmentService:
             for_update=True,
         )
         if cycle is not None:
-            self._require_draft_cycle(cycle)
+            self._require_open_cycle_for_assignment_write(cycle)
         return cycle
 
     async def _require_assessment_cycle(
@@ -1513,6 +1586,19 @@ class AssignmentService:
                 code="assessment_cycle_not_found",
             )
         return cycle
+
+    @staticmethod
+    def _require_open_cycle_for_assignment_write(cycle: AssessmentCycle) -> None:
+        if cycle.status == AssessmentCycleStatus.closed:
+            raise DomainError(
+                "Assessment cycle is closed and cannot be changed.",
+                code="assessment_cycle_closed",
+            )
+        if cycle.status not in (AssessmentCycleStatus.draft, AssessmentCycleStatus.active):
+            raise DomainError(
+                "Only an open assessment cycle can accept assignment changes.",
+                code="assessment_cycle_not_open",
+            )
 
     @staticmethod
     def _require_draft_cycle(cycle: AssessmentCycle) -> None:

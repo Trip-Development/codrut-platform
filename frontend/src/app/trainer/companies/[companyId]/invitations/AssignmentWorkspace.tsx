@@ -90,6 +90,42 @@ const questionnaireLabels: Record<string, string> = {
   pcm_base: "Baza și faza PCM",
 };
 
+function formatPlanErrorMessage(error: unknown, fallback = "Asignările nu au putut fi salvate."): string {
+  if (!error) return fallback;
+  const raw = error instanceof Error ? error.message : String(error);
+  if (raw.includes("assessment_cycle_team_member_removed") || raw.includes("Cannot remove team members")) {
+    return "Nu poți elimina membri dintr-o echipă a unui ciclu de evaluare deja inițiat.";
+  }
+  if (raw.includes("assessment_cycle_team_role_changed") || raw.includes("Cannot change team member roles")) {
+    return "Nu poți modifica rolul membrilor sau liderul echipei într-un ciclu de evaluare deja inițiat.";
+  }
+  if (raw.includes("assessment_cycle_team_snapshot_conflict") || raw.includes("team snapshot for this cycle no longer matches")) {
+    return "Componența echipei nu se potrivește cu instantaneul salvat pentru acest ciclu.";
+  }
+  if (raw.includes("assessment_cycle_team_members_required") || raw.includes("must include at least one participant")) {
+    return "Echipa evaluată trebuie să includă cel puțin un participant.";
+  }
+  if (raw.includes("assessment_cycle_closed") || raw.includes("cycle is closed")) {
+    return "Ciclul de evaluare este închis și nu mai permite modificarea asignărilor.";
+  }
+  if (raw.includes("assessment_cycle_not_draft") || raw.includes("Only a draft assessment cycle")) {
+    return "Doar un ciclu în stadiul de draft poate fi modificat astfel.";
+  }
+  if (raw.includes("assessment_cycle_not_open")) {
+    return "Ciclul de evaluare nu este deschis pentru modificări.";
+  }
+  if (raw.includes("assessment_cycle_open_exists") || raw.includes("Close the current assessment cycle")) {
+    return "Există deja un ciclu de evaluare deschis în acest proiect.";
+  }
+  if (raw.includes("assessment_cycle_icare_self_target_not_leadership") || raw.includes("Self-evaluation iCARE is available only")) {
+    return "Autoevaluarea iCARE este disponibilă doar pentru echipa de direcție.";
+  }
+  if (raw.includes("icare_cohort_unavailable") || raw.includes("feedback relationship is not part of this project")) {
+    return "Relația de evaluare iCARE nu face parte din organigrama acestui proiect.";
+  }
+  return raw;
+}
+
 export function AssignmentWorkspace({
   companyId,
   projects,
@@ -145,6 +181,7 @@ export function AssignmentWorkspace({
   const [planLoading, setPlanLoading] = useState(false);
   const [planSaving, setPlanSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [planErrorMessage, setPlanErrorMessage] = useState<string | null>(null);
   const [assignmentModalMessage, setAssignmentModalMessage] = useState<string | null>(null);
   const [showAdvancedAssignmentModal, setShowAdvancedAssignmentModal] = useState(
     get("modal") === "advanced-assignment",
@@ -612,7 +649,7 @@ export function AssignmentWorkspace({
       setAdvancedAssignmentModalOpen(false);
     } catch (error) {
       setAssignmentModalMessage(
-        error instanceof Error ? error.message : "Asignarea nu a putut fi creată.",
+        formatPlanErrorMessage(error, "Asignarea nu a putut fi creată."),
       );
     } finally {
       assignmentSavingRef.current = false;
@@ -623,16 +660,17 @@ export function AssignmentWorkspace({
   async function handleGeneratePlan() {
     if (planLoadingRef.current || planSavingRef.current) return;
     if (!canUseProjectActions || !cycleScopeReady || !selectedCycleId) {
-      setMessage("Evaluarea selectată nu este încă disponibilă.");
+      setPlanErrorMessage("Evaluarea selectată nu este încă disponibilă.");
       return;
     }
     if (!cycleIsEditable) {
-      setMessage("Evaluările închise sunt disponibile doar pentru consultare.");
+      setPlanErrorMessage("Evaluările închise sunt disponibile doar pentru consultare.");
       return;
     }
 
     planLoadingRef.current = true;
     setPlanLoading(true);
+    setPlanErrorMessage(null);
     setMessage(null);
     try {
       const generated = await getCompanyDefaultAssignmentPlan(
@@ -657,7 +695,7 @@ export function AssignmentWorkspace({
           : "Planul nu conține asignări pentru structura curentă.",
       );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Planul nu a putut fi generat.");
+      setPlanErrorMessage(formatPlanErrorMessage(error, "Planul nu a putut fi generat."));
     } finally {
       planLoadingRef.current = false;
       setPlanLoading(false);
@@ -668,10 +706,11 @@ export function AssignmentWorkspace({
     if (!canSavePlan || planSavingRef.current || planLoadingRef.current) return;
     planSavingRef.current = true;
     setPlanSaving(true);
+    setPlanErrorMessage(null);
     setMessage(null);
     try {
       if (!selectedCycleId || !cycleScopeReady) {
-        setMessage("Evaluarea selectată nu este încă disponibilă.");
+        setPlanErrorMessage("Evaluarea selectată nu este încă disponibilă.");
         return;
       }
       const result = await saveCompanyDefaultAssignmentPlan(
@@ -709,7 +748,7 @@ export function AssignmentWorkspace({
       setSelectedPlanKeys(new Set());
       setMessage(`${result.created_count} create, ${result.existing_count} deja existente.`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Asignările nu au putut fi salvate.");
+      setPlanErrorMessage(formatPlanErrorMessage(error, "Asignările nu au putut fi salvate."));
     } finally {
       planSavingRef.current = false;
       setPlanSaving(false);
@@ -832,6 +871,12 @@ export function AssignmentWorkspace({
             ) : null}
           </div>
         </header>
+
+        {planErrorMessage ? (
+          <InlineFeedback tone="danger" className="m-4 md:m-5">
+            {planErrorMessage}
+          </InlineFeedback>
+        ) : null}
 
         {questionnaireMessage ? (
           <InlineFeedback tone="danger" className="m-4 md:m-5">
