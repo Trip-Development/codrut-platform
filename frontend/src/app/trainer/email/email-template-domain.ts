@@ -66,6 +66,21 @@ const CAMPAIGN_PLACEHOLDERS = new Set([
   "{video_url}",
 ]);
 
+const TRANSACTIONAL_PLACEHOLDERS = new Set([
+  "{participant_name}",
+  "{trainer_name}",
+  "{company_name}",
+  "{task_count}",
+  "{action_url}",
+  "{first_name}",
+  "{last_name}",
+  "{email}",
+  "{project}",
+  "{link_securizat}",
+  "{estimare_timp}",
+  "{sarcini_ramase}",
+]);
+
 const REQUIRED_TEMPLATE_PLACEHOLDERS: Record<string, string[]> = {
   account_setup: ["{participant_name}", "{trainer_name}", "{company_name}", "{action_url}"],
   assignment_bundle: ["{participant_name}", "{company_name}", "{task_count}", "{action_url}"],
@@ -99,6 +114,19 @@ export function emailTemplateDraftValidation({
     const unsupported = placeholders.filter((placeholder) => !CAMPAIGN_PLACEHOLDERS.has(placeholder));
     if (unsupported.length > 0) {
       return `Codrut nu recunoaște ${unsupported.join(", ")} în emailurile de campanie. Folosește etichetele afișate pentru acest șablon.`;
+    }
+  }
+
+  if (lane === "transactional") {
+    if (placeholders.includes("{due_date}")) {
+      return "Ai scris {due_date}, iar aplicația nu poate completa asta. Scrie data direct în text, ca text obișnuit.";
+    }
+    if (placeholders.includes("{sender_name}")) {
+      return "Ai scris {sender_name}. Folosește {trainer_name} pentru numele trainerului sau scrie numele direct în text.";
+    }
+    const unsupported = placeholders.filter((placeholder) => !TRANSACTIONAL_PLACEHOLDERS.has(placeholder));
+    if (unsupported.length > 0) {
+      return `Ai scris ${unsupported.join(", ")}, iar aplicația nu poate completa asta. Folosește variabilele afișate sau scrie textul direct.`;
     }
   }
 

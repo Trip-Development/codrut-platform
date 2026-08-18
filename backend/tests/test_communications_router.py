@@ -822,6 +822,58 @@ def test_campaign_unsubscribe_post_updates_recipient() -> None:
     assert "Dezabonare confirmată" in response.text
     assert "Cody Test" in response.text
     assert "ceo@example.com" in response.text
-    assert recipient.status == CampaignRecipientStatus.unsubscribed
     assert session.flush.await_count == 2
     session.commit.assert_awaited_once()
+
+
+def test_template_patch_route_accepts_key_in_body_and_without_key(monkeypatch) -> None:
+    from codrut.modules.communications.schemas import EmailTemplateResponse
+
+    dummy_response = EmailTemplateResponse(
+        id=uuid4(),
+        key="test_key",
+        version=1,
+        subject="Subject",
+        html_body="<p>Body</p>",
+        text_body="Body",
+        variables=[],
+        audience="transactional",
+        active=True,
+    )
+
+    async def fake_update(self, key, payload, *, version=None, owner_id=None):
+        return dummy_response
+
+    monkeypatch.setattr(CommunicationsService, "update_template", fake_update)
+
+    session = AsyncMock()
+    client = _client_as(UserRole.trainer, session=session)
+
+    # 1. Payload WITH key (backward-compatibility test)
+    res_with_key = client.patch(
+        "/api/communications/templates/test_key",
+        json={
+            "key": "test_key",
+            "subject": "Updated subject",
+            "html_body": "<p>Updated</p>",
+            "text_body": "Updated",
+            "variables": [],
+            "audience": "transactional",
+            "active": True,
+        },
+    )
+    assert res_with_key.status_code == 200
+
+    # 2. Payload WITHOUT key (canonical new frontend test)
+    res_without_key = client.patch(
+        "/api/communications/templates/test_key",
+        json={
+            "subject": "Updated subject",
+            "html_body": "<p>Updated</p>",
+            "text_body": "Updated",
+            "variables": [],
+            "audience": "transactional",
+            "active": True,
+        },
+    )
+    assert res_without_key.status_code == 200

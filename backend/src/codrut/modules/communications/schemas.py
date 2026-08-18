@@ -76,6 +76,7 @@ class EmailTemplateCreateRequest(StrictRequestModel):
 
 
 class EmailTemplateUpdateRequest(StrictRequestModel):
+    key: str | None = Field(default=None, min_length=1, max_length=120)
     subject: str | None = Field(default=None, min_length=1, max_length=255)
     html_body: str | None = Field(default=None, min_length=1)
     text_body: str | None = Field(default=None, min_length=1)

@@ -2731,7 +2731,17 @@ async def test_invitation_capacity_does_not_charge_idempotent_replay_before_new_
         assert initial.emails_queued == 1
         assert replay_and_new.emails_queued == 2
         assert replay_and_new.emails_failed == 0
-        sends = list((await session.execute(select(EmailSend))).scalars().all())
+        sends = list(
+            (
+                await session.execute(
+                    select(EmailSend).where(
+                        EmailSend.recipient_email.in_([first.email, second.email])
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
         assert len(sends) == 2
         await session.rollback()
     await engine.dispose()

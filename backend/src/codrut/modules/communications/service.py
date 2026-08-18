@@ -542,9 +542,14 @@ class CommunicationsService:
         updated_subject = payload.subject if payload.subject is not None else template.subject
         updated_html = payload.html_body if payload.html_body is not None else template.html_body
         updated_text = payload.text_body if payload.text_body is not None else template.text_body
-        updated_variables = (
-            payload.variables if payload.variables is not None else template.variables
-        )
+        if payload.variables is not None:
+            updated_variables = payload.variables
+        else:
+            updated_variables = sorted(
+                extract_placeholders(updated_subject)
+                | extract_placeholders(updated_html)
+                | extract_placeholders(updated_text)
+            )
 
         validate_template_placeholders(
             updated_subject,

@@ -21,6 +21,7 @@ import {
   deleteCampaignOnServer,
   deleteCampaignRecipientOnServer,
   deleteEmailTemplateOnServer,
+  formatEmailTemplateApiError,
   getEmailOpsSummary,
   htmlToPlainText,
   listCampaignRecipientMembershipOnServer,
@@ -3045,6 +3046,81 @@ describe("frontend API adapter stubs", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 } as Response));
 
     await expect(listEmailTemplatesOnServer()).rejects.toThrow("Server returned status 503");
+  });
+
+  it("omits key field from update template payload and includes key in create payload", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        key: "test_template",
+        version: 2,
+        subject: "Subiect actualizat",
+        html_body: "<p>Continut</p>",
+        text_body: "Continut",
+        variables: ["action_url"],
+        audience: "transactional",
+        active: true,
+      }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await updateEmailTemplateOnServer({
+      id: "test_template@1",
+      baseKey: "test_template",
+      version: 1,
+      name: "Test",
+      subject: "Subiect actualizat",
+      lane: "transactional",
+      placeholders: ["{action_url}"],
+      body: "<p>Continut {action_url}</p>",
+      textBody: "Continut {action_url}",
+    });
+
+    const updatePayload = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(updatePayload.key).toBeUndefined();
+    expect(updatePayload.subject).toBe("Subiect actualizat");
+    expect(updatePayload.variables).toEqual(["action_url"]);
+
+    await createEmailTemplateOnServer({
+      id: "test_template@2",
+      baseKey: "test_template",
+      version: 1,
+      name: "Test",
+      subject: "Subiect nou",
+      lane: "transactional",
+      placeholders: ["{action_url}"],
+      body: "<p>Continut {action_url}</p>",
+      textBody: "Continut {action_url}",
+    });
+
+    const createPayload = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(createPayload.key).toBe("test_template");
+    expect(createPayload.subject).toBe("Subiect nou");
+  });
+
+  it("formats detailed validation errors and domain errors in Romanian", () => {
+    const pydanticError = {
+      error: {
+        code: "validation_error",
+        message: "Request validation failed.",
+        details: [
+          { loc: ["body", "key"], message: "Extra inputs are not permitted", type: "extra_forbidden" },
+        ],
+      },
+    };
+    expect(formatEmailTemplateApiError(pydanticError, "Eroare")).toBe("Câmpul „key” nu este permis.");
+
+    const undeclaredError = {
+      error: {
+        code: "email_template_undeclared_variables",
+        message: "Template contains undeclared variables: due_date, sender_name",
+      },
+    };
+    expect(formatEmailTemplateApiError(undeclaredError, "Eroare")).toBe(
+      "Șablonul conține variabile nedeclarate: due_date, sender_name",
+    );
   });
 });
 

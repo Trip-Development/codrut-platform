@@ -165,7 +165,7 @@ export function htmlToPlainText(html: string): string {
 
 function extractEmailVariables(...values: Array<string | undefined>): string[] {
   const variables = new Set<string>();
-  const pattern = /(?:\$\{|\{)([a-zA-Z_][a-zA-Z0-9_]*)(?:\}|\})/g;
+  const pattern = /(?:\$|%7B|\{)?\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
   for (const value of values) {
     if (!value) continue;
     for (const match of value.matchAll(pattern)) {
@@ -175,6 +175,97 @@ function extractEmailVariables(...values: Array<string | undefined>): string[] {
   return Array.from(variables);
 }
 
+export function formatEmailTemplateApiError(
+  errorBody: unknown,
+  fallback: string,
+): string {
+  if (!errorBody || typeof errorBody !== "object") {
+    return fallback;
+  }
+  const error = (errorBody as { error?: { code?: unknown; message?: unknown; details?: unknown } }).error;
+  if (!error) {
+    return fallback;
+  }
+
+  if (Array.isArray(error.details) && error.details.length > 0) {
+    const detailMessages = error.details
+      .map((d: unknown) => {
+        if (typeof d === "string") return d;
+        if (d && typeof d === "object") {
+          const detail = d as { loc?: unknown; type?: unknown; message?: unknown };
+          const loc = Array.isArray(detail.loc)
+            ? detail.loc.filter((p) => typeof p === "string" && p !== "body").join(".")
+            : "";
+          if (detail.type === "extra_forbidden") {
+            return loc
+              ? `Câmpul „${loc}” nu este permis.`
+              : "S-au trimis câmpuri suplimentare nepermise.";
+          }
+          if (detail.type === "missing") {
+            return loc
+              ? `Câmpul „${loc}” este obligatoriu.`
+              : "Lipsește un câmp obligatoriu.";
+          }
+          if (typeof detail.message === "string") {
+            return loc ? `${loc}: ${detail.message}` : detail.message;
+          }
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    if (detailMessages.length > 0) {
+      return detailMessages.join(" ");
+    }
+  }
+
+  if (typeof error.message === "string" && error.message.trim()) {
+    const msg = error.message.trim();
+    if (error.code === "email_template_undeclared_variables") {
+      return msg.replace(
+        "Template contains undeclared variables:",
+        "Șablonul conține variabile nedeclarate:",
+      );
+    }
+    if (error.code === "email_template_invalid_variables") {
+      return msg.replace(
+        "Invalid template variable names:",
+        "Nume invalide pentru variabile:",
+      );
+    }
+    if (error.code === "email_template_duplicate_variables") {
+      return msg.replace(
+        "Duplicate template variables:",
+        "Variabile duplicate în șablon:",
+      );
+    }
+    if (error.code === "email_template_missing_required_variables") {
+      return msg.replace(
+        "Missing required variables for system template:",
+        "Lipsesc variabile obligatorii:",
+      );
+    }
+    if (error.code === "email_template_missing_required_placeholders") {
+      return msg.replace(
+        "Required system variables are absent from template content:",
+        "Variabilele obligatorii lipsesc din conținut:",
+      );
+    }
+    if (error.code === "campaign_template_unsupported_variables") {
+      return msg.replace(
+        "Campaign contains unsupported variables:",
+        "Campania conține variabile nesuportate:",
+      );
+    }
+    if (msg === "Request validation failed.") {
+      return "Datele introduse nu respectă formatul cerut.";
+    }
+    return msg;
+  }
+
+  return fallback;
+}
+
 function frontendToBackendTemplate(f: EmailTemplate) {
   const subject = (f.subject || "").replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}");
   const html_body = (f.body || "").replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}");
@@ -182,7 +273,6 @@ function frontendToBackendTemplate(f: EmailTemplate) {
     ? f.textBody.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}")
     : htmlToPlainText(html_body);
   const variables = extractEmailVariables(
-    ...(f.placeholders || []),
     subject,
     html_body,
     text_body,
@@ -266,7 +356,7 @@ export async function createEmailTemplateOnServer(template: EmailTemplate): Prom
       };
     }
     const errorBody = await response.json().catch(() => null);
-    throw new Error(errorBody?.error?.message ?? "Nu am putut crea șablonul pe server.");
+    throw new Error(formatEmailTemplateApiError(errorBody, "Nu am putut crea șablonul pe server."));
   }
   const data = await response.json();
   return backendToFrontendTemplate(data);
@@ -280,7 +370,15 @@ export async function updateEmailTemplateOnServer(template: EmailTemplate): Prom
     };
   }
 
-  const payload = frontendToBackendTemplate(template);
+  const rawPayload = frontendToBackendTemplate(template);
+  const payload = {
+    subject: rawPayload.subject,
+    html_body: rawPayload.html_body,
+    text_body: rawPayload.text_body,
+    variables: rawPayload.variables,
+    audience: rawPayload.audience,
+    active: rawPayload.active,
+  };
   const response = await apiFetch(`${getApiBaseUrl()}/communications/templates/${template.baseKey}?version=${template.version}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -298,7 +396,7 @@ export async function updateEmailTemplateOnServer(template: EmailTemplate): Prom
       throw new Error("Nu sunteți autentificat. Vă rugăm să vă reconectați.");
     }
     const errorBody = await response.json().catch(() => null);
-    throw new Error(errorBody?.error?.message ?? "Nu am putut actualiza șablonul pe server.");
+    throw new Error(formatEmailTemplateApiError(errorBody, "Nu am putut actualiza șablonul pe server."));
   }
   const data = await response.json();
   return backendToFrontendTemplate(data);
