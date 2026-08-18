@@ -11,10 +11,12 @@ import {
 import InvitePage from "./page";
 import { inviteSwitchDestination } from "./InviteClientActions";
 
+const routerRedirect = vi.fn();
 const routerReplace = vi.fn();
 const routerRefresh = vi.fn();
 
 vi.mock("next/navigation", () => ({
+  redirect: (url: string) => routerRedirect(url),
   useRouter: () => ({ refresh: routerRefresh, replace: routerReplace }),
 }));
 
@@ -269,20 +271,35 @@ describe("InvitePage", () => {
     expect(window.localStorage.getItem("codrut_invite_consent:privacy-2026-07-16:demo-token")).toBeNull();
   });
 
-  it("keeps an invite-only leadership participant in the secure task flow", async () => {
+  it("redirects an unregistered leadership participant to registration", async () => {
     vi.mocked(resolveInviteBundle).mockResolvedValue({
       ...validBundle,
       isLeadership: true,
+      alreadyRegistered: false,
       consentCurrent: true,
       termsAcceptedAt: "2026-07-16T10:00:00Z",
       termsVersion: "privacy-2026-07-16",
     });
 
-    await renderInvitePage();
+    await renderInvitePage("lead-token");
 
-    await screen.findByRole("heading", { name: "Chestionarele tale" });
-    expect(screen.queryByRole("link", { name: /Creează cont permanent/ })).toBeNull();
-    expect(exchangeInviteSession).toHaveBeenCalledWith("demo-token");
+    expect(routerRedirect).toHaveBeenCalledWith("/register?token=lead-token");
+  });
+
+  it("allows a registered leadership participant to enter session exchange", async () => {
+    vi.mocked(resolveInviteBundle).mockResolvedValue({
+      ...validBundle,
+      isLeadership: true,
+      alreadyRegistered: true,
+      consentCurrent: true,
+      termsAcceptedAt: "2026-07-16T10:00:00Z",
+      termsVersion: "privacy-2026-07-16",
+    });
+
+    await renderInvitePage("lead-registered");
+
+    expect(routerRedirect).not.toHaveBeenCalled();
+    expect(exchangeInviteSession).toHaveBeenCalledWith("lead-registered");
   });
 
   it("does not expose an account-like review target in the secure task list or link", async () => {

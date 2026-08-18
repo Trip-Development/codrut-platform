@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2Icon, LockKeyholeIcon } from "lucide-react";
 
 import { apiFetch } from "@/api/http";
+import { resolveInviteBundle } from "@/api/invites";
 import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
@@ -68,7 +69,18 @@ function clearStoredInvite(): void {
 }
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={<RegisterLoadingShell />}>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tokenFromUrl = searchParams.get("token");
+
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [token, setToken] = useState("");
@@ -80,28 +92,64 @@ export default function RegisterPage() {
   const submittingRef = useRef(false);
 
   useEffect(() => {
-    let inviteData = readStoredInvite();
+    let active = true;
 
-    if (!inviteData) {
-      if (!isDemoFallbackEnabled()) {
-        setError("Invitația lipsește sau nu mai este activă. Folosește linkul primit pe email.");
-        setLoading(false);
-        return;
+    async function loadInvite() {
+      let inviteData = readStoredInvite();
+
+      if (tokenFromUrl && (!inviteData || inviteData.token !== tokenFromUrl)) {
+        try {
+          const bundle = await resolveInviteBundle(tokenFromUrl);
+          if (!active) return;
+          if (bundle.state === "valid") {
+            inviteData = {
+              email: bundle.participantEmail,
+              token: tokenFromUrl,
+              fullName: bundle.participantFullName,
+              isLeadership: bundle.isLeadership,
+            };
+            storeInvite(inviteData);
+          } else {
+            setError(bundle.message || "Invitația lipsește sau nu mai este activă. Folosește linkul primit pe email.");
+            setLoading(false);
+            return;
+          }
+        } catch {
+          if (!active) return;
+          setError("Nu am putut verifica invitația. Folosește linkul primit pe email.");
+          setLoading(false);
+          return;
+        }
       }
 
-      inviteData = {
-        email: "lider.demo@example.com",
-        token: "demo-token",
-        fullName: "Lider Demo",
-        isLeadership: true,
-      };
-      storeInvite(inviteData);
+      if (!inviteData) {
+        if (!isDemoFallbackEnabled()) {
+          setError("Invitația lipsește sau nu mai este activă. Folosește linkul primit pe email.");
+          setLoading(false);
+          return;
+        }
+
+        inviteData = {
+          email: "lider.demo@example.com",
+          token: "demo-token",
+          fullName: "Lider Demo",
+          isLeadership: true,
+        };
+        storeInvite(inviteData);
+      }
+
+      if (!active) return;
+      setEmail(inviteData.email || "lider.demo@example.com");
+      setToken(inviteData.token || "demo-token");
+      setLoading(false);
     }
 
-    setEmail(inviteData.email || "lider.demo@example.com");
-    setToken(inviteData.token || "demo-token");
-    setLoading(false);
-  }, [router]);
+    void loadInvite();
+
+    return () => {
+      active = false;
+    };
+  }, [tokenFromUrl]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -160,19 +208,7 @@ export default function RegisterPage() {
   };
 
   if (loading) {
-    return (
-      <main className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-10 text-foreground">
-        <section className="w-full max-w-md rounded-lg border bg-surface p-8">
-          <BrandMark size="lg" showText={false} className="mx-auto" />
-          <OperationFeedback
-            className="mt-8"
-            title="Verificăm invitația"
-            detail="Confirmăm că linkul de activare este încă valid."
-            meta="în verificare"
-          />
-        </section>
-      </main>
-    );
+    return <RegisterLoadingShell />;
   }
 
   return (
@@ -300,3 +336,20 @@ export default function RegisterPage() {
     </main>
   );
 }
+
+function RegisterLoadingShell() {
+  return (
+    <main className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-10 text-foreground">
+      <section className="w-full max-w-md rounded-lg border bg-surface p-8">
+        <BrandMark size="lg" showText={false} className="mx-auto" />
+        <OperationFeedback
+          className="mt-8"
+          title="Verificăm invitația"
+          detail="Confirmăm că linkul de activare este încă valid."
+          meta="în verificare"
+        />
+      </section>
+    </main>
+  );
+}
+

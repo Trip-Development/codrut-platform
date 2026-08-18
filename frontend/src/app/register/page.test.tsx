@@ -2,18 +2,26 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiFetch } from "@/api/http";
+import { resolveInviteBundle } from "@/api/invites";
 import RegisterPage from "./page";
 
 const router = {
   push: vi.fn(),
 };
 
+let mockSearchParams = new URLSearchParams();
+
 vi.mock("next/navigation", () => ({
   useRouter: () => router,
+  useSearchParams: () => mockSearchParams,
 }));
 
 vi.mock("@/api/http", () => ({
   apiFetch: vi.fn(),
+}));
+
+vi.mock("@/api/invites", () => ({
+  resolveInviteBundle: vi.fn(),
 }));
 
 vi.mock("@/api/runtime", () => ({
@@ -142,5 +150,58 @@ describe("RegisterPage", () => {
       terms_accepted: true,
     });
     expect(window.sessionStorage.getItem("codrut_invite")).toBeNull();
+  });
+
+  it("resolves token from URL query parameter, locks email to invitation, and redirects to invite on success", async () => {
+    mockSearchParams = new URLSearchParams({ token: "query-token" });
+    vi.mocked(resolveInviteBundle).mockResolvedValue({
+      state: "valid",
+      token: "query-token",
+      projectName: "Michelin Leadership",
+      participantEmail: "director@michelin.example",
+      participantFullName: "Director Michelin",
+      anonymousName: "Leader123",
+      isLeadership: true,
+      alreadyRegistered: false,
+      accountType: "guest",
+      accessMode: "secure_link",
+      consentCurrent: false,
+      deadlineLabel: "15 septembrie 2026",
+      tasks: [],
+    });
+
+    render(<RegisterPage />);
+    await screen.findByDisplayValue("director@michelin.example");
+    const emailInput = screen.getByLabelText("Email securizat") as HTMLInputElement;
+    expect(emailInput.disabled).toBe(true);
+    expect(emailInput.value).toBe("director@michelin.example");
+
+    fireEvent.change(screen.getByLabelText("Parolă"), { target: { value: "o frază lungă și memorabilă" } });
+    fireEvent.change(screen.getByLabelText("Confirmă parola"), { target: { value: "o frază lungă și memorabilă" } });
+    fireEvent.click(screen.getByLabelText("Accept termenii și politica de confidențialitate."));
+    fireEvent.submit(screen.getByRole("button", { name: "Finalizează înregistrarea" }).closest("form")!);
+
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/invite/query-token"));
+    const request = vi.mocked(apiFetch).mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(String(request.body))).toMatchObject({
+      email: "director@michelin.example",
+      token: "query-token",
+      terms_accepted: true,
+    });
+  });
+
+  it("shows error when invite token in URL is expired or invalid", async () => {
+    mockSearchParams = new URLSearchParams({ token: "expired-token" });
+    vi.mocked(resolveInviteBundle).mockResolvedValue({
+      state: "expired",
+      token: "expired-token",
+      projectName: "Proiect Expirat",
+      deadlineLabel: "deadline-ul proiectului",
+      message: "Invitația a expirat. Cere un link nou de la trainer.",
+    });
+
+    render(<RegisterPage />);
+    expect(await screen.findByText("Invitația a expirat. Cere un link nou de la trainer.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Finalizează înregistrarea" })).toHaveProperty("disabled", true);
   });
 });
