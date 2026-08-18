@@ -2,7 +2,6 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import select
 
 from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
@@ -79,7 +78,7 @@ def create_mock_q_def() -> QuestionnaireDefinition:
 
 @pytest.mark.asyncio
 async def test_leadership_account_registration_and_flow() -> None:
-    """1. Leadership participant without account registers, accesses dashboard/questionnaires, and submits response."""
+    """1. Leadership participant registers, accesses dashboard, and submits response."""
     settings = get_settings()
     async with SessionLocal() as session:
         # 1. Independent roots
@@ -182,7 +181,7 @@ async def test_leadership_account_registration_and_flow() -> None:
         auth_res = await identity_service.register(
             RegisterRequest(
                 email=profile.email,
-                password="A-Very-Secure-Password-1234!",
+                password="A-Very-Secure-Password-1234!",  # noqa: S106
                 token=token,
                 terms_accepted=True,
                 terms_version=CURRENT_TERMS_VERSION,
@@ -335,7 +334,7 @@ async def test_leadership_login_later() -> None:
         await identity_service.register(
             RegisterRequest(
                 email=profile.email,
-                password="My-Safe-Password-1234!",
+                password="My-Safe-Password-1234!",  # noqa: S106
                 token=token,
                 terms_accepted=True,
                 terms_version=CURRENT_TERMS_VERSION,
@@ -346,7 +345,7 @@ async def test_leadership_login_later() -> None:
         login_res = await identity_service.login(
             LoginRequest(
                 email=profile.email,
-                password="My-Safe-Password-1234!",
+                password="My-Safe-Password-1234!",  # noqa: S106
             )
         )
         assert login_res.response.email == profile.email
@@ -468,7 +467,7 @@ async def test_member_secure_link_flow_without_account() -> None:
 
 @pytest.mark.asyncio
 async def test_edge_cases() -> None:
-    """4. All edge cases: abandonment, expiration, cross-device, forwarded link, wrong session, double click."""
+    """4. All edge cases: abandonment, expiration, cross-device, forwarded link, wrong session."""
     settings = get_settings()
     async with SessionLocal() as session:
         # 1. Roots
@@ -573,7 +572,7 @@ async def test_edge_cases() -> None:
             await identity_service.register(
                 RegisterRequest(
                     email="intruder@example.com",  # Wrong email
-                    password="Password-123456789!",
+                    password="Password-123456789!",  # noqa: S106
                     token=token,
                     terms_accepted=True,
                     terms_version=CURRENT_TERMS_VERSION,
@@ -602,7 +601,7 @@ async def test_edge_cases() -> None:
             await identity_service.register(
                 RegisterRequest(
                     email=profile.email,
-                    password="Password-123456789!",
+                    password="Password-123456789!",  # noqa: S106
                     token=expired_token,
                     terms_accepted=True,
                     terms_version=CURRENT_TERMS_VERSION,
@@ -619,7 +618,7 @@ async def test_edge_cases() -> None:
         reg_res = await identity_service.register(
             RegisterRequest(
                 email=profile.email,
-                password="Password-123456789!",
+                password="Password-123456789!",  # noqa: S106
                 token=token,
                 terms_accepted=True,
                 terms_version=CURRENT_TERMS_VERSION,
@@ -638,7 +637,7 @@ async def test_edge_cases() -> None:
             email=f"other.{uuid.uuid4().hex[:6]}@example.com",
             role=UserRole.participant,
             account_type=UserAccountType.registered,
-            password_hash="some-hash",
+            password_hash="some-hash",  # noqa: S106
         )
         session.add(other_user)
         await session.flush()
