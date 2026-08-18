@@ -2817,6 +2817,8 @@ export interface components {
             audience?: string | null;
             /** Html Body */
             html_body?: string | null;
+            /** Key */
+            key?: string | null;
             /** Subject */
             subject?: string | null;
             /** Text Body */
