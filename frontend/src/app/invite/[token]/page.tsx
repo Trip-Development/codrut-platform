@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   AlertTriangleIcon,
   ArrowRightIcon,
@@ -50,6 +51,10 @@ export default async function InvitePage({ params }: InvitePageProps) {
 
   if (data.state !== "valid") {
     return <InvalidInviteState message={data.message} />;
+  }
+
+  if (data.isLeadership && !data.alreadyRegistered) {
+    redirect(`/register?token=${encodeURIComponent(token)}`);
   }
 
   const tasksView = <InviteTasksView token={token} data={data} />;
