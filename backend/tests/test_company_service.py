@@ -31,6 +31,7 @@ from codrut.modules.assignments.schemas import AssignmentPlanSaveRequest
 from codrut.modules.assignments.service import AssignmentService
 from codrut.modules.communications.email_provider import LocalEmailProvider
 from codrut.modules.communications.models import EmailSend, EmailSendStatus
+from codrut.modules.communications.repository import CommunicationsRepository
 from codrut.modules.communications.service import TransactionalEmailService
 from codrut.modules.companies.hierarchy import HierarchyParticipant, build_organization_hierarchy
 from codrut.modules.companies.models import (
@@ -2652,15 +2653,18 @@ async def test_invitation_capacity_does_not_charge_idempotent_replay_before_new_
     questionnaire_definition_factory,
 ) -> None:
     await engine.dispose()
-    provider = LocalEmailProvider()
-    settings = Settings(_env_file=None, email_daily_send_cap=2)
-    monkeypatch.setattr("codrut.core.config.get_settings", lambda: settings)
-    monkeypatch.setattr(
-        "codrut.modules.communications.email_provider.build_email_provider",
-        lambda _settings: provider,
-    )
-
     async with SessionLocal() as session:
+        provider = LocalEmailProvider()
+        comm_repo = CommunicationsRepository(session)
+        day_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        already_sent = await comm_repo.count_accepted_sends_since(day_start)
+        settings = Settings(_env_file=None, email_daily_send_cap=already_sent + 2)
+        monkeypatch.setattr("codrut.core.config.get_settings", lambda: settings)
+        monkeypatch.setattr(
+            "codrut.modules.communications.email_provider.build_email_provider",
+            lambda _settings: provider,
+        )
+
         trainer = User(
             id=uuid.uuid4(),
             email=f"trainer-{uuid.uuid4().hex[:8]}@example.com",
