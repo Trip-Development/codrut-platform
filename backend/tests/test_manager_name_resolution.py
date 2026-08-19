@@ -6,6 +6,7 @@ from sqlalchemy import delete, select
 from codrut.contracts.emails import EmailMessage, EmailProviderKey, EmailSendResult
 from codrut.core.database import SessionLocal, engine
 from codrut.core.errors import DomainError
+from codrut.core.security import hash_password
 from codrut.modules.assignments.models import (
     AssessmentCycle,
     AssessmentCycleStatus,
@@ -64,7 +65,7 @@ async def create_test_context(db_session, *, role_group: str = "leadership"):
     user = User(
         id=uuid4(),
         email=f"user_{uuid4().hex[:8]}@example.com",
-        password_hash="test_password_hash",
+        password_hash=hash_password("trainer-password-123"),
         role=UserRole.trainer,
     )
     db_session.add(user)
@@ -177,7 +178,17 @@ def test_manager_name_unresolved_uses_cleaned_raw_text():
 
 def test_manager_name_missing_or_top_level_falls_back_to_trainer_name():
     trainer = "Andrei Văcaru"
-    for placeholder_value in [None, "", "   ", "fara manager", "top", "direct manager", "root", "na", "-"]:
+    for placeholder_value in [
+        None,
+        "",
+        "   ",
+        "fara manager",
+        "top",
+        "direct manager",
+        "root",
+        "na",
+        "-",
+    ]:
         membership = (
             ProjectMembership(
                 id=uuid4(),
@@ -202,13 +213,14 @@ def test_manager_name_missing_or_top_level_falls_back_to_trainer_name():
 
 
 def test_manager_name_profile_only_ignored_in_favor_of_trainer():
-    """
-    Cerință explicită de produs de la Andrei: 'Ce vede Andrei pe ecran, aia semnează.'
-    Organigrama din aplicație (_project_participant_response, companies/service.py) citește
-    exclusiv din ProjectMembership.reports_to_name, fără niciun fallback pe profilul general.
-    Dacă un participant are manager setat pe ParticipantProfile, dar la nivel de proiect (ProjectMembership)
-    este fără manager (None) sau lipsește ProjectMembership, organigrama îl arată fără manager.
-    Prin urmare, emailul NU trebuie să folosească managerul din profil, ci trebuie să cadă pe trainer_name.
+    """Cerință explicită de produs de la Andrei: 'Ce vede Andrei pe ecran, aia semnează.'
+
+    Organigrama din aplicație (_project_participant_response, companies/service.py)
+    citește exclusiv din ProjectMembership.reports_to_name, fără niciun fallback
+    pe profilul general. Dacă un participant are manager setat pe ParticipantProfile,
+    dar la nivel de proiect (ProjectMembership) este fără manager (None) sau lipsește
+    ProjectMembership, organigrama îl arată fără manager. Prin urmare, emailul NU
+    trebuie să folosească managerul din profil, ci trebuie să cadă pe trainer_name.
     """
     trainer = "Andrei Văcaru"
     # Cazul 1: Are ProjectMembership dar cu reports_to_name = None (deși profilul ar avea manager)
@@ -239,9 +251,10 @@ def test_manager_name_profile_only_ignored_in_favor_of_trainer():
 
 
 def test_manager_name_duplicate_ambiguous_keeps_cleaned_raw_text():
-    """
-    Dacă un nume de manager este duplicat/ambiguu în rosterul proiectului (două persoane cu același nume normalizat),
-    nu se alege un participant arbitrar în tăcere, ci se păstrează textul brut curățat.
+    """Dacă un nume de manager este duplicat/ambiguu în rosterul proiectului
+
+    (două persoane cu același nume normalizat), nu se alege un participant
+    arbitrar în tăcere, ci se păstrează textul brut curățat.
     """
     membership = ProjectMembership(
         id=uuid4(),
@@ -274,7 +287,10 @@ async def test_enqueue_assignment_invitation_renders_manager_name():
             owner_id=user.id,
             version=1,
             subject="Salut ${participant_name} de la ${manager_name}",
-            html_body="<p>Managerul tău: ${manager_name}. <a href=\"${action_url}\">Deschide</a></p>",
+            html_body=(
+                "<p>Managerul tău: ${manager_name}. "
+                '<a href="${action_url}">Deschide</a></p>'
+            ),
             text_body="Managerul tău: ${manager_name}. Deschide: ${action_url}",
             variables=["participant_name", "manager_name", "action_url"],
             audience="transactional",
@@ -310,8 +326,12 @@ async def test_enqueue_assignment_invitation_renders_manager_name():
             )
         ).scalar_one_or_none()
         assert send is not None
-        assert send.message_payload["subject"] == f"Salut {participant.full_name} de la Frederic Cauquil"
-        assert "Managerul tău: Frederic Cauquil." in send.message_payload["html_body"]
+        expected_subj = f"Salut {participant.full_name} de la Frederic Cauquil"
+        assert send.message_payload["subject"] == expected_subj
+        assert (
+            "Managerul tău: Frederic Cauquil."
+            in send.message_payload["html_body"]
+        )
 
         await db_session.execute(delete(EmailSend).where(EmailSend.id == send.id))
         await db_session.commit()
@@ -356,7 +376,7 @@ async def test_project_template_validation_accepts_manager_name():
         user = User(
             id=uuid4(),
             email=f"trainer_{uuid4().hex[:8]}@example.com",
-            password_hash="test_pwd",
+            password_hash=hash_password("trainer-password-123"),
             role=UserRole.trainer,
         )
         db_session.add(user)
@@ -387,9 +407,20 @@ async def test_project_template_validation_accepts_manager_name():
             owner_id=user.id,
             version=1,
             subject="Invitație de la ${manager_name} pentru ${participant_name}",
-            html_body="<p>Manager: ${manager_name} la ${company_name}. <a href=\"${action_url}\">Click</a></p>",
-            text_body="Manager: ${manager_name} la ${company_name}. Link: ${action_url}",
-            variables=["participant_name", "manager_name", "company_name", "action_url"],
+            html_body=(
+                "<p>Manager: ${manager_name} la ${company_name}. "
+                '<a href="${action_url}">Click</a></p>'
+            ),
+            text_body=(
+                "Manager: ${manager_name} la ${company_name}. "
+                "Link: ${action_url}"
+            ),
+            variables=[
+                "participant_name",
+                "manager_name",
+                "company_name",
+                "action_url",
+            ],
             audience="transactional",
             active=True,
         )
@@ -437,10 +468,12 @@ async def test_project_template_validation_accepts_manager_name():
 @pytest.mark.asyncio
 async def test_company_service_send_invitations_end_to_end_manager_resolution():
     async with SessionLocal() as db_session:
+        trainer_email = f"andrei.vacaru+{uuid4().hex[:8]}@example.com"
+        trainer_expected_name = trainer_email.split("@", 1)[0]
         user = User(
             id=uuid4(),
-            email="andrei.vacaru@example.com",
-            password_hash="test_pwd",
+            email=trainer_email,
+            password_hash=hash_password("trainer-password-123"),
             role=UserRole.trainer,
         )
         db_session.add(user)
@@ -448,7 +481,13 @@ async def test_company_service_send_invitations_end_to_end_manager_resolution():
         db_session.add(company)
         await db_session.flush()
 
-        db_session.add(CompanyMembership(company_id=company.id, user_id=user.id, role=CompanyMembershipRole.owner))
+        db_session.add(
+            CompanyMembership(
+                company_id=company.id,
+                user_id=user.id,
+                role=CompanyMembershipRole.owner,
+            )
+        )
         project = CompanyProject(
             id=uuid4(),
             company_id=company.id,
@@ -505,12 +544,48 @@ async def test_company_service_send_invitations_end_to_end_manager_resolution():
         for p in [titus, frederic, remy, ioana]:
             db_session.add(p)
 
-        db_session.add(ProjectMembership(id=uuid4(), project_id=project.id, company_id=company.id, participant_profile_id=titus.id, reports_to_name="fara manager", active=True))
-        db_session.add(ProjectMembership(id=uuid4(), project_id=project.id, company_id=company.id, participant_profile_id=frederic.id, reports_to_name="Titus Botis", active=True))
-        db_session.add(ProjectMembership(id=uuid4(), project_id=project.id, company_id=company.id, participant_profile_id=remy.id, reports_to_name="FredericCauquil", active=True))
-        db_session.add(ProjectMembership(id=uuid4(), project_id=project.id, company_id=company.id, participant_profile_id=ioana.id, reports_to_name="Manager Necunoscut", active=True))
+        db_session.add(
+            ProjectMembership(
+                id=uuid4(),
+                project_id=project.id,
+                company_id=company.id,
+                participant_profile_id=titus.id,
+                reports_to_name="fara manager",
+                active=True,
+            )
+        )
+        db_session.add(
+            ProjectMembership(
+                id=uuid4(),
+                project_id=project.id,
+                company_id=company.id,
+                participant_profile_id=frederic.id,
+                reports_to_name="Titus Botis",
+                active=True,
+            )
+        )
+        db_session.add(
+            ProjectMembership(
+                id=uuid4(),
+                project_id=project.id,
+                company_id=company.id,
+                participant_profile_id=remy.id,
+                reports_to_name="FredericCauquil",
+                active=True,
+            )
+        )
+        db_session.add(
+            ProjectMembership(
+                id=uuid4(),
+                project_id=project.id,
+                company_id=company.id,
+                participant_profile_id=ioana.id,
+                reports_to_name="Manager Necunoscut",
+                active=True,
+            )
+        )
 
-        key = "icare"
+        key = f"icare_{uuid4().hex[:8]}"
         definition = QuestionnaireDefinition(
             id=uuid4(),
             key=key,
@@ -527,17 +602,19 @@ async def test_company_service_send_invitations_end_to_end_manager_resolution():
         await db_session.flush()
 
         for p in [titus, frederic, remy, ioana]:
-            db_session.add(QuestionnaireAssignment(
-                id=uuid4(),
-                company_id=company.id,
-                project_id=project.id,
-                assessment_cycle_id=cycle.id,
-                respondent_profile_id=p.id,
-                questionnaire_key=key,
-                questionnaire_definition_id=definition.id,
-                target_type="self",
-                status=AssignmentStatus.assigned,
-            ))
+            db_session.add(
+                QuestionnaireAssignment(
+                    id=uuid4(),
+                    company_id=company.id,
+                    project_id=project.id,
+                    assessment_cycle_id=cycle.id,
+                    respondent_profile_id=p.id,
+                    questionnaire_key=key,
+                    questionnaire_definition_id=definition.id,
+                    target_type="self",
+                    status=AssignmentStatus.assigned,
+                )
+            )
 
         comm_repo = CommunicationsRepository(db_session)
         tmpl_key = f"e2e_tmpl_{uuid4().hex[:8]}"
@@ -546,7 +623,10 @@ async def test_company_service_send_invitations_end_to_end_manager_resolution():
             owner_id=user.id,
             version=1,
             subject="Invitatie pentru ${participant_name} de la ${manager_name}",
-            html_body="<p>Managerul tau: ${manager_name}. <a href=\"${action_url}\">Deschide</a></p>",
+            html_body=(
+                "<p>Managerul tau: ${manager_name}. "
+                '<a href="${action_url}">Deschide</a></p>'
+            ),
             text_body="Managerul tau: ${manager_name}. Deschide: ${action_url}",
             variables=["participant_name", "manager_name", "action_url"],
             audience="transactional",
@@ -572,29 +652,60 @@ async def test_company_service_send_invitations_end_to_end_manager_resolution():
         assert batch_res.emails_queued == 4 or batch_res.emails_sent == 4
 
         # Verify each rendered email send in database
-        target_emails = ["remy@example.com", "frederic@example.com", "ioana@example.com", "titus@example.com"]
+        target_emails = [
+            "remy@example.com",
+            "frederic@example.com",
+            "ioana@example.com",
+            "titus@example.com",
+        ]
         sends = (
             await db_session.execute(
-                select(EmailSend).where(EmailSend.recipient_email.in_(target_emails)).order_by(EmailSend.created_at.desc())
+                select(EmailSend)
+                .where(EmailSend.recipient_email.in_(target_emails))
+                .order_by(EmailSend.created_at.desc())
             )
         ).scalars().all()
         sends_by_email = {s.recipient_email: s for s in sends}
 
         # 1. Remy -> manager resolves to Frederic Cauquil (canonical)
-        assert "Frederic Cauquil" in sends_by_email["remy@example.com"].message_payload["subject"]
-        assert "Managerul tau: Frederic Cauquil." in sends_by_email["remy@example.com"].message_payload["html_body"]
+        assert (
+            "Frederic Cauquil"
+            in sends_by_email["remy@example.com"].message_payload["subject"]
+        )
+        assert (
+            "Managerul tau: Frederic Cauquil."
+            in sends_by_email["remy@example.com"].message_payload["html_body"]
+        )
 
         # 2. Frederic -> manager resolves to Titus Botis (canonical)
-        assert "Titus Botis" in sends_by_email["frederic@example.com"].message_payload["subject"]
-        assert "Managerul tau: Titus Botis." in sends_by_email["frederic@example.com"].message_payload["html_body"]
+        assert (
+            "Titus Botis"
+            in sends_by_email["frederic@example.com"].message_payload["subject"]
+        )
+        assert (
+            "Managerul tau: Titus Botis."
+            in sends_by_email["frederic@example.com"].message_payload["html_body"]
+        )
 
         # 3. Ioana -> manager is unresolvable "Manager Necunoscut" -> raw cleaned string
-        assert "Manager Necunoscut" in sends_by_email["ioana@example.com"].message_payload["subject"]
-        assert "Managerul tau: Manager Necunoscut." in sends_by_email["ioana@example.com"].message_payload["html_body"]
+        assert (
+            "Manager Necunoscut"
+            in sends_by_email["ioana@example.com"].message_payload["subject"]
+        )
+        assert (
+            "Managerul tau: Manager Necunoscut."
+            in sends_by_email["ioana@example.com"].message_payload["html_body"]
+        )
 
-        # 4. Titus -> top level without manager -> falls back to trainer "andrei.vacaru"
-        assert "andrei.vacaru" in sends_by_email["titus@example.com"].message_payload["subject"]
-        assert "Managerul tau: andrei.vacaru." in sends_by_email["titus@example.com"].message_payload["html_body"]
+        # 4. Titus -> top level without manager -> falls back to trainer
+        assert (
+            trainer_expected_name
+            in sends_by_email["titus@example.com"].message_payload["subject"]
+        )
+        assert (
+            f"Managerul tau: {trainer_expected_name}."
+            in sends_by_email["titus@example.com"].message_payload["html_body"]
+        )
 
         # Clean up test sends
         send_ids = [s.id for s in sends]

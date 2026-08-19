@@ -5,18 +5,17 @@ import time
 from uuid import uuid4
 
 import httpx
-from sqlalchemy import select
 
-from codrut.contracts.emails import EmailDeliveryStatus
 from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
+from codrut.core.security import hash_password
 from codrut.modules.assignments.models import (
     AssessmentCycle,
     AssessmentCycleStatus,
     AssignmentStatus,
     QuestionnaireAssignment,
 )
-from codrut.modules.communications.models import EmailSend, EmailTemplate
+from codrut.modules.communications.models import EmailTemplate
 from codrut.modules.communications.repository import CommunicationsRepository
 from codrut.modules.companies.models import (
     Company,
@@ -48,14 +47,14 @@ async def run_mailpit_proof() -> None:
     print("=" * 70)
 
     run_id = uuid4().hex[:6]
-    test_domain = f"example.com"
+    test_domain = "example.com"
 
     async with SessionLocal() as db_session:
         # 1. Create Trainer user
         trainer_user = User(
             id=uuid4(),
             email=f"andrei.vacaru+{run_id}@codrut.ro",
-            password_hash="test_password_hash",
+            password_hash=hash_password("trainer-password-123"),
             role=UserRole.trainer,
         )
         db_session.add(trainer_user)
@@ -95,12 +94,7 @@ async def run_mailpit_proof() -> None:
         db_session.add(cycle)
         await db_session.flush()
 
-        # 3. Create 4 Participants representing all hierarchy scenarios:
-        # - Frederic Cauquil: Manager în proiect (reports to Titus Botis)
-        # - Remy Bedu: Subaltern 1 (reports to "FredericCauquil" -> se rezolvă la Frederic Cauquil)
-        # - Ioana Pop: Subaltern 2 (reports to "Manager Necunoscut Extern" -> text brut curățat)
-        # - Titus Botis: Fără manager (top level / reports to "fara manager" -> fallback la trainer)
-
+        # 3. Create 4 Participants representing all hierarchy scenarios
         frederic = ParticipantProfile(
             id=uuid4(),
             company_id=company.id,
@@ -138,10 +132,46 @@ async def run_mailpit_proof() -> None:
         for p in participants:
             db_session.add(p)
 
-        db_session.add(ProjectMembership(id=uuid4(), project_id=project.id, company_id=company.id, participant_profile_id=frederic.id, reports_to_name="Titus Botis", active=True))
-        db_session.add(ProjectMembership(id=uuid4(), project_id=project.id, company_id=company.id, participant_profile_id=remy.id, reports_to_name="FredericCauquil", active=True))
-        db_session.add(ProjectMembership(id=uuid4(), project_id=project.id, company_id=company.id, participant_profile_id=ioana.id, reports_to_name="   Manager Necunoscut Extern   ", active=True))
-        db_session.add(ProjectMembership(id=uuid4(), project_id=project.id, company_id=company.id, participant_profile_id=titus.id, reports_to_name="fara manager", active=True))
+        db_session.add(
+            ProjectMembership(
+                id=uuid4(),
+                project_id=project.id,
+                company_id=company.id,
+                participant_profile_id=frederic.id,
+                reports_to_name="Titus Botis",
+                active=True,
+            )
+        )
+        db_session.add(
+            ProjectMembership(
+                id=uuid4(),
+                project_id=project.id,
+                company_id=company.id,
+                participant_profile_id=remy.id,
+                reports_to_name="FredericCauquil",
+                active=True,
+            )
+        )
+        db_session.add(
+            ProjectMembership(
+                id=uuid4(),
+                project_id=project.id,
+                company_id=company.id,
+                participant_profile_id=ioana.id,
+                reports_to_name="   Manager Necunoscut Extern   ",
+                active=True,
+            )
+        )
+        db_session.add(
+            ProjectMembership(
+                id=uuid4(),
+                project_id=project.id,
+                company_id=company.id,
+                participant_profile_id=titus.id,
+                reports_to_name="fara manager",
+                active=True,
+            )
+        )
 
         # Create questionnaire definition and assignments
         key = f"icare_proof_{run_id}"
@@ -161,17 +191,19 @@ async def run_mailpit_proof() -> None:
         await db_session.flush()
 
         for p in participants:
-            db_session.add(QuestionnaireAssignment(
-                id=uuid4(),
-                company_id=company.id,
-                project_id=project.id,
-                assessment_cycle_id=cycle.id,
-                respondent_profile_id=p.id,
-                questionnaire_key=key,
-                questionnaire_definition_id=definition.id,
-                target_type="self",
-                status=AssignmentStatus.assigned,
-            ))
+            db_session.add(
+                QuestionnaireAssignment(
+                    id=uuid4(),
+                    company_id=company.id,
+                    project_id=project.id,
+                    assessment_cycle_id=cycle.id,
+                    respondent_profile_id=p.id,
+                    questionnaire_key=key,
+                    questionnaire_definition_id=definition.id,
+                    target_type="self",
+                    status=AssignmentStatus.assigned,
+                )
+            )
 
         # 4. Create custom template using ${manager_name}
         comm_repo = CommunicationsRepository(db_session)
@@ -185,8 +217,9 @@ async def run_mailpit_proof() -> None:
                 "<div>"
                 "<p>Salut <strong>${participant_name}</strong>,</p>"
                 "<p>Ai fost invitat să completezi evaluarea pentru ${company_name}.</p>"
-                "<p>Pentru întrebări, te rugăm să iei legătura cu managerul tău direct: <strong>${manager_name}</strong>.</p>"
-                "<p><a href=\"${action_url}\">Deschide chestionarele</a></p>"
+                "<p>Pentru întrebări, te rugăm să iei legătura cu managerul tău direct: "
+                "<strong>${manager_name}</strong>.</p>"
+                '<p><a href="${action_url}">Deschide chestionarele</a></p>'
                 "<p>Cu stimă,<br />${manager_name}</p>"
                 "</div>"
             ),
@@ -206,17 +239,18 @@ async def run_mailpit_proof() -> None:
         project.leadership_invitation_template_key = tmpl_key
         await db_session.flush()
 
-        print(f"\n[1] Configurare proiect test creată:")
+        print("\n[1] Configurare proiect test creată:")
         print(f"  - ID Companie: {company.id}")
         print(f"  - ID Proiect: {project.id}")
         print(f"  - Șablon utilizat: {tmpl_key} (conține ${{manager_name}})")
-        print(f"  - Participanți:")
+        print("  - Participanți:")
         print(f"    * {frederic.full_name} ({frederic.email}) -> reports_to: 'Titus Botis'")
-        print(f"    * {remy.full_name} ({remy.email}) -> reports_to: 'FredericCauquil' (fără spațiu)")
+        print(f"    * {remy.full_name} ({remy.email}) -> reports_to: 'FredericCauquil'")
         print(f"    * {ioana.full_name} ({ioana.email}) -> reports_to: 'Manager Necunoscut Extern'")
         print(f"    * {titus.full_name} ({titus.email}) -> reports_to: 'fara manager' (top level)")
 
-        print(f"\n[2] Trimitere invitații prin CompanyService.send_participant_invites...")
+        # 5. Dispatch invitations
+        print("\n[2] Trimitere invitații prin CompanyService.send_participant_invites...")
         service = CompanyService(db_session)
         batch_res = await service.send_participant_invites(
             user_id=trainer_user.id,
@@ -230,11 +264,15 @@ async def run_mailpit_proof() -> None:
         )
         await db_session.commit()
 
-        print(f"  - Rezultat creare invitații: total={batch_res.total}, emails_sent={batch_res.emails_sent}, emails_queued={batch_res.emails_queued}")
+        print(
+            f"  - Rezultat creare invitații: total={batch_res.total}, "
+            f"emails_sent={batch_res.emails_sent}, emails_queued={batch_res.emails_queued}"
+        )
 
         # Drain outbox to Mailpit SMTP
         from codrut.workers.main import process_email_outbox
-        print(f"\n[2.1] Procesare outbox (trimitere SMTP către Mailpit)...")
+
+        print("\n[2.1] Procesare outbox (trimitere SMTP către Mailpit)...")
         drain_result = await process_email_outbox({})
         print(f"  - Rezultat procesare outbox: {drain_result}")
 
