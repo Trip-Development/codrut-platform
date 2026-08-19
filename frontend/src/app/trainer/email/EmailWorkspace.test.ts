@@ -378,7 +378,14 @@ describe("renderEmailTemplatePreviewBody", () => {
     expect(html).toContain("Titlul vizibil din email");
     expect(html).toContain("{thumbnail_url}");
     expect(html).toContain('href="{action_url}"');
-    expect(html).toContain("Andrei Văcaru");
+    expect(html).not.toContain("Andrei Văcaru");
+
+    const campaignStyledHtml = buildStyledEmailTemplateBody({
+      heading: draft.heading,
+      body: draft.body,
+      lane: "campaign",
+    });
+    expect(campaignStyledHtml).toContain("Andrei Văcaru");
   });
 
   it("uses one CTA in HTML and preserves one URL in transactional plain text", () => {
@@ -396,8 +403,10 @@ describe("renderEmailTemplatePreviewBody", () => {
     expect(campaignHtml).toContain('href="{landing_page_url}"');
     expect(campaignHtml).toContain('src="{thumbnail_url}"');
     expect(campaignHtml).toContain('href="{calendly_url}"');
+    expect(campaignHtml).toContain("Andrei Văcaru");
     expect(campaignHtml).not.toContain("Link platformă:");
     expect(transactionalHtml).toContain('href="{action_url}"');
+    expect(transactionalHtml).not.toContain("Andrei Văcaru");
     expect(transactionalHtml).not.toContain("Link platformă:");
     expect(htmlToPlainText(transactionalHtml).match(/\{action_url\}/g)).toHaveLength(1);
   });

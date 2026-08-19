@@ -27,6 +27,10 @@ def test_account_setup_template_renders_email_message() -> None:
     assert "Ana" in message.html_body
     assert "Cody" in message.html_body
     assert "https://cody.andreivacaru.ro/invite/token" in message.text_body
+    assert "text-transform:uppercase" not in message.html_body
+    assert '<div style="font-family:Inter,Arial,sans-serif;' in message.html_body
+    assert "border:1px solid #eadfdb;" in message.html_body
+    assert message.html_body.endswith("</div></div>")
 
 
 def test_assignment_bundle_template_renders_task_count() -> None:
@@ -46,6 +50,31 @@ def test_assignment_bundle_template_renders_task_count() -> None:
     assert "3 chestionare" in message.subject
     assert "3 chestionare" in message.html_body
     assert "Cody" in message.text_body
+    assert "text-transform:uppercase" not in message.html_body
+    assert '<div style="font-family:Inter,Arial,sans-serif;' in message.html_body
+    assert "border:1px solid #eadfdb;" in message.html_body
+    assert message.html_body.endswith("</div></div>")
+
+
+def test_assignment_reminder_template_renders_without_header() -> None:
+    template = get_transactional_template(TransactionalTemplateKey.assignment_reminder)
+
+    message = template.render(
+        to=EmailAddress("ana@example.com"),
+        context={
+            "participant_name": "Ana",
+            "company_name": "Demo",
+            "action_url": "https://cody.andreivacaru.ro/tasks/token",
+        },
+    )
+
+    assert template.version == 2
+    assert "Demo" in message.subject
+    assert "Continuă chestionarele" in message.html_body
+    assert "text-transform:uppercase" not in message.html_body
+    assert '<div style="font-family:Inter,Arial,sans-serif;' in message.html_body
+    assert "border:1px solid #eadfdb;" in message.html_body
+    assert message.html_body.endswith("</div></div>")
 
 
 def test_template_render_rejects_missing_context() -> None:
