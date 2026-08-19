@@ -1420,6 +1420,23 @@ class CompanyService:
             if mode == "email" and has_sendable_email
             else 0
         )
+        project_memberships_map: dict[UUID, ProjectMembership] = {}
+        project_participants_by_key: dict[str, ParticipantProfile] = {}
+        duplicate_name_keys: set[str] = set()
+        if project_id is not None:
+            all_project_memberships = await self.repository.list_project_memberships(
+                company.id, project_id
+            )
+            for membership, member_profile in all_project_memberships:
+                project_memberships_map[member_profile.id] = membership
+                key = manager_reference_key(member_profile.full_name)
+                if not key:
+                    continue
+                if key in project_participants_by_key:
+                    duplicate_name_keys.add(key)
+                else:
+                    project_participants_by_key[key] = member_profile
+
         for participant in participants:
             if participant.email is None:
                 results.append(
@@ -1490,12 +1507,19 @@ class CompanyService:
                                 "trimise.",
                                 code="reminder_not_due",
                             )
+                        manager_name = _resolve_participant_manager_name(
+                            project_memberships_map.get(participant.id),
+                            project_participants_by_key,
+                            duplicate_name_keys,
+                            trainer_name,
+                        )
                         queued = await email_service.enqueue_assignment_invitation(
                             assignments[0],
                             participant,
                             AssignmentInvitationContext(
                                 company_name=company.name,
                                 trainer_name=trainer_name,
+                                manager_name=manager_name,
                                 action_url=invite_url,
                                 task_count=len(assignments),
                             ),
@@ -2146,6 +2170,40 @@ def _project_participant_response(
         anonymous_name=participant.anonymous_name,
         project_membership_id=membership.id,
     )
+
+
+def _resolve_participant_manager_name(
+    membership: ProjectMembership | None,
+    project_participants_by_key: dict[str, ParticipantProfile],
+    duplicate_name_keys: set[str],
+    fallback_trainer_name: str,
+) -> str:
+    # 1. Sursa este DOAR membership.reports_to_name (exact ca organigrama din UI).
+    # Dacă nu există ProjectMembership sau reports_to_name este None -> fallback la trainer_name.
+    if membership is None or membership.reports_to_name is None:
+        return fallback_trainer_name
+
+    raw_reports_to = membership.reports_to_name
+    if not raw_reports_to or not raw_reports_to.strip():
+        return fallback_trainer_name
+
+    cleaned = clean_manager_reference(raw_reports_to)
+    if cleaned is None:
+        return fallback_trainer_name
+
+    # 2. Dacă numele managerului este ambiguu în rosterul proiectului (cheie duplicată),
+    # se folosește șirul brut curățat, fără asociere arbitrară.
+    key = manager_reference_key(cleaned)
+    if key in duplicate_name_keys:
+        return cleaned.strip()
+
+    # 3. Dacă se potrivește cu un participant real unic din proiect -> full_name canonic
+    matched = project_participants_by_key.get(key)
+    if matched is not None:
+        return matched.full_name
+
+    # 4. Dacă nu se poate asocia unui participant din proiect -> textul brut curățat
+    return cleaned.strip()
 
 
 def _validate_date_window(

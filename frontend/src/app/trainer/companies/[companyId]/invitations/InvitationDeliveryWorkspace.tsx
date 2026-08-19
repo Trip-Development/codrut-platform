@@ -405,6 +405,7 @@ export function InvitationDeliveryWorkspace({
       new Set([
         "participant_name",
         "trainer_name",
+        "manager_name",
         "company_name",
         "task_count",
         "action_url",

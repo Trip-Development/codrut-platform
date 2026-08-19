@@ -100,6 +100,7 @@ INVITATION_TEMPLATE_ALLOWED_VARS = frozenset(
     {
         "participant_name",
         "trainer_name",
+        "manager_name",
         "company_name",
         "task_count",
         "action_url",
@@ -2934,6 +2935,7 @@ class AssignmentInvitationContext:
     trainer_name: str
     action_url: str
     task_count: int = 1
+    manager_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -3061,6 +3063,12 @@ class TransactionalEmailService:
                 code="template_not_found",
             )
 
+        resolved_manager_name = (
+            context.manager_name.strip()
+            if context.manager_name and context.manager_name.strip()
+            else context.trainer_name
+        )
+
         message = render_template_content(
             subject=subject,
             html_body=html_body,
@@ -3070,6 +3078,7 @@ class TransactionalEmailService:
             context={
                 "participant_name": respondent.full_name,
                 "trainer_name": context.trainer_name,
+                "manager_name": resolved_manager_name,
                 "company_name": context.company_name,
                 "task_count": str(context.task_count),
                 "action_url": context.action_url,
