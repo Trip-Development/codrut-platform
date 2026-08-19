@@ -36,11 +36,55 @@ from codrut.modules.companies.models import (
     ProjectMembership,
 )
 from codrut.modules.forms.models import (
+    QuestionnaireDefinition,
     QuestionnaireResponse,
     QuestionnaireResponseStatus,
 )
 from codrut.modules.forms.service import FormsService
 from codrut.modules.identity.models import User, UserRole
+
+
+async def _ensure_questionnaire_definition(
+    session,
+    key: str = "lencioni",
+) -> QuestionnaireDefinition:
+    existing = (
+        await session.scalars(
+            select(QuestionnaireDefinition).where(
+                QuestionnaireDefinition.key == key,
+                QuestionnaireDefinition.active.is_(True),
+            )
+        )
+    ).first()
+    if existing:
+        return existing
+    definition = QuestionnaireDefinition(
+        id=uuid.uuid4(),
+        key=key,
+        title=f"Test {key}",
+        description="",
+        version=1,
+        active=True,
+        schema={
+            "sections": [
+                {
+                    "id": "section_1",
+                    "title": "Section 1",
+                    "questions": [
+                        {
+                            "id": "q1",
+                            "type": "scale",
+                            "prompt": "Question 1",
+                            "required": True,
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    session.add(definition)
+    await session.commit()
+    return definition
 
 
 async def _setup_test_project_and_trainer(session) -> tuple[Company, CompanyProject, User]:
@@ -71,6 +115,15 @@ async def _setup_test_project_and_trainer(session) -> tuple[Company, CompanyProj
         status=CompanyProjectStatus.active,
     )
     session.add(project)
+    for q_key in (
+        "lencioni",
+        "boss_360",
+        "icare",
+        "pcm_base",
+        "distress_drivers",
+        "pilot_feedback",
+    ):
+        await _ensure_questionnaire_definition(session, q_key)
     await session.commit()
     return company, project, trainer_user
 
