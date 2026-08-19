@@ -20,6 +20,12 @@ EMAIL_SHELL_OPEN = (
     '<p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#890505;'
     'letter-spacing:.08em;text-transform:uppercase;">Andrei Văcaru</p>'
 )
+TRANSACTIONAL_EMAIL_SHELL_OPEN = (
+    '<div style="font-family:Inter,Arial,sans-serif;max-width:620px;margin:0 auto;'
+    'padding:28px;color:#2b211f;">'
+    '<div style="border:1px solid #eadfdb;border-radius:18px;padding:28px;'
+    'background:#fffdfb;">'
+)
 EMAIL_SHELL_CLOSE = "</div></div>"
 PROMOTIONAL_SHELL_CLOSE = (
     "</div>"
@@ -87,7 +93,7 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
         version=5,
         subject="Andrei Văcaru: activează contul pentru ${company_name}",
         html_body=(
-            EMAIL_SHELL_OPEN
+            TRANSACTIONAL_EMAIL_SHELL_OPEN
             + f"<h1 {HEADING_STYLE}>Contul tău Cody este pregătit</h1>"
             + f"<p {GREETING_STYLE}>Bună, ${{participant_name}}.</p>"
             + f"<p {BODY_COPY_STYLE}>${{trainer_name}} te-a invitat în spațiul de evaluare "
@@ -112,7 +118,7 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
         version=5,
         subject="Andrei Văcaru: ai ${task_count} chestionare pentru ${company_name}",
         html_body=(
-            EMAIL_SHELL_OPEN
+            TRANSACTIONAL_EMAIL_SHELL_OPEN
             + f"<h1 {HEADING_STYLE}>Chestionarele tale sunt pregătite</h1>"
             + f"<p {GREETING_STYLE}>Bună, ${{participant_name}}.</p>"
             + f"<p {BODY_COPY_STYLE}>Pentru ${{company_name}}, ai ${{task_count}} "
@@ -137,7 +143,7 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
         version=2,
         subject="Reminder: ai chestionare de completat pentru ${company_name}",
         html_body=(
-            EMAIL_SHELL_OPEN
+            TRANSACTIONAL_EMAIL_SHELL_OPEN
             + f"<h1 {HEADING_STYLE}>Continuă chestionarele</h1>"
             + f"<p {GREETING_STYLE}>Bună, ${{participant_name}}.</p>"
             + f"<p {BODY_COPY_STYLE}>Mai ai chestionare de completat pentru "

@@ -38,8 +38,11 @@ export function emailTemplateCtaCount(body: string): number {
     .length;
 }
 
-const EMAIL_PREVIEW_SHELL_OPEN =
+const TRANSACTIONAL_EMAIL_PREVIEW_SHELL_OPEN =
+  '<div style="font-family:Inter,Arial,sans-serif;max-width:620px;margin:0 auto;padding:28px;color:#2b211f;"><div style="border:1px solid #eadfdb;border-radius:18px;padding:28px;background:#fffdfb;">';
+const PROMOTIONAL_EMAIL_PREVIEW_SHELL_OPEN =
   '<div style="font-family:Inter,Arial,sans-serif;max-width:620px;margin:0 auto;padding:28px;color:#2b211f;"><div style="border:1px solid #eadfdb;border-radius:18px;padding:28px;background:#fffdfb;"><p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#890505;letter-spacing:.08em;text-transform:uppercase;">Andrei Văcaru</p>';
+const EMAIL_PREVIEW_SHELL_OPEN = PROMOTIONAL_EMAIL_PREVIEW_SHELL_OPEN;
 const EMAIL_PREVIEW_SHELL_CLOSE = "</div></div>";
 const PROMOTIONAL_EMAIL_PREVIEW_SHELL_CLOSE =
   '</div><div style="margin-top:24px;padding-top:24px;border-top:1px solid #eadfdb;font-size:12px;line-height:1.5;color:#8c7e7b;text-align:center;"><p style="margin:0 0 8px;">Ai primit acest email deoarece ești abonat la actualizările noastre sau ești un client.</p><p style="margin:0 0 8px;"><a href="{unsubscribe_url}" style="color:#6d5f5b;text-decoration:underline;">Dezabonare</a></p><p style="margin:0;">{legal_address}</p></div></div>';
@@ -285,8 +288,9 @@ export function buildStyledEmailTemplateBody({
   const headingHtml = heading.trim()
     ? `<h1 style="${EMAIL_HEADING_STYLE}">${emailInlineMarkdownToHtml(heading.trim())}</h1>`
     : "";
+  const shellOpen = lane === "campaign" ? PROMOTIONAL_EMAIL_PREVIEW_SHELL_OPEN : TRANSACTIONAL_EMAIL_PREVIEW_SHELL_OPEN;
   const shellClose = lane === "campaign" ? PROMOTIONAL_EMAIL_PREVIEW_SHELL_CLOSE : EMAIL_PREVIEW_SHELL_CLOSE;
-  return `${EMAIL_PREVIEW_SHELL_OPEN}${headingHtml}${friendlyEmailBlocksToHtml(body)}${shellClose}`;
+  return `${shellOpen}${headingHtml}${friendlyEmailBlocksToHtml(body)}${shellClose}`;
 }
 
 export function parseEmailTemplateEditorDraft(body: string, fallbackHeading: string): { heading: string; body: string } {
