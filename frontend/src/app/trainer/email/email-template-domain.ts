@@ -5,6 +5,7 @@ export const MOCK_REPLACEMENTS: Record<string, string> = {
   "{last_name}": "Popescu",
   "{participant_name}": "Ioana Popescu",
   "{trainer_name}": "Andrei Văcaru",
+  "{manager_name}": "Mihai Popescu",
   "{company_name}": "Compania Pilot",
   "{organization_name}": "Compania Pilot",
   "{contact_name}": "Ioana Popescu",
@@ -69,6 +70,7 @@ const CAMPAIGN_PLACEHOLDERS = new Set([
 const TRANSACTIONAL_PLACEHOLDERS = new Set([
   "{participant_name}",
   "{trainer_name}",
+  "{manager_name}",
   "{company_name}",
   "{task_count}",
   "{action_url}",
@@ -90,6 +92,7 @@ const REQUIRED_TEMPLATE_PLACEHOLDERS: Record<string, string[]> = {
 const PLACEHOLDER_LABELS: Record<string, string> = {
   "{action_url}": "linkul de acces",
   "{company_name}": "numele companiei",
+  "{manager_name}": "numele managerului direct din organigramă",
   "{participant_name}": "numele participantului",
   "{task_count}": "numărul de chestionare",
   "{trainer_name}": "numele trainerului",
