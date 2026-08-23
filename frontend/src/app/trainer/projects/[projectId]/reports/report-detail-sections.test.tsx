@@ -29,7 +29,7 @@ function team(overrides: Partial<TeamLens> = {}): TeamLens {
 }
 
 describe("Lencioni team detail", () => {
-  it("keeps a single trainer-visible response and friendly navigation", () => {
+  it("renders teams with data and provides friendly navigation", () => {
     const { rerender } = render(
       <LencioniTeamBreakdown teams={[]} overviewHref="/reports" />,
     );
@@ -43,15 +43,15 @@ describe("Lencioni team detail", () => {
         overviewHref="/reports"
         teams={[
           team({
-            id: "single",
-            name: "Echipa cu un răspuns",
-            lencioniCount: 1,
-            lencioniScale: { score_unit: "score", scale_min: 0, scale_max: 12 },
+            id: "scored-team",
+            name: "Echipa Scilence",
+            lencioniCount: 3,
+            lencioniScale: { score_unit: "score", scale_min: 0, scale_max: 10 },
             lencioniAverages: [
               {
                 id: "trust",
                 label: "Încredere",
-                avg: 6.8,
+                avg: 8.5,
                 range_label: "Solid",
                 interpretation: "Echipa colaborează.",
               },
@@ -61,11 +61,57 @@ describe("Lencioni team detail", () => {
       />,
     );
 
-    const card = screen.getByText("Echipa cu un răspuns").closest("article");
+    const card = screen.getByText("Echipa Scilence").closest("article");
     expect(card).not.toBeNull();
-    expect(within(card as HTMLElement).getByText("6.8 / 12")).toBeTruthy();
+    expect(within(card as HTMLElement).getByText("8.5 / 10")).toBeTruthy();
     expect(within(card as HTMLElement).getByText("Solid: Echipa colaborează.")).toBeTruthy();
-    expect(screen.queryByText(/Prag de confidențialitate|Ascuns până există/)).toBeNull();
+  });
+
+  it("renders teams with 0 responses without hiding them", () => {
+    render(
+      <LencioniTeamBreakdown
+        overviewHref="/reports"
+        teams={[
+          team({
+            id: "zero-responses",
+            name: "Echipa Fără Răspunsuri",
+            lencioniCount: 0,
+            lencioniAverages: [],
+            lencioniUnavailableReason: "no_responses",
+            lencioniUnavailableMessage: "Nu există încă răspunsuri",
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Echipa Fără Răspunsuri")).toBeTruthy();
+    expect(screen.getByText("Nu există încă răspunsuri")).toBeTruthy();
+  });
+
+  it("renders privacy threshold message when responses are below threshold", () => {
+    render(
+      <LencioniTeamBreakdown
+        overviewHref="/reports"
+        teams={[
+          team({
+            id: "single-response",
+            name: "Echipa Cu Un Răspuns",
+            lencioniCount: 1,
+            lencioniAverages: [],
+            lencioniUnavailableReason: "privacy_threshold",
+            lencioniUnavailableMessage:
+              "Rezultatele sunt ascunse deoarece numărul de evaluări (1) este sub pragul minim de confidențialitate (2).",
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Echipa Cu Un Răspuns")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Rezultatele sunt ascunse deoarece numărul de evaluări (1) este sub pragul minim de confidențialitate (2).",
+      ),
+    ).toBeTruthy();
   });
 
   it("explains a team whose pinned scales cannot be combined", () => {

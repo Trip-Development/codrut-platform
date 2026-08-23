@@ -30,6 +30,7 @@ from codrut.modules.scoring.service import (
     _build_driver_rank_summary,
     _build_icare_cohort_summaries,
     _build_score_summary,
+    _build_team_lens,
     _build_team_lenses,
     _distribution_count,
     _distribution_from_completed_pcm_assignments,
@@ -745,7 +746,10 @@ def test_cycle_team_lenses_use_snapshot_targets_without_multi_team_bleed() -> No
     assert by_id[str(leadership_team_id)].driver_count == 0
     assert by_id[str(functional_team_id)].lencioni_count == 2
     assert by_id[str(functional_team_id)].lencioni_averages[0].avg == 9
-    assert by_id[str(functional_team_id)].driver_count == 1
+    assert by_id[str(functional_team_id)].driver_count == 0
+    assert by_id[str(functional_team_id)].driver_averages == []
+    assert by_id[str(functional_team_id)].boss_360_averages == []
+    assert by_id[str(functional_team_id)].pcm_base_distribution == []
 
 
 def test_ambiguous_hierarchy_keeps_explicit_leaders_for_individual_reports() -> None:
@@ -1584,9 +1588,9 @@ def test_pcm_distribution_requires_completed_known_profiles() -> None:
     blank_id = uuid.uuid4()
     missing_id = uuid.uuid4()
     participants = [
-        _participant(thinker_id, pcm_base=" thinker "),
-        _participant(alias_id, pcm_base="Gânditor"),
-        _participant(blank_id, pcm_base="  "),
+        _participant(thinker_id),
+        _participant(alias_id),
+        _participant(blank_id),
     ]
     assignments = [
         _assignment("pcm_base", respondent_profile_id=thinker_id),
@@ -1600,13 +1604,20 @@ def test_pcm_distribution_requires_completed_known_profiles() -> None:
         ),
         _assignment("lencioni", respondent_profile_id=thinker_id),
     ]
+    cycle_values = {
+        thinker_id: {"pcm_base": " thinker "},
+        alias_id: {"pcm_base": "Gânditor"},
+        blank_id: {"pcm_base": "  "},
+    }
     distribution = _distribution_from_completed_pcm_assignments(
         participants,
         assignments,  # type: ignore[arg-type]
         "pcm_base",
+        cycle_values=cycle_values,
     )
     assert _distribution_count(distribution) == 2
-    assert [item.label for item in distribution] == ["Gânditor", "Gânditor"]
+    assert [item.label for item in distribution] == ["Gânditor"]
+    assert distribution[0].value == 2
     assert all(item.color == "#2563eb" for item in distribution)
     assert _pcm_profile_key(None) is None
     assert _pcm_profile_key("Gânditor") == "thinker"
@@ -1614,6 +1625,165 @@ def test_pcm_distribution_requires_completed_known_profiles() -> None:
     assert _format_pcm_label(None) == "Necompletată"
     assert _format_pcm_label("custom_profile") == "Custom Profile"
     assert _get_pcm_color("custom") is None
+
+
+def test_frederic_cauquil_team_with_peer_leadership_member_work_separation() -> None:
+    """Corecția 1: Munca de conducere se scoate pentru ORICE membru din conducere (lider sau subordonat)."""
+    frederic_leader_id = uuid.uuid4()
+    remy_peer_id = uuid.uuid4()
+    sub_1_id = uuid.uuid4()
+    sub_2_id = uuid.uuid4()
+    sub_3_id = uuid.uuid4()
+    sub_4_id = uuid.uuid4()
+    leadership_team_id = uuid.uuid4()
+    frederic_team_id = uuid.uuid4()
+
+    participants = [
+        ReportParticipant(id=frederic_leader_id, full_name="Frederic Cauquil", reports_to_name=None, role_group="leadership", pcm_base=None, pcm_phase=None, user_id=None),
+        ReportParticipant(id=remy_peer_id, full_name="Remy Bedu", reports_to_name="Frederic Cauquil", role_group="leadership", pcm_base=None, pcm_phase=None, user_id=None),
+        ReportParticipant(id=sub_1_id, full_name="Sub 1", reports_to_name="Frederic Cauquil", role_group="member", pcm_base=None, pcm_phase=None, user_id=None),
+        ReportParticipant(id=sub_2_id, full_name="Sub 2", reports_to_name="Frederic Cauquil", role_group="member", pcm_base=None, pcm_phase=None, user_id=None),
+        ReportParticipant(id=sub_3_id, full_name="Sub 3", reports_to_name="Frederic Cauquil", role_group="member", pcm_base=None, pcm_phase=None, user_id=None),
+        ReportParticipant(id=sub_4_id, full_name="Sub 4", reports_to_name="Frederic Cauquil", role_group="member", pcm_base=None, pcm_phase=None, user_id=None),
+    ]
+
+    snapshot = AssessmentCycleTeamSnapshot(
+        leadership_ids=frozenset({frederic_leader_id, remy_peer_id}),
+        direct_report_ids_by_leader_id={
+            frederic_leader_id: frozenset({remy_peer_id, sub_1_id, sub_2_id, sub_3_id, sub_4_id})
+        },
+        teams=(
+            AssessmentCycleTeam(
+                id=leadership_team_id,
+                name="Leadership",
+                type=TeamType.leadership,
+                member_ids=frozenset({frederic_leader_id, remy_peer_id}),
+            ),
+            AssessmentCycleTeam(
+                id=frederic_team_id,
+                name="Echipa Frederic Cauquil",
+                type=TeamType.functional,
+                member_ids=frozenset({frederic_leader_id, remy_peer_id, sub_1_id, sub_2_id, sub_3_id, sub_4_id}),
+                leader_id=frederic_leader_id,
+            ),
+        ),
+    )
+
+    rows: list[AssignmentResultWithDefinition] = []
+    # Frederic has 21 leadership tasks in lens (19 icare + 1 driver + 1 pcm; his lencioni is targeted to leadership_team_id)
+    for _ in range(19):
+        rows.append((_assignment("icare", respondent_profile_id=frederic_leader_id), None, None))
+    rows.append((_assignment("distress_drivers", respondent_profile_id=frederic_leader_id), None, None))
+    rows.append((_assignment("pcm_base", respondent_profile_id=frederic_leader_id), None, None))
+
+    # Remy has 22 leadership tasks (19 icare + 1 driver + 1 pcm + 1 lencioni targeted to leadership)
+    for _ in range(19):
+        rows.append((_assignment("icare", respondent_profile_id=remy_peer_id), None, None))
+    rows.append((_assignment("distress_drivers", respondent_profile_id=remy_peer_id), None, None))
+    rows.append((_assignment("pcm_base", respondent_profile_id=remy_peer_id), None, None))
+    rows.append((_assignment("lencioni", respondent_profile_id=remy_peer_id, target_team_id=leadership_team_id), None, None))
+
+    # The 4 regular members each have 2 tasks: 1 Lencioni targeted to frederic_team_id + 1 team task
+    for sub_id in (sub_1_id, sub_2_id, sub_3_id, sub_4_id):
+        rows.append((_assignment("lencioni", respondent_profile_id=sub_id, target_team_id=frederic_team_id), None, None))
+        rows.append((_assignment("feedback_team", respondent_profile_id=sub_id, target_team_id=frederic_team_id), None, None))
+
+    result = _build_team_lenses(participants, rows, team_snapshot=snapshot)
+    by_id = {team.id: team for team in result.team_lenses}
+    frederic_lens = by_id[str(frederic_team_id)]
+
+    # Expected: Team work = 8 assignments (from the 4 non-leadership members)
+    assert frederic_lens.assigned_count == 8
+    # Expected: Leadership work = 42 assignments (21 from Frederic + 21 from Remy in this lens)
+    assert frederic_lens.leadership_assigned_count == 42
+    # Expected: Leader-specific work = 21 assignments (from Frederic)
+    assert frederic_lens.leader_assigned_count == 21
+    # Corecția 2: Sum of parts equals total assignments in lens (8 + 42 = 50)
+    assert frederic_lens.assigned_count + frederic_lens.leadership_assigned_count == 50
+
+
+def test_team_lens_lencioni_privacy_threshold() -> None:
+    """Corecția 3: Prag de confidențialitate pe lentilele de echipă."""
+    leader_id = uuid.uuid4()
+    sub_1_id = uuid.uuid4()
+    sub_2_id = uuid.uuid4()
+    team_id = uuid.uuid4()
+
+    participants = [
+        ReportParticipant(id=leader_id, full_name="Leader", reports_to_name=None, role_group="leadership", pcm_base=None, pcm_phase=None, user_id=None),
+        ReportParticipant(id=sub_1_id, full_name="Sub 1", reports_to_name="Leader", role_group="member", pcm_base=None, pcm_phase=None, user_id=None),
+        ReportParticipant(id=sub_2_id, full_name="Sub 2", reports_to_name="Leader", role_group="member", pcm_base=None, pcm_phase=None, user_id=None),
+    ]
+    definition = SimpleNamespace(
+        private_config={},
+        schema={},
+        feedback_policy={"score_unit": "score", "scale_min": 0, "scale_max": 10},
+    )
+
+    # 1. 0 responses
+    lens_0 = _build_team_lens(
+        str(team_id),
+        "Echipă 0",
+        {leader_id, sub_1_id, sub_2_id},
+        participants,
+        [],
+        lencioni_target_team_id=team_id,
+        minimum_completed=2,
+    )
+    assert lens_0.lencioni_count == 0
+    assert lens_0.lencioni_averages == []
+    assert lens_0.lencioni_unavailable_reason == "no_responses"
+    assert lens_0.lencioni_unavailable_message == "Nu există încă răspunsuri"
+
+    # 2. 1 response (below threshold of 2)
+    rows_1: list[AssignmentResultWithDefinition] = [
+        (
+            _assignment("lencioni", respondent_profile_id=sub_1_id, target_team_id=team_id),
+            _result({"trust": 8}),
+            definition,
+        )
+    ]
+    lens_1 = _build_team_lens(
+        str(team_id),
+        "Echipă 1",
+        {leader_id, sub_1_id, sub_2_id},
+        participants,
+        rows_1,
+        lencioni_target_team_id=team_id,
+        minimum_completed=2,
+    )
+    assert lens_1.lencioni_count == 1
+    assert lens_1.lencioni_averages == []
+    assert lens_1.lencioni_unavailable_reason == "privacy_threshold"
+    assert "sub pragul minim de confidențialitate" in (lens_1.lencioni_unavailable_message or "")
+
+    # 3. 2 responses (meets threshold)
+    rows_2: list[AssignmentResultWithDefinition] = [
+        (
+            _assignment("lencioni", respondent_profile_id=sub_1_id, target_team_id=team_id),
+            _result({"trust": 8}),
+            definition,
+        ),
+        (
+            _assignment("lencioni", respondent_profile_id=sub_2_id, target_team_id=team_id),
+            _result({"trust": 10}),
+            definition,
+        ),
+    ]
+    lens_2 = _build_team_lens(
+        str(team_id),
+        "Echipă 2",
+        {leader_id, sub_1_id, sub_2_id},
+        participants,
+        rows_2,
+        lencioni_target_team_id=team_id,
+        minimum_completed=2,
+    )
+    assert lens_2.lencioni_count == 2
+    assert len(lens_2.lencioni_averages) == 1
+    assert lens_2.lencioni_averages[0].avg == 9.0
+    assert lens_2.lencioni_unavailable_reason is None
+    assert lens_2.lencioni_unavailable_message is None
 
 
 def test_hierarchy_issue_copy_is_specific_and_preserves_fallback() -> None:

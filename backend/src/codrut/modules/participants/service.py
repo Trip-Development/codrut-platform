@@ -143,7 +143,7 @@ class ParticipantWorkspaceService:
         pcm_base, pcm_phase = (
             await self._get_cycle_pcm_values(assignments)
             if cycle_id is not None
-            else (profile.pcm_base, profile.pcm_phase)
+            else (None, None)
         )
         projects = await self._get_projects(assignments)
         teams = await self._get_teams(assignments)
@@ -1261,6 +1261,8 @@ class ParticipantWorkspaceService:
         self,
         assignments: list[QuestionnaireAssignment],
     ) -> tuple[str | None, str | None]:
+        from codrut.modules.scoring.service import _format_pcm_label
+
         pcm_assignment_ids = {
             assignment.id
             for assignment in assignments
@@ -1279,11 +1281,11 @@ class ParticipantWorkspaceService:
         pcm_phase: str | None = None
         for response in result.scalars().all():
             base_value = response.answers.get("pcm_base")
-            phase_value = response.answers.get("pcm_phase")
+            phase_value = response.answers.get("pcm_phase") or response.answers.get("phase")
             if isinstance(base_value, str) and base_value.strip():
-                pcm_base = base_value.strip()
+                pcm_base = _format_pcm_label(base_value.strip())
             if isinstance(phase_value, str) and phase_value.strip():
-                pcm_phase = phase_value.strip()
+                pcm_phase = _format_pcm_label(phase_value.strip())
         return pcm_base, pcm_phase
 
     async def _get_active_individual_publications(

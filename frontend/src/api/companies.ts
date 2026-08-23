@@ -439,10 +439,19 @@ export type ReportDistribution = {
 export type ReportTeamLens = {
   id: string;
   name: string;
+  team_type?: string | null;
   member_count: number;
   assigned_count: number;
   completed_count: number;
   completion_rate: number;
+  leader_id?: string | null;
+  leader_name?: string | null;
+  leader_assigned_count?: number;
+  leader_completed_count?: number;
+  leader_completion_rate?: number;
+  leadership_assigned_count?: number;
+  leadership_completed_count?: number;
+  leadership_completion_rate?: number;
   lencioni_count: number;
   driver_count: number;
   boss_360_count: number;
@@ -450,6 +459,8 @@ export type ReportTeamLens = {
   pcm_phase_count: number;
   lencioni_averages: ReportAverage[];
   lencioni_scale?: ReportScoreScale | null;
+  lencioni_unavailable_reason?: string | null;
+  lencioni_unavailable_message?: string | null;
   driver_averages: ReportAverage[];
   boss_360_averages: ReportAverage[];
   pcm_base_distribution: ReportDistribution[];

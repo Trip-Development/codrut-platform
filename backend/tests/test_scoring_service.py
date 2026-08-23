@@ -1865,6 +1865,42 @@ async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warni
                 ),
             ]
             session.add_all(assignments)
+            session.add_all(
+                [
+                    QuestionnaireResponse(
+                        id=uuid.uuid4(),
+                        assignment_id=assignments[0].id,
+                        questionnaire_key="pcm_base",
+                        questionnaire_version=definitions["pcm_base"].version,
+                        status=QuestionnaireResponseStatus.submitted,
+                        answers={"pcm_base": "harmonizer", "pcm_phase": "promoter"},
+                    ),
+                    QuestionnaireResponse(
+                        id=uuid.uuid4(),
+                        assignment_id=assignments[1].id,
+                        questionnaire_key="pcm_base",
+                        questionnaire_version=definitions["pcm_base"].version,
+                        status=QuestionnaireResponseStatus.submitted,
+                        answers={"pcm_base": "thinker", "pcm_phase": "promoter"},
+                    ),
+                    QuestionnaireResponse(
+                        id=uuid.uuid4(),
+                        assignment_id=assignments[2].id,
+                        questionnaire_key="phase",
+                        questionnaire_version=definitions["phase"].version,
+                        status=QuestionnaireResponseStatus.submitted,
+                        answers={"pcm_base": "imaginer", "phase": "promoter"},
+                    ),
+                    QuestionnaireResponse(
+                        id=uuid.uuid4(),
+                        assignment_id=assignments[3].id,
+                        questionnaire_key="pcm_base",
+                        questionnaire_version=definitions["pcm_base"].version,
+                        status=QuestionnaireResponseStatus.submitted,
+                        answers={"pcm_base": "promoter", "pcm_phase": "promoter"},
+                    ),
+                ]
+            )
             await session.flush()
 
             session.add_all(
@@ -1907,7 +1943,7 @@ async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warni
             ]
             assert base_distribution == [
                 ("harmonizer", "Armonizator", 1),
-                ("ganditor", "Gânditor", 1),
+                ("thinker", "Gânditor", 1),
                 ("imaginer", "Imaginator", 1),
                 ("promoter", "Promotor", 1),
             ]
@@ -1922,12 +1958,17 @@ async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warni
                 team for team in aggregate.team_lenses if team.name == "Echipa Bogdan Manager"
             )
             assert manager_team.member_count == 2
-            assert manager_team.assigned_count == 4
-            assert manager_team.completed_count == 4
-            assert manager_team.driver_count == 1
+            assert manager_team.assigned_count == 2
+            assert manager_team.completed_count == 2
+            assert manager_team.leadership_assigned_count == 2
+            assert manager_team.leadership_completed_count == 2
+            assert manager_team.assigned_count + manager_team.leadership_assigned_count == 4
+            assert manager_team.driver_count == 0
             assert manager_team.lencioni_count == 1
-            assert manager_team.pcm_base_count == 2
-            assert manager_team.pcm_phase_count == 2
+            assert manager_team.lencioni_averages == []
+            assert manager_team.lencioni_unavailable_reason == "privacy_threshold"
+            assert manager_team.pcm_base_count == 0
+            assert manager_team.pcm_phase_count == 0
 
             await session.rollback()
     finally:
