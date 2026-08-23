@@ -292,7 +292,9 @@ export async function getParticipantWorkspaceSummary(
   return getDemoParticipantWorkspaceSummary();
 }
 
-function mapParticipantWorkspaceSummary(
+export type { BackendParticipantWorkspaceSummary };
+
+export function mapParticipantWorkspaceSummary(
   data: BackendParticipantWorkspaceSummary,
 ): ParticipantWorkspaceSummary {
   return {

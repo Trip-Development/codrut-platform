@@ -102,6 +102,119 @@ describe("ParticipantClientWorkspace", () => {
     expect(screen.queryByRole("complementary", { name: "Contextul fluxului" })).toBeNull();
   });
 
+  it("renders non-regression active navigation and links when readOnly is false (default)", () => {
+    render(
+      <ParticipantClientWorkspace
+        session={{
+          state: "authenticated",
+          user: {
+            id: "participant-1",
+            name: "Mihai Matei",
+            email: "mihai.matei@example.com",
+            role: "participant",
+          },
+        }}
+        summaryData={{
+          projectName: "Leadership Q3",
+          companyName: "Atlas Mobility",
+          participantFullName: "Mihai Matei",
+          participantEmail: "mihai.matei@example.com",
+          deadlineLabel: "Fără termen",
+          pcmBase: null,
+          pcmPhase: null,
+          results: [
+            {
+              assignmentId: "res-1",
+              questionnaireKey: "lencioni",
+              title: "Lencioni",
+              targetLabel: "Echipa",
+              scores: {},
+            },
+          ],
+          tasks: [
+            {
+              id: "task-active",
+              title: "Driveri de stres TA",
+              status: "not_started",
+              detail: "De completat",
+              href: "/participant/questionnaires/distress_drivers?assignmentId=task-active",
+              assignmentId: "task-active",
+              targetLabel: "Autoevaluare",
+              estimatedMinutes: 5,
+              questionnaireKey: "distress_drivers",
+            },
+          ],
+        }}
+        readOnly={false}
+      />,
+    );
+
+    // Active task link exists
+    const taskLink = screen.getByRole("link", { name: /Deschide/i });
+    expect(taskLink).toBeDefined();
+    expect(taskLink.getAttribute("href")).toContain("/participant/questionnaires/distress_drivers?assignmentId=task-active");
+
+    // Results link exists
+    const resultsLink = screen.getByRole("link", { name: /Vezi rezultatele/i });
+    expect(resultsLink).toBeDefined();
+  });
+
+  it("renders read-only mode with passive indicators, no active completion links, and inline results when readOnly is true", () => {
+    render(
+      <ParticipantClientWorkspace
+        session={{
+          state: "authenticated",
+          user: {
+            id: "participant-1",
+            name: "Mihai Matei",
+            email: "mihai.matei@example.com",
+            role: "participant",
+          },
+        }}
+        summaryData={{
+          projectName: "Leadership Q3",
+          companyName: "Atlas Mobility",
+          participantFullName: "Mihai Matei",
+          participantEmail: "mihai.matei@example.com",
+          deadlineLabel: "Fără termen",
+          pcmBase: "Thinker",
+          pcmPhase: null,
+          results: [
+            {
+              assignmentId: "res-1",
+              questionnaireKey: "lencioni",
+              title: "Lencioni Echipa",
+              targetLabel: "Echipa",
+              scores: {},
+            },
+          ],
+          tasks: [
+            {
+              id: "task-readonly",
+              title: "Driveri de stres TA",
+              status: "not_started",
+              detail: "De completat",
+              href: "/participant/questionnaires/distress_drivers?assignmentId=task-readonly",
+              assignmentId: "task-readonly",
+              targetLabel: "Autoevaluare",
+              estimatedMinutes: 5,
+              questionnaireKey: "distress_drivers",
+            },
+          ],
+        }}
+        readOnly={true}
+      />,
+    );
+
+    // No interactive questionnaire completion link
+    expect(screen.queryByRole("link", { name: /Deschide|Continuă|Completează|Începe/i })).toBeNull();
+    expect(screen.getByText("Doar citire")).toBeDefined();
+
+    // Results panel is displayed inline in preview mode
+    expect(screen.getAllByText("Lencioni Echipa").length).toBeGreaterThan(0);
+    expect(screen.getByText("Gânditor")).toBeDefined();
+  });
+
   it("makes ready results the primary action after every questionnaire is complete", () => {
     render(
       <ParticipantClientWorkspace
@@ -1152,5 +1265,73 @@ describe("ParticipantTaskList", () => {
     expect(screen.getAllByText("Proiect încheiat").length).toBeGreaterThan(1);
     expect(screen.queryByRole("link", { name: /Continuă review-ul/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /Deschide|Continuă/i })).toBeNull();
+  });
+
+  it("renders active completion links by default when readOnly is false (non-regression)", () => {
+    const activeTask: InviteTask = {
+      id: "active-task-1",
+      assignmentId: "active-task-1",
+      title: "PCM Profil Personal",
+      status: "not_started",
+      detail: "De completat",
+      href: "/participant/tasks/active-task-1",
+      targetLabel: "Autoevaluare",
+      estimatedMinutes: 20,
+      questionnaireKey: "pcm",
+      projectId: "project-active",
+      projectName: "Proiect Activ",
+      deadlineLabel: "31 august 2026",
+    };
+    const projects = groupParticipantTasksByProject([activeTask]);
+
+    render(
+      <ParticipantTaskList
+        projects={projects}
+        persistenceIdentityKey="participant-active"
+        returnTo="/participant/questionnaires"
+        emptyTitle="Nu ai sarcini"
+        emptyDescription="Lista este goală."
+        readOnly={false}
+      />,
+    );
+
+    const openLink = screen.getByRole("link", { name: /Deschide/i });
+    expect(openLink).toBeDefined();
+    expect(openLink.getAttribute("href")).toContain("/participant/tasks/active-task-1");
+  });
+
+  it("disables all completion links and displays passive status badges when readOnly is true", () => {
+    const activeTask: InviteTask = {
+      id: "active-task-2",
+      assignmentId: "active-task-2",
+      title: "PCM Profil Personal",
+      status: "not_started",
+      detail: "De completat",
+      href: "/participant/tasks/active-task-2",
+      targetLabel: "Autoevaluare",
+      estimatedMinutes: 20,
+      questionnaireKey: "pcm",
+      projectId: "project-active",
+      projectName: "Proiect Activ",
+      deadlineLabel: "31 august 2026",
+    };
+    const projects = groupParticipantTasksByProject([activeTask]);
+
+    render(
+      <ParticipantTaskList
+        projects={projects}
+        persistenceIdentityKey="participant-readonly"
+        returnTo="/participant/questionnaires"
+        emptyTitle="Nu ai sarcini"
+        emptyDescription="Lista este goală."
+        readOnly={true}
+      />,
+    );
+
+    // In readOnly mode, no interactive form links are rendered
+    expect(screen.queryByRole("link", { name: /Deschide|Continuă|Completează|Începe/i })).toBeNull();
+    // Passive status label is shown
+    expect(screen.getByText("Doar citire")).toBeDefined();
+    expect(screen.getByText("Închis")).toBeDefined();
   });
 });

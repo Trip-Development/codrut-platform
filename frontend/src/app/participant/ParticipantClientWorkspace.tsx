@@ -66,9 +66,14 @@ type ParticipantClientWorkspaceProps = {
       description: string;
     };
   };
+  readOnly?: boolean;
 };
 
-export function ParticipantClientWorkspace({ session, summaryData }: ParticipantClientWorkspaceProps) {
+export function ParticipantClientWorkspace({
+  session,
+  summaryData,
+  readOnly = false,
+}: ParticipantClientWorkspaceProps) {
   const participantIdentity =
     summaryData.participantFullName?.trim() || summaryData.anonymousName?.trim() || "Participant";
   const participantFirstName = participantIdentity.split(/\s+/)[0];
@@ -106,7 +111,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
   const scopeParams = participantScopeParams(summaryData);
   const questionnairesHref = participantScopedHref("/participant/questionnaires", scopeParams);
   const resultsHref = participantResultsHref(scopeParams);
-  const navItems = participantScopedNavItems(scopeParams);
+  const navItems = readOnly ? [] : participantScopedNavItems(scopeParams);
 
   return (
     <AppShell
@@ -131,7 +136,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
         >
           {isComplete ? (
             <>
-              <ParticipantCompletionState resultCount={resultCount} resultsHref={resultsHref} />
+              <ParticipantCompletionState resultCount={resultCount} resultsHref={resultsHref} readOnly={readOnly} />
               <div className="mt-8">
                 <ParticipantTaskList
                   projects={taskProjects}
@@ -139,6 +144,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
                   returnTo={questionnairesHref}
                   emptyTitle="Toate răspunsurile au fost trimise"
                   emptyDescription="Nu mai ai sarcini active."
+                  readOnly={readOnly}
                 />
               </div>
             </>
@@ -173,6 +179,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
                   summaryData.emptyState?.description ??
                   "Deschide linkul unei invitații noi pentru a vedea sarcinile asociate."
                 }
+                readOnly={readOnly}
               />
             </>
           )}
@@ -182,10 +189,30 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
               <p className="text-sm text-muted-foreground">
                 Ai {resultCount} {resultCount === 1 ? "rezultat disponibil" : "rezultate disponibile"}.
               </p>
-              <Link href={resultsHref} className={serverLinkButtonClassName({ variant: "ghost", className: "w-fit text-brand-text" })}>
-                Vezi rezultatele
-                <ArrowRightIcon data-icon="inline-end" aria-hidden="true" strokeWidth={2.2} />
-              </Link>
+              {readOnly ? (
+                <span className="text-xs font-semibold text-muted-foreground">
+                  Rezultatele sunt afișate mai jos
+                </span>
+              ) : (
+                <Link href={resultsHref} className={serverLinkButtonClassName({ variant: "ghost", className: "w-fit text-brand-text" })}>
+                  Vezi rezultatele
+                  <ArrowRightIcon data-icon="inline-end" aria-hidden="true" strokeWidth={2.2} />
+                </Link>
+              )}
+            </div>
+          ) : null}
+
+          {readOnly && resultCount > 0 ? (
+            <div className="mt-12 border-t border-border pt-10" data-slot="participant-preview-results">
+              <ParticipantResultsPanel
+                results={summaryData.results}
+                receivedFeedback={summaryData.receivedFeedback}
+                receivedFeedbackGroups={summaryData.receivedFeedbackGroups}
+                pcmBase={summaryData.pcmBase}
+                pcmPhase={summaryData.pcmPhase}
+                hasTasks={hasAnyTasks}
+                allTasksComplete={isComplete}
+              />
             </div>
           ) : null}
         </section>
@@ -1088,7 +1115,7 @@ function scoreItemsForResult(
   dimensionOrder?: ReadonlyMap<string, number>,
 ): ScoreItem[] {
   const items: ScoreItem[] = [];
-  for (const [id, value] of Object.entries(result.scores)) {
+  for (const [id, value] of Object.entries(result.scores ?? {})) {
     const score = extractScore(value);
     if (score === null) continue;
     items.push({

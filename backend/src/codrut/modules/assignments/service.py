@@ -39,13 +39,13 @@ from codrut.modules.assignments.schemas import (
     TeamCreateRequest,
     TeamMembershipCreateRequest,
 )
+from codrut.modules.companies.access import require_company_manager
 from codrut.modules.companies.hierarchy import (
     HierarchyParticipant,
     OrganizationHierarchy,
     build_organization_hierarchy,
 )
 from codrut.modules.companies.models import (
-    CompanyMembershipRole,
     CompanyProjectStatus,
     ParticipantProfile,
     ProjectMembership,
@@ -677,9 +677,7 @@ class AssignmentService:
             key=lambda item: participant_by_id[item].full_name,
         )
         top_leader_ids = set(hierarchy.top_level_ids) & manager_ids
-        leadership_team_leader_id = (
-            next(iter(top_leader_ids)) if len(top_leader_ids) == 1 else None
-        )
+        leadership_team_leader_id = next(iter(top_leader_ids)) if len(top_leader_ids) == 1 else None
         if leadership_ids:
             leadership_team = teams_by_name.get("leadership")
             scopes.append(
@@ -937,9 +935,7 @@ class AssignmentService:
             previous_status in COMPLETED_ASSIGNMENT_STATUSES
             and payload.status in EDITABLE_ASSIGNMENT_STATUSES
         ):
-            await self.forms_repository.delete_submission_processing_for_assignment(
-                assignment_id
-            )
+            await self.forms_repository.delete_submission_processing_for_assignment(assignment_id)
             await self.forms_repository.unlock_response_for_assignment(assignment_id)
             await self.scoring_repository.delete_by_assignment(assignment_id)
             await self.result_publication_service.reconcile_assignment(assignment_id)
@@ -1201,10 +1197,8 @@ class AssignmentService:
         persisted_assignments: list[QuestionnaireAssignment],
         planned_assignments: list[AssignmentPlanSaveItem] | None = None,
     ) -> set[UUID]:
-        leadership_ids = (
-            await self.assignment_repository.list_cycle_leadership_participant_ids(
-                cycle.id
-            )
+        leadership_ids = await self.assignment_repository.list_cycle_leadership_participant_ids(
+            cycle.id
         )
         for assignment in [*persisted_assignments, *(planned_assignments or [])]:
             questionnaire_key = assignment.questionnaire_key.strip()
@@ -1334,20 +1328,7 @@ class AssignmentService:
         )
 
     async def _require_company_manager(self, user_id: UUID, company_id: UUID) -> None:
-        if await self.company_repository.get_company(company_id) is None:
-            raise DomainError("Company not found.", code="company_not_found")
-
-        membership = await self.company_repository.get_membership(company_id, user_id)
-        if membership is not None and membership.role in {
-            CompanyMembershipRole.owner,
-            CompanyMembershipRole.trainer,
-        }:
-            return
-
-        raise DomainError(
-            "You do not have access to manage assignments for this company.",
-            code="company_access_denied",
-        )
+        await require_company_manager(self.company_repository, user_id, company_id)
 
     async def _require_company_participant(
         self,
@@ -1627,8 +1608,7 @@ def _require_cycle_icare_self_target(
     leadership_ids: set[UUID],
 ) -> None:
     is_self_target = target_type == AssignmentTargetType.self_assessment or (
-        target_type == AssignmentTargetType.person
-        and target_person_id == respondent_profile_id
+        target_type == AssignmentTargetType.person and target_person_id == respondent_profile_id
     )
     if (
         questionnaire_key in ICARE_QUESTIONNAIRE_KEYS
