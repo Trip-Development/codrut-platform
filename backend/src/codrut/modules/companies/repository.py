@@ -12,6 +12,7 @@ from codrut.modules.companies.models import (
     ParticipantAccountLinkAudit,
     ParticipantProfile,
     ParticipantReportingRelationship,
+    ParticipantViewAudit,
     ProjectLifecycleEvent,
     ProjectMembership,
 )
@@ -317,6 +318,28 @@ class CompanyRepository:
         await self.session.flush()
         return audit
 
+    async def add_participant_view_audit(
+        self,
+        audit: ParticipantViewAudit,
+    ) -> ParticipantViewAudit:
+        self.session.add(audit)
+        await self.session.flush()
+        return audit
+
+    async def list_participant_view_audits(
+        self,
+        company_id: UUID,
+        *,
+        trainer_user_id: UUID | None = None,
+        limit: int = 100,
+    ) -> list[ParticipantViewAudit]:
+        stmt = select(ParticipantViewAudit).where(ParticipantViewAudit.company_id == company_id)
+        if trainer_user_id is not None:
+            stmt = stmt.where(ParticipantViewAudit.trainer_user_id == trainer_user_id)
+        stmt = stmt.order_by(ParticipantViewAudit.created_at.desc()).limit(limit)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def list_project_memberships(
         self,
         company_id: UUID,
@@ -515,11 +538,7 @@ class CompanyRepository:
 
     async def anonymous_name_exists(self, anonymous_name: str) -> bool:
         result = await self.session.execute(
-            select(
-                exists().where(
-                    ParticipantProfile.anonymous_name == anonymous_name
-                )
-            )
+            select(exists().where(ParticipantProfile.anonymous_name == anonymous_name))
         )
         return bool(result.scalar())
 

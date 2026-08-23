@@ -4,6 +4,7 @@ import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "r
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  EyeIcon,
   FilterIcon,
   Loader2Icon,
   PencilIcon,
@@ -501,6 +502,7 @@ export function ProjectParticipantsWorkspace({
         ) : null}
         <RosterTable
           rows={visibleRows}
+          companyId={companyId}
           projectId={projectId}
           operationLocked={mutationLocked}
           onEdit={startEdit}
@@ -513,7 +515,7 @@ export function ProjectParticipantsWorkspace({
       <Sheet
         open={Boolean(editingParticipant && editingAccessRow && form)}
         onOpenChange={(open) => {
-          if (!open && !savingId && !removingId) cancelEdit();
+          if (!open && !mutationLocked) cancelEdit();
         }}
         labelledBy={confirmingRemoval ? "participant-removal-title" : "participant-edit-title"}
         describedBy={confirmingRemoval ? "participant-removal-description" : "participant-edit-description"}
@@ -716,12 +718,14 @@ export function ProjectParticipantsWorkspace({
 
 function RosterTable({
   rows,
+  companyId,
   projectId,
   operationLocked,
   onEdit,
   emptyMessage,
 }: {
   rows: AccessRow[];
+  companyId: string;
   projectId: string;
   operationLocked: boolean;
   onEdit: (participant: CompanyParticipant) => void;
@@ -770,6 +774,7 @@ function RosterTable({
               <ParticipantRow
                 key={row.participant.id}
                 row={row}
+                companyId={companyId}
                 projectId={projectId}
                 operationLocked={operationLocked}
                 onEdit={() => onEdit(row.participant)}
@@ -784,11 +789,13 @@ function RosterTable({
 
 function ParticipantRow({
   row,
+  companyId,
   projectId,
   operationLocked,
   onEdit,
 }: {
   row: AccessRow;
+  companyId: string;
   projectId: string;
   operationLocked: boolean;
   onEdit: () => void;
@@ -832,18 +839,28 @@ function ParticipantRow({
         <DotStatus {...participantStateStatus(row)} />
       </td>
       <td className="col-start-2 row-start-1 text-right align-middle md:px-3 md:py-3">
-        <Button
-          type="button"
-          onClick={onEdit}
-          disabled={operationLocked}
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`Editează ${participant.full_name}`}
-          title={`Editează ${participant.full_name}`}
-          className="rounded-md text-muted-foreground shadow-none hover:text-burgundy"
-        >
-          <PencilIcon aria-hidden="true" strokeWidth={1.8} />
-        </Button>
+        <div className="flex items-center justify-end gap-1">
+          <Link
+            href={`/trainer/companies/${companyId}/participants/${participant.id}/preview?projectId=${projectId}`}
+            aria-label={`Vezi ca participant: ${participant.full_name}`}
+            title={`Vezi ca participant: ${participant.full_name}`}
+            className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <EyeIcon className="h-4 w-4" aria-hidden="true" />
+          </Link>
+          <Button
+            type="button"
+            onClick={onEdit}
+            disabled={operationLocked}
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Editează ${participant.full_name}`}
+            title={`Editează ${participant.full_name}`}
+            className="rounded-md text-muted-foreground shadow-none hover:text-burgundy"
+          >
+            <PencilIcon aria-hidden="true" strokeWidth={1.8} />
+          </Button>
+        </div>
       </td>
     </tr>
   );

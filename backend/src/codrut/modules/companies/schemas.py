@@ -325,3 +325,16 @@ class ParticipantInvitationStatusResponse(BaseModel):
     has_active_secure_link: bool = False
     active_secure_link_expires_at: datetime | None = None
     active_secure_link_url: str | None = None
+
+
+class ParticipantViewAuditResponse(BaseModel):
+    id: UUID
+    company_id: UUID
+    trainer_user_id: UUID | None = None
+    trainer_email: str
+    participant_profile_id: UUID
+    participant_name: str
+    screen: str
+    project_id: UUID | None = None
+    cycle_id: UUID | None = None
+    created_at: datetime
