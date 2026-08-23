@@ -75,7 +75,11 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_participant_view_audits_created_at", table_name="participant_view_audits")
-    op.drop_index("ix_participant_view_audits_participant_profile_id", table_name="participant_view_audits")
-    op.drop_index("ix_participant_view_audits_trainer_user_id", table_name="participant_view_audits")
+    op.drop_index(
+        "ix_participant_view_audits_participant_profile_id", table_name="participant_view_audits"
+    )
+    op.drop_index(
+        "ix_participant_view_audits_trainer_user_id", table_name="participant_view_audits"
+    )
     op.drop_index("ix_participant_view_audits_company_id", table_name="participant_view_audits")
     op.drop_table("participant_view_audits")
