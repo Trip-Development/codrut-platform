@@ -1,4 +1,9 @@
 import { apiFetch } from "./http";
+import {
+  mapParticipantWorkspaceSummary,
+  type BackendParticipantWorkspaceSummary,
+  type ParticipantWorkspaceSummary,
+} from "./participants";
 import { formatPcmLabel, getPcmColor } from "./pcm";
 import { getApiBaseUrl, isDemoFallbackEnabled, isLocalSeededDemoFallbackEnabled } from "./runtime";
 
@@ -2573,4 +2578,107 @@ function projectPayloadToApi(payload: CompanyProjectPayload) {
     body.member_reminder_template_key = payload.member_reminder_template_key ?? null;
   }
   return body;
+}
+
+export type ParticipantViewAudit = {
+  id: string;
+  companyId: string;
+  trainerUserId: string;
+  trainerEmail: string;
+  participantProfileId: string;
+  participantName: string;
+  screen: string;
+  projectId?: string | null;
+  cycleId?: string | null;
+  createdAt: string;
+};
+
+export async function getParticipantWorkspacePreview(
+  companyId: string,
+  participantId: string,
+  options: {
+    projectId?: string | null;
+    cycleId?: string | null;
+    screen?: string;
+  } = {},
+  requestOptions: Pick<RequestInit, "headers"> = {},
+): Promise<ParticipantWorkspaceSummary> {
+  const params = new URLSearchParams();
+  if (options.projectId) params.set("project_id", options.projectId);
+  if (options.cycleId) params.set("cycle_id", options.cycleId);
+  if (options.screen) params.set("screen", options.screen);
+  const query = params.size > 0 ? `?${params.toString()}` : "";
+
+  const response = await apiFetch(
+    `${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}/workspace-preview${query}`,
+    {
+      cache: "no-store",
+      credentials: "include",
+      ...requestOptions,
+    },
+  );
+
+  if (!response.ok) {
+    const errorData = (await response.json().catch(() => ({}))) as ApiErrorPayload;
+    throw new CompanyMutationError(
+      typeof errorData.detail === "string"
+        ? errorData.detail
+        : (errorData.error?.message as string) ?? "Nu am putut încărca vizualizarea ca participant.",
+      (errorData.error?.code as string) ?? `http_${response.status}`,
+    );
+  }
+
+  const data = (await response.json()) as BackendParticipantWorkspaceSummary;
+  return mapParticipantWorkspaceSummary(data);
+}
+
+export async function getParticipantViewAudits(
+  companyId: string,
+  limit: number = 100,
+  requestOptions: Pick<RequestInit, "headers"> = {},
+): Promise<ParticipantViewAudit[]> {
+  const response = await apiFetch(
+    `${getApiBaseUrl()}/companies/${companyId}/participant-view-audits?limit=${limit}`,
+    {
+      cache: "no-store",
+      credentials: "include",
+      ...requestOptions,
+    },
+  );
+
+  if (!response.ok) {
+    const errorData = (await response.json().catch(() => ({}))) as ApiErrorPayload;
+    throw new CompanyMutationError(
+      typeof errorData.detail === "string"
+        ? errorData.detail
+        : (errorData.error?.message as string) ?? "Nu am putut încărca jurnalul de acces.",
+      (errorData.error?.code as string) ?? `http_${response.status}`,
+    );
+  }
+
+  const list = (await response.json()) as Array<{
+    id: string;
+    company_id: string;
+    trainer_user_id: string;
+    trainer_email: string;
+    participant_profile_id: string;
+    participant_name: string;
+    screen: string;
+    project_id?: string | null;
+    cycle_id?: string | null;
+    created_at: string;
+  }>;
+
+  return list.map((item) => ({
+    id: item.id,
+    companyId: item.company_id,
+    trainerUserId: item.trainer_user_id,
+    trainerEmail: item.trainer_email,
+    participantProfileId: item.participant_profile_id,
+    participantName: item.participant_name,
+    screen: item.screen,
+    projectId: item.project_id,
+    cycleId: item.cycle_id,
+    createdAt: item.created_at,
+  }));
 }

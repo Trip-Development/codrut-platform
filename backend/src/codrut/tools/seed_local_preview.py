@@ -120,7 +120,7 @@ class CompanyContext:
     cycles: tuple[AssessmentCycle, ...]
 
 
-async def seed_local_preview() -> PreviewSeedResult:
+async def seed_local_preview(company_name: str | None = None) -> PreviewSeedResult:
     settings = get_settings()
     assert_local_preview_allowed(settings)
 
@@ -160,13 +160,14 @@ async def seed_local_preview() -> PreviewSeedResult:
         )
         await session.flush()
 
-        await _clear_preview_data(session, trainer, participant_user)
+        await _clear_preview_data(session, trainer, participant_user, company_name=company_name)
         definitions = await _replace_preview_definitions(session)
         contexts = await _seed_company_contexts(
             session,
             trainer,
             participant_user,
             definitions,
+            target_company_name=company_name,
         )
         assignments = await _seed_assignments(session, contexts, definitions)
         await ResultPublicationService(session).reconcile_all()
@@ -218,20 +219,34 @@ async def _clear_preview_data(
     session: AsyncSession,
     trainer: User,
     participant_user: User,
+    *,
+    company_name: str | None = None,
 ) -> None:
-    preview_company_names = (*PREVIEW_COMPANY_NAMES, *LEGACY_PREVIEW_COMPANY_NAMES)
-    company_ids = list(
-        (
-            await session.execute(
-                select(Company.id).where(
-                    or_(
-                        Company.name.in_(preview_company_names),
-                        Company.name.startswith(LEGACY_PREVIEW_COMPANY_PREFIX),
+    if company_name is not None:
+        company_ids = list(
+            (
+                await session.execute(select(Company.id).where(Company.name == company_name))
+            ).scalars()
+        )
+    else:
+        preview_company_names = (*PREVIEW_COMPANY_NAMES, *LEGACY_PREVIEW_COMPANY_NAMES)
+        company_ids = list(
+            (
+                await session.execute(
+                    select(Company.id).where(
+                        or_(
+                            Company.name.in_(preview_company_names),
+                            Company.name.startswith(LEGACY_PREVIEW_COMPANY_PREFIX),
+                            Company.id.in_(
+                                select(ParticipantProfile.company_id).where(
+                                    ParticipantProfile.user_id == participant_user.id
+                                )
+                            ),
+                        )
                     )
                 )
-            )
-        ).scalars()
-    )
+            ).scalars()
+        )
     assignment_ids: list[uuid.UUID] = []
     if company_ids:
         assignment_ids = list(
@@ -276,9 +291,7 @@ async def _clear_preview_data(
     if contact_ids:
         event_filters.append(CampaignRecipientEvent.recipient_id.in_(contact_ids))
     if event_filters:
-        await session.execute(
-            delete(CampaignRecipientEvent).where(or_(*event_filters))
-        )
+        await session.execute(delete(CampaignRecipientEvent).where(or_(*event_filters)))
 
     send_filters = []
     if assignment_ids:
@@ -314,11 +327,18 @@ async def _clear_preview_data(
         await session.execute(delete(Company).where(Company.id.in_(company_ids)))
     await session.flush()
 
+    known_preview_names = (*PREVIEW_COMPANY_NAMES, *LEGACY_PREVIEW_COMPANY_NAMES)
+    if company_name is not None:
+        known_preview_names = (*known_preview_names, company_name)
     linked_profile = (
         await session.execute(
             select(ParticipantProfile, Company.name)
             .join(Company, Company.id == ParticipantProfile.company_id)
-            .where(ParticipantProfile.user_id == participant_user.id)
+            .where(
+                ParticipantProfile.user_id == participant_user.id,
+                Company.name.not_in(known_preview_names),
+                ~Company.name.startswith(LEGACY_PREVIEW_COMPANY_PREFIX),
+            )
         )
     ).first()
     if linked_profile is not None:
@@ -356,15 +376,8 @@ async def _replace_preview_definitions(
     )
     for definition in existing:
         definition.active = False
-    await session.execute(
-        delete(QuestionnaireDefinition).where(
-            QuestionnaireDefinition.key.in_(keys),
-            QuestionnaireDefinition.version == PREVIEW_DEFINITION_VERSION,
-            QuestionnaireDefinition.system_managed.is_(False),
-        )
-    )
-    await session.flush()
 
+    existing_preview = {d.key: d for d in existing if d.version == PREVIEW_DEFINITION_VERSION}
     persisted: dict[str, QuestionnaireDefinition] = {}
     for definition in preview_definitions:
         content_checksum = canonical_checksum(
@@ -378,22 +391,31 @@ async def _replace_preview_definitions(
                 "trainer_visibility_policy": {},
             }
         )
-        model = QuestionnaireDefinition(
-            id=_preview_uuid(
-                "questionnaire-definition",
-                definition.key,
-                PREVIEW_DEFINITION_VERSION,
-            ),
-            key=definition.key,
-            version=PREVIEW_DEFINITION_VERSION,
-            title=definition.title,
-            description=definition.description,
-            schema=definition.schema,
-            feedback_policy=definition.feedback_policy,
-            content_checksum=content_checksum,
-            active=definition.key not in active_system_keys,
-        )
-        session.add(model)
+        if definition.key in existing_preview:
+            model = existing_preview[definition.key]
+            model.title = definition.title
+            model.description = definition.description
+            model.schema = definition.schema
+            model.feedback_policy = definition.feedback_policy
+            model.content_checksum = content_checksum
+            model.active = definition.key not in active_system_keys
+        else:
+            model = QuestionnaireDefinition(
+                id=_preview_uuid(
+                    "questionnaire-definition",
+                    definition.key,
+                    PREVIEW_DEFINITION_VERSION,
+                ),
+                key=definition.key,
+                version=PREVIEW_DEFINITION_VERSION,
+                title=definition.title,
+                description=definition.description,
+                schema=definition.schema,
+                feedback_policy=definition.feedback_policy,
+                content_checksum=content_checksum,
+                active=definition.key not in active_system_keys,
+            )
+            session.add(model)
         persisted[definition.key] = model
     await session.flush()
     return persisted
@@ -404,6 +426,8 @@ async def _seed_company_contexts(
     trainer: User,
     participant_user: User,
     definitions: dict[str, QuestionnaireDefinition],
+    *,
+    target_company_name: str | None = None,
 ) -> list[CompanyContext]:
     now = datetime.now(UTC)
     company_specs = (
@@ -482,8 +506,30 @@ async def _seed_company_contexts(
         ),
     )
 
+    if target_company_name is not None:
+        matching_spec = next(
+            (spec for spec in company_specs if spec[0] == target_company_name),
+            None,
+        )
+        if matching_spec is not None:
+            active_company_specs = [matching_spec]
+        else:
+            active_company_specs = [
+                (
+                    target_company_name,
+                    "Leadership operațional Q3",
+                    company_specs[0][2],
+                )
+            ]
+    else:
+        active_company_specs = list(company_specs)
+
     contexts: list[CompanyContext] = []
-    for company_index, (company_name, project_name, participant_specs) in enumerate(company_specs):
+    for company_index, (
+        company_name,
+        project_name,
+        participant_specs,
+    ) in enumerate(active_company_specs):
         company = Company(id=_preview_uuid("company", company_name), name=company_name)
         session.add(company)
         await session.flush()
@@ -636,27 +682,31 @@ async def _seed_company_contexts(
 
         cycle_specs = (
             (
-                1,
-                "Evaluare inițială",
-                AssessmentCycleStatus.closed,
-                now - timedelta(days=75),
-                now - timedelta(days=45),
-            ),
-            (
-                2,
-                "Reevaluare",
-                AssessmentCycleStatus.active,
-                now - timedelta(days=14),
-                None,
-            ),
-        ) if company_index == 0 else (
-            (
-                1,
-                "Evaluare curentă",
-                AssessmentCycleStatus.active,
-                now - timedelta(days=14),
-                None,
-            ),
+                (
+                    1,
+                    "Evaluare inițială",
+                    AssessmentCycleStatus.closed,
+                    now - timedelta(days=75),
+                    now - timedelta(days=45),
+                ),
+                (
+                    2,
+                    "Reevaluare",
+                    AssessmentCycleStatus.active,
+                    now - timedelta(days=14),
+                    None,
+                ),
+            )
+            if company_index == 0
+            else (
+                (
+                    1,
+                    "Evaluare curentă",
+                    AssessmentCycleStatus.active,
+                    now - timedelta(days=14),
+                    None,
+                ),
+            )
         )
         cycles: list[AssessmentCycle] = []
         for sequence, name, status, starts_at, closed_at in cycle_specs:
@@ -934,50 +984,51 @@ async def _seed_assignments(
             age_days=offset + 4,
         )
 
-    atlas, nova = contexts[1], contexts[2]
-    queue_completed(
+    if len(contexts) > 2:
+        atlas, nova = contexts[1], contexts[2]
+        queue_completed(
+            add_assignment(
+                atlas,
+                atlas.participants[0],
+                "lencioni",
+                status=AssignmentStatus.scored,
+                target_type=AssignmentTargetType.team,
+                target_team=atlas.team,
+                cycle=atlas.cycles[0],
+            ),
+            lencioni_answers((6, 5, 7, 6, 6)),
+            age_days=2,
+        )
         add_assignment(
             atlas,
-            atlas.participants[0],
-            "lencioni",
-            status=AssignmentStatus.scored,
-            target_type=AssignmentTargetType.team,
-            target_team=atlas.team,
+            atlas.participants[1],
+            "boss_360",
+            status=AssignmentStatus.invited,
+            target_type=AssignmentTargetType.person,
+            target_person=atlas.participants[0],
             cycle=atlas.cycles[0],
-        ),
-        lencioni_answers((6, 5, 7, 6, 6)),
-        age_days=2,
-    )
-    add_assignment(
-        atlas,
-        atlas.participants[1],
-        "boss_360",
-        status=AssignmentStatus.invited,
-        target_type=AssignmentTargetType.person,
-        target_person=atlas.participants[0],
-        cycle=atlas.cycles[0],
-        icare_cohort=IcareCohort.direct_team,
-    )
-    queue_completed(
+            icare_cohort=IcareCohort.direct_team,
+        )
+        queue_completed(
+            add_assignment(
+                nova,
+                nova.participants[0],
+                "distress_drivers",
+                status=AssignmentStatus.scored,
+                cycle=nova.cycles[0],
+            ),
+            driver_answers((5, 3, 2, 4, 3)),
+            age_days=3,
+        )
         add_assignment(
             nova,
-            nova.participants[0],
-            "distress_drivers",
-            status=AssignmentStatus.scored,
+            nova.participants[1],
+            "lencioni",
+            status=AssignmentStatus.invited,
+            target_type=AssignmentTargetType.team,
+            target_team=nova.team,
             cycle=nova.cycles[0],
-        ),
-        driver_answers((5, 3, 2, 4, 3)),
-        age_days=3,
-    )
-    add_assignment(
-        nova,
-        nova.participants[1],
-        "lencioni",
-        status=AssignmentStatus.invited,
-        target_type=AssignmentTargetType.team,
-        target_team=nova.team,
-        cycle=nova.cycles[0],
-    )
+        )
     await session.flush()
 
     session.add(
@@ -1304,7 +1355,17 @@ async def _seed_communications(session: AsyncSession, trainer: User) -> tuple[in
 
 
 def main() -> None:
-    result = asyncio.run(seed_local_preview())
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Seed local preview data.")
+    parser.add_argument(
+        "--company-name",
+        type=str,
+        default=None,
+        help="Optional company name to seed/clear in isolation.",
+    )
+    args = parser.parse_args()
+    result = asyncio.run(seed_local_preview(company_name=args.company_name))
     print("Local preview data is ready.")
     print(f"Trainer: {result.trainer_email}")
     print(f"Participant: {result.participant_email}")

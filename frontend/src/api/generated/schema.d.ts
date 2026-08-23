@@ -814,6 +814,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/companies/{company_id}/participant-view-audits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Participant View Audits */
+        get: operations["list_participant_view_audits_api_companies__company_id__participant_view_audits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/companies/{company_id}/participants": {
         parameters: {
             query?: never;
@@ -963,6 +980,23 @@ export interface paths {
         put?: never;
         /** Resend Participant Invite */
         post: operations["resend_participant_invite_api_companies__company_id__participants__participant_id__resend_invite_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/participants/{participant_id}/workspace-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Participant Workspace Preview */
+        get: operations["get_participant_workspace_preview_api_companies__company_id__participants__participant_id__workspace_preview_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3609,6 +3643,41 @@ export interface components {
             reports_to_name?: string | null;
             /** Role Group */
             role_group?: string | null;
+        };
+        /** ParticipantViewAuditResponse */
+        ParticipantViewAuditResponse: {
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Cycle Id */
+            cycle_id?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Participant Name */
+            participant_name: string;
+            /**
+             * Participant Profile Id
+             * Format: uuid
+             */
+            participant_profile_id: string;
+            /** Project Id */
+            project_id?: string | null;
+            /** Screen */
+            screen: string;
+            /** Trainer Email */
+            trainer_email: string;
+            /** Trainer User Id */
+            trainer_user_id?: string | null;
         };
         /** ParticipantWorkspaceCard */
         ParticipantWorkspaceCard: {
@@ -8853,6 +8922,84 @@ export interface operations {
             };
         };
     };
+    list_participant_view_audits_api_companies__company_id__participant_view_audits_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParticipantViewAuditResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_company_participants_api_companies__company_id__participants_get: {
         parameters: {
             query?: never;
@@ -9670,6 +9817,87 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RosterImportResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_participant_workspace_preview_api_companies__company_id__participants__participant_id__workspace_preview_get: {
+        parameters: {
+            query?: {
+                project_id?: string | null;
+                cycle_id?: string | null;
+                screen?: string;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+                participant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParticipantWorkspaceSummary"];
                 };
             };
             /** @description Bad Request */

@@ -26,6 +26,7 @@ from codrut.modules.companies.schemas import (
     ParticipantRemovalRequest,
     ParticipantResponse,
     ParticipantUpdateRequest,
+    ParticipantViewAuditResponse,
     ProjectLifecycleEventResponse,
     ProjectParticipantResponse,
     ProjectPermanentDeleteRequest,
@@ -36,6 +37,7 @@ from codrut.modules.companies.schemas import (
 from codrut.modules.companies.service import CompanyService
 from codrut.modules.identity.schemas import AuthResponse, SessionPrincipal
 from codrut.modules.identity.session_cookie import set_session_cookie
+from codrut.modules.participants.schemas import ParticipantWorkspaceSummary
 
 router = APIRouter()
 
@@ -254,6 +256,66 @@ async def get_participant_account_link_status(
         company_id,
         participant_id,
     )
+
+
+@router.get(
+    "/{company_id}/participants/{participant_id}/workspace-preview",
+    response_model=ParticipantWorkspaceSummary,
+)
+async def get_participant_workspace_preview(
+    company_id: UUID,
+    participant_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+    project_id: Annotated[UUID | None, Query()] = None,
+    cycle_id: Annotated[UUID | None, Query()] = None,
+    screen: Annotated[str, Query()] = "workspace",
+) -> ParticipantWorkspaceSummary:
+    require_trainer_principal(principal)
+    summary = await CompanyService(session).get_participant_workspace_preview(
+        trainer_user_id=principal.user_id,
+        trainer_email=principal.email,
+        company_id=company_id,
+        participant_id=participant_id,
+        project_id=project_id,
+        cycle_id=cycle_id,
+        screen=screen,
+    )
+    await session.commit()
+    return summary
+
+
+@router.get(
+    "/{company_id}/participant-view-audits",
+    response_model=list[ParticipantViewAuditResponse],
+)
+async def list_participant_view_audits(
+    company_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> list[ParticipantViewAuditResponse]:
+    require_trainer_principal(principal)
+    audits = await CompanyService(session).list_participant_view_audits(
+        trainer_user_id=principal.user_id,
+        company_id=company_id,
+        limit=limit,
+    )
+    return [
+        ParticipantViewAuditResponse(
+            id=audit.id,
+            company_id=audit.company_id,
+            trainer_user_id=audit.trainer_user_id,
+            trainer_email=audit.trainer_email,
+            participant_profile_id=audit.participant_profile_id,
+            participant_name=audit.participant_name,
+            screen=audit.screen,
+            project_id=audit.project_id,
+            cycle_id=audit.cycle_id,
+            created_at=audit.created_at,
+        )
+        for audit in audits
+    ]
 
 
 @router.post(

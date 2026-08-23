@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import AssessmentCycle, AssessmentCycleStatus
+from codrut.modules.companies.access import require_company_manager
 from codrut.modules.companies.anonymous import (
     allocate_anonymous_name,
 )
@@ -29,6 +30,7 @@ from codrut.modules.companies.models import (
     ParticipantAccountLinkAudit,
     ParticipantProfile,
     ParticipantReportingRelationship,
+    ParticipantViewAudit,
     ProjectLifecycleAction,
     ProjectLifecycleEvent,
     ProjectMembership,
@@ -64,6 +66,8 @@ from codrut.modules.companies.schemas import (
 )
 from codrut.modules.identity.models import User
 from codrut.modules.identity.repository import IdentityRepository
+from codrut.modules.participants.schemas import ParticipantWorkspaceSummary
+from codrut.modules.participants.service import ParticipantWorkspaceService
 
 logger = logging.getLogger(__name__)
 
@@ -380,36 +384,28 @@ class CompanyService:
         if "form_closes_at" in payload.model_fields_set:
             project.form_closes_at = payload.form_closes_at
         if "leadership_invitation_template_key" in payload.model_fields_set:
-            project.leadership_invitation_template_key = (
-                await self._validate_project_template_key(
-                    payload.leadership_invitation_template_key,
-                    user_id,
-                    "invitația de leadership",
-                )
+            project.leadership_invitation_template_key = await self._validate_project_template_key(
+                payload.leadership_invitation_template_key,
+                user_id,
+                "invitația de leadership",
             )
         if "member_invitation_template_key" in payload.model_fields_set:
-            project.member_invitation_template_key = (
-                await self._validate_project_template_key(
-                    payload.member_invitation_template_key,
-                    user_id,
-                    "invitația de membri",
-                )
+            project.member_invitation_template_key = await self._validate_project_template_key(
+                payload.member_invitation_template_key,
+                user_id,
+                "invitația de membri",
             )
         if "leadership_reminder_template_key" in payload.model_fields_set:
-            project.leadership_reminder_template_key = (
-                await self._validate_project_template_key(
-                    payload.leadership_reminder_template_key,
-                    user_id,
-                    "reminderul de leadership",
-                )
+            project.leadership_reminder_template_key = await self._validate_project_template_key(
+                payload.leadership_reminder_template_key,
+                user_id,
+                "reminderul de leadership",
             )
         if "member_reminder_template_key" in payload.model_fields_set:
-            project.member_reminder_template_key = (
-                await self._validate_project_template_key(
-                    payload.member_reminder_template_key,
-                    user_id,
-                    "reminderul de membri",
-                )
+            project.member_reminder_template_key = await self._validate_project_template_key(
+                payload.member_reminder_template_key,
+                user_id,
+                "reminderul de membri",
             )
 
         _validate_date_window(project.starts_at, project.due_at, "invalid_project_dates")
@@ -877,9 +873,7 @@ class CompanyService:
 
         project_memberships = await self.repository.list_all_project_memberships(company_id)
         participant_memberships = [
-            membership
-            for membership, member in project_memberships
-            if member.id == participant.id
+            membership for membership, member in project_memberships if member.id == participant.id
         ]
         if participant_memberships:
             raise DomainError(
@@ -909,11 +903,9 @@ class CompanyService:
             == manager_reference_key(participant.full_name)
         }
         for direct_membership, direct_participant in project_memberships:
-            if (
-                direct_participant.id != participant.id
-                and manager_reference_key(direct_membership.reports_to_name)
-                == manager_reference_key(participant.full_name)
-            ):
+            if direct_participant.id != participant.id and manager_reference_key(
+                direct_membership.reports_to_name
+            ) == manager_reference_key(participant.full_name):
                 direct_reports_by_id[direct_participant.id] = direct_participant
         for relationship in await self.repository.list_reporting_relationships(company_id):
             if relationship.manager_profile_id == participant.id:
@@ -932,17 +924,14 @@ class CompanyService:
         _require_expected_direct_reports(payload, direct_reports)
 
         for direct_report in direct_reports:
-            if (
-                manager_reference_key(direct_report.reports_to_name)
-                == manager_reference_key(participant.full_name)
+            if manager_reference_key(direct_report.reports_to_name) == manager_reference_key(
+                participant.full_name
             ):
                 direct_report.reports_to_name = None
         for direct_membership, direct_participant in project_memberships:
-            if (
-                direct_participant.id in direct_reports_by_id
-                and manager_reference_key(direct_membership.reports_to_name)
-                == manager_reference_key(participant.full_name)
-            ):
+            if direct_participant.id in direct_reports_by_id and manager_reference_key(
+                direct_membership.reports_to_name
+            ) == manager_reference_key(participant.full_name):
                 direct_membership.reports_to_name = None
 
         await self.repository.delete_participant(participant)
@@ -1171,9 +1160,7 @@ class CompanyService:
     async def _ensure_anonymous_names(self, participants: list[ParticipantProfile]) -> None:
         changed = False
         reserved_anonymous_names = {
-            participant.anonymous_name
-            for participant in participants
-            if participant.anonymous_name
+            participant.anonymous_name for participant in participants if participant.anonymous_name
         }
         for participant in participants:
             if participant.anonymous_name:
@@ -1380,9 +1367,7 @@ class CompanyService:
             for assignments in active_assignments_by_participant.values()
             for assignment in assignments
         }
-        project_was_draft = (
-            project is not None and project.status == CompanyProjectStatus.draft
-        )
+        project_was_draft = project is not None and project.status == CompanyProjectStatus.draft
         cycle_was_draft = cycle is not None and cycle.status == AssessmentCycleStatus.draft
         cycle_original_starts_at = cycle.starts_at if cycle is not None else None
         if project_was_draft and active_assignment_ids:
@@ -2085,16 +2070,76 @@ class CompanyService:
             )
 
     async def _require_company_manager(self, user_id: UUID, company_id: UUID) -> None:
-        membership = await self.repository.get_membership(company_id, user_id)
-        if membership is not None and membership.role in {
-            CompanyMembershipRole.owner,
-            CompanyMembershipRole.trainer,
-        }:
-            return
+        await require_company_manager(self.repository, user_id, company_id)
 
-        raise DomainError(
-            "You do not have access to manage this company.",
-            code="company_access_denied",
+    async def require_company_manager(self, user_id: UUID, company_id: UUID) -> None:
+        await require_company_manager(self.repository, user_id, company_id)
+
+    async def get_participant_workspace_preview(
+        self,
+        trainer_user_id: UUID,
+        trainer_email: str,
+        company_id: UUID,
+        participant_id: UUID,
+        project_id: UUID | None = None,
+        cycle_id: UUID | None = None,
+        screen: str = "workspace",
+    ) -> ParticipantWorkspaceSummary:
+        await require_company_manager(self.repository, trainer_user_id, company_id)
+
+        participant = await self.repository.get_participant(company_id, participant_id)
+        if participant is None:
+            raise DomainError(
+                "Participant not found in this company.",
+                code="participant_not_found",
+            )
+
+        # S3: Write access log BEFORE fetching/returning data (fail-closed)
+        try:
+            await self.repository.add_participant_view_audit(
+                ParticipantViewAudit(
+                    company_id=company_id,
+                    trainer_user_id=trainer_user_id,
+                    trainer_email=trainer_email,
+                    participant_profile_id=participant_id,
+                    participant_name=participant.full_name,
+                    screen=screen,
+                    project_id=project_id,
+                    cycle_id=cycle_id,
+                )
+            )
+            await self.repository.session.commit()
+        except Exception as exc:
+            await self.repository.session.rollback()
+            logger.exception(
+                "Failed to write participant view audit log.",
+                extra={"trainer": trainer_email, "participant_id": str(participant_id)},
+            )
+            raise DomainError(
+                "Failed to record access audit log.",
+                code="audit_log_failed",
+            ) from exc
+
+        # S6: Same confidentiality rules and workspace calculation
+        workspace_service = ParticipantWorkspaceService(self.repository.session)
+        return await workspace_service.get_workspace_summary(
+            user_id=participant.user_id,
+            participant_profile_id=participant_id,
+            project_id=project_id,
+            cycle_id=cycle_id,
+        )
+
+    async def list_participant_view_audits(
+        self,
+        trainer_user_id: UUID,
+        company_id: UUID,
+        limit: int = 100,
+    ) -> list[ParticipantViewAudit]:
+        await require_company_manager(self.repository, trainer_user_id, company_id)
+        return await self.repository.list_participant_view_audits(
+            company_id=company_id,
+            trainer_user_id=trainer_user_id,
+            limit=limit,
         )
 
     async def _require_company_owner(self, user_id: UUID, company_id: UUID) -> None:
@@ -2382,10 +2427,7 @@ def _invite_batch_error_message(code: str, role_group: str | None = None) -> str
             "Adaugă butonul și reia."
         )
     if code == "campaign_template_not_allowed":
-        return (
-            "Ai ales un șablon de campanie. "
-            "Pentru invitații e nevoie de un șablon de sistem."
-        )
+        return "Ai ales un șablon de campanie. Pentru invitații e nevoie de un șablon de sistem."
     if code in ("unsupported_placeholders", "email_template_unsupported_variables"):
         return (
             "Șablonul ales conține variabile nepermise. "

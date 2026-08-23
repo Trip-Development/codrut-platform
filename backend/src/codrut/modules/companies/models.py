@@ -396,3 +396,35 @@ class CompanyAccessCode(TimestampMixin, Base):
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     company: Mapped[Company] = relationship(back_populates="access_codes")
+
+
+class ParticipantViewAudit(Base):
+    __tablename__ = "participant_view_audits"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    trainer_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    trainer_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    participant_profile_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("participant_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    participant_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    screen: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    cycle_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        index=True,
+    )

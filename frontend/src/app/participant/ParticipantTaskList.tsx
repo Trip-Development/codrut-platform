@@ -25,6 +25,7 @@ type ParticipantTaskListProps = {
   emptyTitle: string;
   emptyDescription: string;
   inviteToken?: string;
+  readOnly?: boolean;
 };
 
 type ProjectAccent = {
@@ -95,6 +96,7 @@ export function ParticipantTaskList({
   emptyTitle,
   emptyDescription,
   inviteToken,
+  readOnly = false,
 }: ParticipantTaskListProps) {
   const defaults = useMemo(() => defaultExpandedState(projects), [projects]);
   const [expandedProjects, setExpandedProjects] =
@@ -159,8 +161,10 @@ export function ParticipantTaskList({
           const contentId = `participant-project-${project.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
           const pendingCount = project.totalCount - project.completedCount;
           const complete = project.totalCount > 0 && pendingCount === 0;
-          const readOnly =
-            project.historyBucket === "history" || project.status !== "active";
+          const isProjectReadOnly =
+            readOnly ||
+            project.historyBucket === "history" ||
+            project.status !== "active";
 
           return (
             <article
@@ -214,16 +218,18 @@ export function ParticipantTaskList({
                     "text-right text-xs font-semibold",
                     complete
                       ? "text-success-ink"
-                      : readOnly
+                      : isProjectReadOnly
                         ? "text-muted-foreground"
                         : "text-brand-text",
                   )}
                 >
-                  {readOnly
+                  {isProjectReadOnly && !complete && project.historyBucket === "history"
                     ? "Istoric"
-                    : complete
-                    ? "Finalizat"
-                    : `${pendingCount} de făcut`}
+                    : isProjectReadOnly && !complete
+                      ? "Doar citire"
+                      : complete
+                        ? "Finalizat"
+                        : `${pendingCount} de făcut`}
                   <span className="mt-1 block font-mono font-medium tabular-nums text-muted-foreground">
                     {project.completedCount}/{project.totalCount}
                   </span>
@@ -238,7 +244,7 @@ export function ParticipantTaskList({
                       group={group}
                       returnTo={returnTo}
                       inviteToken={inviteToken}
-                      readOnly={readOnly}
+                      readOnly={isProjectReadOnly}
                     />
                   ))}
                 </div>

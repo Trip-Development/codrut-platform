@@ -1,8 +1,9 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2Icon, PencilIcon, XIcon } from "lucide-react";
+import { EyeIcon, HistoryIcon, Loader2Icon, PencilIcon, XIcon } from "lucide-react";
 
 import {
   deleteCompanyParticipant,
@@ -105,6 +106,7 @@ export function CompanyParticipantsTable({
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Managerul nu a putut fi salvat.");
+      router.refresh();
     } finally {
       setSaving(false);
     }
@@ -144,11 +146,20 @@ export function CompanyParticipantsTable({
     >
       <header className="flex min-h-14 items-center justify-between gap-4 border-b border-border px-5 py-3">
         <h2 id="company-participants-title" className="text-base font-semibold text-foreground">Participanți</h2>
-        <span className="text-sm font-medium tabular-nums text-muted-foreground">
-          {visibleParticipants.length === participants.length
-            ? participants.length
-            : `${visibleParticipants.length} din ${participants.length}`}
-        </span>
+        <div className="flex items-center gap-4">
+          <Link
+            href={`/trainer/companies/${companyId}/audit`}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <HistoryIcon className="h-3.5 w-3.5" />
+            Jurnal accesări
+          </Link>
+          <span className="text-sm font-medium tabular-nums text-muted-foreground">
+            {visibleParticipants.length === participants.length
+              ? participants.length
+              : `${visibleParticipants.length} din ${participants.length}`}
+          </span>
+        </div>
       </header>
       {participants.length > 0 ? (
         <>
@@ -227,18 +238,28 @@ export function CompanyParticipantsTable({
                         </span>
                       </td>
                       <td className="absolute right-3 top-3 text-right md:static md:px-3 md:py-4">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          disabled={mutationLocked}
-                          aria-label={`Editează ${participant.full_name}`}
-                          title={`Editează ${participant.full_name}`}
-                          onClick={() => startEdit(participant)}
-                          className="rounded-md text-muted-foreground shadow-none hover:text-burgundy"
-                        >
-                          <PencilIcon aria-hidden="true" strokeWidth={1.8} />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Link
+                            href={`/trainer/companies/${companyId}/participants/${participant.id}/preview`}
+                            aria-label={`Vezi ca participant: ${participant.full_name}`}
+                            title={`Vezi ca participant: ${participant.full_name}`}
+                            className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          >
+                            <EyeIcon className="h-4 w-4" aria-hidden="true" />
+                          </Link>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            disabled={mutationLocked}
+                            aria-label={`Editează ${participant.full_name}`}
+                            title={`Editează ${participant.full_name}`}
+                            onClick={() => startEdit(participant)}
+                            className="rounded-md text-muted-foreground shadow-none hover:text-burgundy"
+                          >
+                            <PencilIcon aria-hidden="true" strokeWidth={1.8} />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -262,9 +283,8 @@ export function CompanyParticipantsTable({
         onOpenChange={(open) => {
           if (!open && !mutationLocked) closeEditor();
         }}
-        labelledBy={confirmingRemoval ? "participant-removal-title" : "company-participant-edit-title"}
-        describedBy={confirmingRemoval ? "participant-removal-description" : "company-participant-edit-description"}
-        closeOnBackdrop={!mutationLocked}
+        labelledBy={confirmingRemoval ? "participant-removal-title" : "participant-edit-title"}
+        describedBy={confirmingRemoval ? "participant-removal-description" : "participant-edit-description"}
       >
         {editingParticipant ? (
           confirmingRemoval ? (
@@ -284,10 +304,10 @@ export function CompanyParticipantsTable({
             <div className="flex h-full min-w-0 flex-col">
               <SheetHeader className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <h2 id="company-participant-edit-title" className="text-lg font-semibold text-foreground">
+                  <h2 id="participant-edit-title" className="text-lg font-semibold text-foreground">
                     Editează managerul
                   </h2>
-                  <p id="company-participant-edit-description" className="mt-1 break-words text-sm text-muted-foreground">
+                  <p id="participant-edit-description" className="mt-1 break-words text-sm text-muted-foreground">
                     {editingParticipant.full_name}
                   </p>
                 </div>

@@ -6,11 +6,13 @@ import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 type ParticipantCompletionStateProps = {
   resultCount: number;
   resultsHref?: string;
+  readOnly?: boolean;
 };
 
 export function ParticipantCompletionState({
   resultCount,
   resultsHref = "/participant/results",
+  readOnly = false,
 }: ParticipantCompletionStateProps) {
   const resultsReady = resultCount > 0;
 
@@ -61,7 +63,7 @@ export function ParticipantCompletionState({
           </div>
         </div>
 
-        {resultsReady ? (
+        {resultsReady && !readOnly ? (
           <Link
             href={resultsHref}
             className={serverLinkButtonClassName({
@@ -72,6 +74,10 @@ export function ParticipantCompletionState({
             Deschide rezultatele
             <ArrowRightIcon data-icon="inline-end" aria-hidden="true" strokeWidth={2.2} />
           </Link>
+        ) : resultsReady && readOnly ? (
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-white/20 px-4 py-2 text-sm font-semibold text-white">
+            Rezultate disponibile (mod doar citire)
+          </span>
         ) : null}
       </div>
     </section>
