@@ -7941,6 +7941,7 @@
             "type": "array"
           },
           "boss_360_count": {
+            "default": 0,
             "title": "Boss 360 Count",
             "type": "integer"
           },
@@ -7960,12 +7961,66 @@
             "type": "array"
           },
           "driver_count": {
+            "default": 0,
             "title": "Driver Count",
             "type": "integer"
           },
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "leader_assigned_count": {
+            "default": 0,
+            "title": "Leader Assigned Count",
+            "type": "integer"
+          },
+          "leader_completed_count": {
+            "default": 0,
+            "title": "Leader Completed Count",
+            "type": "integer"
+          },
+          "leader_completion_rate": {
+            "default": 0,
+            "title": "Leader Completion Rate",
+            "type": "integer"
+          },
+          "leader_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leader Id"
+          },
+          "leader_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leader Name"
+          },
+          "leadership_assigned_count": {
+            "default": 0,
+            "title": "Leadership Assigned Count",
+            "type": "integer"
+          },
+          "leadership_completed_count": {
+            "default": 0,
+            "title": "Leadership Completed Count",
+            "type": "integer"
+          },
+          "leadership_completion_rate": {
+            "default": 0,
+            "title": "Leadership Completion Rate",
+            "type": "integer"
           },
           "lencioni_averages": {
             "items": {
@@ -7981,6 +8036,28 @@
           "lencioni_scale": {
             "$ref": "#/components/schemas/ReportScoreScaleResponse"
           },
+          "lencioni_unavailable_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lencioni Unavailable Message"
+          },
+          "lencioni_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lencioni Unavailable Reason"
+          },
           "member_count": {
             "title": "Member Count",
             "type": "integer"
@@ -7990,6 +8067,7 @@
             "type": "string"
           },
           "pcm_base_count": {
+            "default": 0,
             "title": "Pcm Base Count",
             "type": "integer"
           },
@@ -8001,6 +8079,7 @@
             "type": "array"
           },
           "pcm_phase_count": {
+            "default": 0,
             "title": "Pcm Phase Count",
             "type": "integer"
           },
@@ -8010,6 +8089,11 @@
             },
             "title": "Pcm Phase Distribution",
             "type": "array"
+          },
+          "team_type": {
+            "default": "functional",
+            "title": "Team Type",
+            "type": "string"
           }
         },
         "required": [
@@ -8020,16 +8104,8 @@
           "completed_count",
           "completion_rate",
           "lencioni_count",
-          "driver_count",
-          "boss_360_count",
-          "pcm_base_count",
-          "pcm_phase_count",
           "lencioni_averages",
-          "lencioni_scale",
-          "driver_averages",
-          "boss_360_averages",
-          "pcm_base_distribution",
-          "pcm_phase_distribution"
+          "lencioni_scale"
         ],
         "title": "ReportTeamLensResponse",
         "type": "object"

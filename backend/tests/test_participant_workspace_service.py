@@ -992,8 +992,8 @@ async def test_workspace_pcm_values_are_scoped_to_selected_cycle() -> None:
                 cycle_id=current_cycle.id,
             )
 
-            assert (baseline.pcm_base, baseline.pcm_phase) == ("harmonizer", "rebel")
-            assert (current.pcm_base, current.pcm_phase) == ("thinker", "promoter")
+            assert (baseline.pcm_base, baseline.pcm_phase) == ("Armonizator", "Rebel")
+            assert (current.pcm_base, current.pcm_phase) == ("Gânditor", "Promotor")
 
             await session.rollback()
     finally:
@@ -1276,8 +1276,8 @@ async def test_participant_workspace_summary_uses_persisted_profile_and_assignme
             assert summary.participant_email == user.email
             assert summary.company_name == company.name
             assert summary.project_name == "Leadership septembrie"
-            assert summary.pcm_base == "harmonizer"
-            assert summary.pcm_phase == "thinker"
+            assert summary.pcm_base is None
+            assert summary.pcm_phase is None
             assert [task.assignmentId for task in summary.tasks] == [
                 str(team_assignment.id),
                 str(person_assignment.id),

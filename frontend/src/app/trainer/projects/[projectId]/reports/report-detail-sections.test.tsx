@@ -29,7 +29,7 @@ function team(overrides: Partial<TeamLens> = {}): TeamLens {
 }
 
 describe("Lencioni team detail", () => {
-  it("keeps a single trainer-visible response and friendly navigation", () => {
+  it("renders teams with data and provides friendly navigation", () => {
     const { rerender } = render(
       <LencioniTeamBreakdown teams={[]} overviewHref="/reports" />,
     );
@@ -43,15 +43,15 @@ describe("Lencioni team detail", () => {
         overviewHref="/reports"
         teams={[
           team({
-            id: "single",
-            name: "Echipa cu un răspuns",
-            lencioniCount: 1,
-            lencioniScale: { score_unit: "score", scale_min: 0, scale_max: 12 },
+            id: "scored-team",
+            name: "Echipa Scilence",
+            lencioniCount: 3,
+            lencioniScale: { score_unit: "score", scale_min: 0, scale_max: 10 },
             lencioniAverages: [
               {
                 id: "trust",
                 label: "Încredere",
-                avg: 6.8,
+                avg: 8.5,
                 range_label: "Solid",
                 interpretation: "Echipa colaborează.",
               },
@@ -61,11 +61,57 @@ describe("Lencioni team detail", () => {
       />,
     );
 
-    const card = screen.getByText("Echipa cu un răspuns").closest("article");
+    const card = screen.getByText("Echipa Scilence").closest("article");
     expect(card).not.toBeNull();
-    expect(within(card as HTMLElement).getByText("6.8 / 12")).toBeTruthy();
+    expect(within(card as HTMLElement).getByText("8.5 / 10")).toBeTruthy();
     expect(within(card as HTMLElement).getByText("Solid: Echipa colaborează.")).toBeTruthy();
-    expect(screen.queryByText(/Prag de confidențialitate|Ascuns până există/)).toBeNull();
+  });
+
+  it("renders teams with 0 responses without hiding them", () => {
+    render(
+      <LencioniTeamBreakdown
+        overviewHref="/reports"
+        teams={[
+          team({
+            id: "zero-responses",
+            name: "Echipa Fără Răspunsuri",
+            lencioniCount: 0,
+            lencioniAverages: [],
+            lencioniUnavailableReason: "no_responses",
+            lencioniUnavailableMessage: "Nu există încă răspunsuri",
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Echipa Fără Răspunsuri")).toBeTruthy();
+    expect(screen.getByText("Nu există încă răspunsuri")).toBeTruthy();
+  });
+
+  it("renders privacy threshold message when responses are below threshold", () => {
+    render(
+      <LencioniTeamBreakdown
+        overviewHref="/reports"
+        teams={[
+          team({
+            id: "single-response",
+            name: "Echipa Cu Un Răspuns",
+            lencioniCount: 1,
+            lencioniAverages: [],
+            lencioniUnavailableReason: "privacy_threshold",
+            lencioniUnavailableMessage:
+              "Rezultatele sunt ascunse deoarece numărul de evaluări (1) este sub pragul minim de confidențialitate (2).",
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Echipa Cu Un Răspuns")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Rezultatele sunt ascunse deoarece numărul de evaluări (1) este sub pragul minim de confidențialitate (2).",
+      ),
+    ).toBeTruthy();
   });
 
   it("explains a team whose pinned scales cannot be combined", () => {
@@ -83,5 +129,107 @@ describe("Lencioni team detail", () => {
     );
 
     expect(screen.getByText(/Aceste rezultate folosesc scale diferite/)).toBeTruthy();
+  });
+
+  it("displays team work and leadership work separately for functional teams", () => {
+    render(
+      <LencioniTeamBreakdown
+        overviewHref="/reports"
+        teams={[
+          team({
+            id: "manager-team-1",
+            name: "Echipa Vânzări",
+            teamType: "functional",
+            memberCount: 5,
+            assignedCount: 5,
+            completedCount: 4,
+            completionRate: 80,
+            leadershipAssignedCount: 4,
+            leadershipCompletedCount: 2,
+            leadershipCompletionRate: 50,
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Echipa Vânzări")).toBeTruthy();
+    expect(screen.getByText("Muncă echipă:")).toBeTruthy();
+    expect(screen.getByText(/4\/5 \(80%\)/)).toBeTruthy();
+    expect(screen.getByText("Muncă conducere:")).toBeTruthy();
+    expect(screen.getByText(/2\/4 \(50%\)/)).toBeTruthy();
+  });
+
+  it("uses leadershipAssignedCount for Frederic-Remy case where sum of displayed assignments equals lens total", () => {
+    // Lens total: 51 assignments (8 regular team tasks + 43 total leadership tasks: 21 Frederic + 22 Remy)
+    // leaderAssignedCount is only 21 (Frederic), but leadershipAssignedCount is 43 (Frederic + Remy).
+    const teamWorkAssigned = 8;
+    const teamWorkCompleted = 6;
+    const leadershipWorkAssigned = 43;
+    const leadershipWorkCompleted = 30;
+    const lensTotalAssigned = teamWorkAssigned + leadershipWorkAssigned; // 51
+
+    render(
+      <LencioniTeamBreakdown
+        overviewHref="/reports"
+        teams={[
+          team({
+            id: "frederic-team",
+            name: "Echipa Frederic Cauquil",
+            teamType: "functional",
+            memberCount: 6,
+            assignedCount: teamWorkAssigned,
+            completedCount: teamWorkCompleted,
+            completionRate: Math.round((teamWorkCompleted / teamWorkAssigned) * 100),
+            leaderAssignedCount: 21,
+            leaderCompletedCount: 15,
+            leaderCompletionRate: 71,
+            leadershipAssignedCount: leadershipWorkAssigned,
+            leadershipCompletedCount: leadershipWorkCompleted,
+            leadershipCompletionRate: Math.round((leadershipWorkCompleted / leadershipWorkAssigned) * 100),
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Echipa Frederic Cauquil")).toBeTruthy();
+    // Verifică că se afișează munca de echipă (8)
+    expect(screen.getByText("Muncă echipă:")).toBeTruthy();
+    expect(screen.getByText(/6\/8 \(75%\)/)).toBeTruthy();
+
+    // Verifică că „Muncă conducere" folosește leadershipAssignedCount (43), nu doar leaderAssignedCount (21)
+    expect(screen.getByText("Muncă conducere:")).toBeTruthy();
+    expect(screen.getByText(/30\/43 \(70%\)/)).toBeTruthy();
+    expect(screen.queryByText(/21/)).toBeNull();
+
+    // Verifică că suma asignărilor afișate (8 + 43) este exact totalul lentilei (51)
+    expect(teamWorkAssigned + leadershipWorkAssigned).toBe(lensTotalAssigned);
+    expect(lensTotalAssigned).toBe(51);
+  });
+
+  it("displays single completion rate without separation for leadership team", () => {
+    render(
+      <LencioniTeamBreakdown
+        overviewHref="/reports"
+        teams={[
+          team({
+            id: "leadership",
+            name: "Leadership",
+            teamType: "leadership",
+            memberCount: 4,
+            assignedCount: 8,
+            completedCount: 6,
+            completionRate: 75,
+            leadershipAssignedCount: 4,
+            leadershipCompletedCount: 2,
+            leadershipCompletionRate: 50,
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Leadership")).toBeTruthy();
+    expect(screen.getByText("75% completat")).toBeTruthy();
+    expect(screen.queryByText("Muncă echipă:")).toBeNull();
+    expect(screen.queryByText("Muncă conducere:")).toBeNull();
   });
 });

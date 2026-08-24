@@ -7,6 +7,14 @@ from uuid import UUID
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from codrut.contracts.scoring import (
+    PCM_PROFILES,
+    PCM_REPORT_KEYS,
+    RECEIVED_360_MINIMUM_COMPLETED,
+    format_pcm_label,
+    get_pcm_color,
+    pcm_profile_key,
+)
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import (
     AssessmentCycle,
@@ -31,7 +39,6 @@ from codrut.modules.companies.hierarchy import (
 )
 from codrut.modules.companies.manager_matching import (
     clean_manager_reference,
-    normalize_manager_token,
 )
 from codrut.modules.companies.models import ParticipantProfile, ProjectMembership
 from codrut.modules.companies.repository import CompanyRepository
@@ -86,34 +93,6 @@ BOSS_360_REPORT_KEYS = {
     QuestionnaireKey.icare.value,
 }
 
-PCM_REPORT_KEYS = {
-    QuestionnaireKey.pcm_base.value,
-    QuestionnaireKey.phase.value,
-    "pcm_phase",
-}
-
-PCM_PROFILES = {
-    "harmonizer": ("Armonizator", "#f97316"),
-    "thinker": ("Gânditor", "#2563eb"),
-    "persister": ("Perseverent", "#7c3aed"),
-    "imaginer": ("Imaginator", "#fb923c"),
-    "rebel": ("Rebel", "#eab308"),
-    "promoter": ("Promotor", "#dc2626"),
-}
-
-PCM_ALIASES = {
-    "armonizator": "harmonizer",
-    "harmonizer": "harmonizer",
-    "ganditor": "thinker",
-    "thinker": "thinker",
-    "perseverent": "persister",
-    "persister": "persister",
-    "imaginator": "imaginer",
-    "imaginer": "imaginer",
-    "rebel": "rebel",
-    "promotor": "promoter",
-    "promoter": "promoter",
-}
 
 
 @dataclass(frozen=True)
@@ -224,16 +203,12 @@ class ScoringService:
             assessment_cycle_id,
             assignment_results,
         )
-        pcm_values = (
-            _pcm_values_from_responses(
-                await self.repository.list_company_pcm_responses(
-                    company_id,
-                    project_id,
-                    assessment_cycle_id,
-                )
+        pcm_values = _pcm_values_from_responses(
+            await self.repository.list_company_pcm_responses(
+                company_id,
+                project_id,
+                assessment_cycle_id,
             )
-            if assessment_cycle_id is not None
-            else None
         )
         assignments = [assignment for assignment, _result, _definition in assignment_results]
         total_assigned = len(assignment_results)
@@ -305,10 +280,6 @@ class ScoringService:
             participants,
             team_snapshot=team_snapshot,
         )
-        driver_rank_summary = _build_driver_rank_summary(
-            driver_selection.rankable_rows,
-            insufficient_driver_score_count=(driver_selection.insufficient_driver_score_count),
-        )
         pcm_base_distribution = _distribution_from_completed_pcm_assignments(
             participants,
             assignments,
@@ -328,6 +299,40 @@ class ScoringService:
             team_snapshot=team_snapshot,
         )
 
+        pcm_base_count = _distribution_count(pcm_base_distribution)
+        pcm_phase_count = _distribution_count(pcm_phase_distribution)
+        pcm_base_reportable = (
+            pcm_base_distribution
+            if pcm_base_count >= RECEIVED_360_MINIMUM_COMPLETED
+            else []
+        )
+        pcm_phase_reportable = (
+            pcm_phase_distribution
+            if pcm_phase_count >= RECEIVED_360_MINIMUM_COMPLETED
+            else []
+        )
+        driver_count = score_summary.driver_count
+        driver_averages = (
+            score_summary.driver_averages
+            if driver_count >= RECEIVED_360_MINIMUM_COMPLETED
+            else []
+        )
+        driver_rank_summary = (
+            _build_driver_rank_summary(
+                driver_selection.rankable_rows,
+                insufficient_driver_score_count=(driver_selection.insufficient_driver_score_count),
+            )
+            if driver_count >= RECEIVED_360_MINIMUM_COMPLETED
+            else DriverRankSummaryResponse(
+                total_people=0,
+                first_rank=[],
+                second_rank=[],
+                first_rank_tie_breaks=0,
+                second_rank_tie_breaks=0,
+                insufficient_driver_score_count=driver_selection.insufficient_driver_score_count,
+            )
+        )
+
         return CompanyReportAggregateResponse(
             project_id=project_id,
             assessment_cycle_id=assessment_cycle_id,
@@ -341,13 +346,13 @@ class ScoringService:
             if total_assigned > 0
             else 0,
             lencioni_count=score_summary.lencioni_count,
-            driver_count=score_summary.driver_count,
+            driver_count=driver_count,
             boss_360_count=score_summary.boss_360_count,
-            pcm_base_count=_distribution_count(pcm_base_distribution),
-            pcm_phase_count=_distribution_count(pcm_phase_distribution),
+            pcm_base_count=pcm_base_count,
+            pcm_phase_count=pcm_phase_count,
             lencioni_averages=score_summary.lencioni_averages,
             lencioni_scale=score_summary.lencioni_scale,
-            driver_averages=score_summary.driver_averages,
+            driver_averages=driver_averages,
             driver_scale=score_summary.driver_scale,
             boss_360_averages=score_summary.boss_360_averages,
             icare_target_summaries=icare_target_summaries,
@@ -365,8 +370,8 @@ class ScoringService:
                     set(team_snapshot.leadership_ids) if team_snapshot is not None else None
                 ),
             ),
-            pcm_base_distribution=pcm_base_distribution,
-            pcm_phase_distribution=pcm_phase_distribution,
+            pcm_base_distribution=pcm_base_reportable,
+            pcm_phase_distribution=pcm_phase_reportable,
             team_lenses=team_lens_result.team_lenses,
             hierarchy_ambiguous=team_lens_result.hierarchy_ambiguous,
             hierarchy_ambiguity_message=team_lens_result.hierarchy_ambiguity_message,
@@ -471,6 +476,10 @@ class ScoringService:
         driver_summary = _build_score_summary(member_results)
         driver_feedback = _driver_feedback_by_dimension(member_results)
         cycle_pcm = pcm_values.get(participant_profile_id, {})
+        pcm_base_raw = cycle_pcm.get("pcm_base")
+        pcm_phase_raw = cycle_pcm.get("pcm_phase")
+        pcm_base = _format_pcm_label(pcm_base_raw) if pcm_base_raw else None
+        pcm_phase = _format_pcm_label(pcm_phase_raw) if pcm_phase_raw else None
 
         return LeadershipMemberReportResponse(
             project_id=project_id,
@@ -481,8 +490,8 @@ class ScoringService:
                 position=member.position,
                 role_group=member.role_group,
             ),
-            pcm_base=cycle_pcm.get("pcm_base", member.pcm_base),
-            pcm_phase=cycle_pcm.get("pcm_phase", member.pcm_phase),
+            pcm_base=pcm_base,
+            pcm_phase=pcm_phase,
             lencioni_count=lencioni_summary.lencioni_count,
             lencioni_averages=lencioni_summary.lencioni_averages,
             lencioni_scale=lencioni_summary.lencioni_scale,
@@ -2235,22 +2244,25 @@ def _distribution_from_completed_pcm_assignments(
         if participant is None:
             continue
         value = (cycle_values or {}).get(participant_id, {}).get(field)
-        if value is None and cycle_values is None:
-            value = getattr(participant, field)
         if not isinstance(value, str) or not value.strip():
             continue
         cleaned = value.strip()
-        counts[cleaned] = counts.get(cleaned, 0) + 1
+        profile_key = _pcm_profile_key(cleaned) or cleaned.lower()
+        counts[profile_key] = counts.get(profile_key, 0) + 1
 
     return sorted(
         [
             ReportDistributionResponse(
-                id=profile,
-                label=_format_pcm_label(profile),
+                id=profile_key,
+                label=PCM_PROFILES[profile_key][0]
+                if profile_key in PCM_PROFILES
+                else _format_pcm_label(profile_key),
                 value=count,
-                color=_get_pcm_color(profile),
+                color=PCM_PROFILES[profile_key][1]
+                if profile_key in PCM_PROFILES
+                else _get_pcm_color(profile_key),
             )
-            for profile, count in counts.items()
+            for profile_key, count in counts.items()
         ],
         key=lambda item: (-item.value, item.label),
     )
@@ -2262,10 +2274,12 @@ def _pcm_values_from_responses(
     values: dict[UUID, dict[str, str]] = {}
     for assignment, response in responses:
         profile_values = values.setdefault(assignment.respondent_profile_id, {})
-        for field in ("pcm_base", "pcm_phase"):
-            value = response.answers.get(field)
-            if isinstance(value, str) and value.strip():
-                profile_values[field] = value.strip()
+        base_val = response.answers.get("pcm_base")
+        if isinstance(base_val, str) and base_val.strip():
+            profile_values["pcm_base"] = base_val.strip()
+        phase_val = response.answers.get("pcm_phase") or response.answers.get("phase")
+        if isinstance(phase_val, str) and phase_val.strip():
+            profile_values["pcm_phase"] = phase_val.strip()
     return values
 
 
@@ -2279,8 +2293,10 @@ def _build_team_lenses(
     pcm_values: dict[UUID, dict[str, str]] | None = None,
     *,
     team_snapshot: AssessmentCycleTeamSnapshot | None = None,
+    minimum_completed: int = RECEIVED_360_MINIMUM_COMPLETED,
 ) -> TeamLensBuildResult:
     if team_snapshot is not None:
+        leadership_ids = set(team_snapshot.leadership_ids)
         return TeamLensBuildResult(
             team_lenses=[
                 _build_team_lens(
@@ -2290,7 +2306,11 @@ def _build_team_lenses(
                     participants,
                     assignment_results,
                     pcm_values,
+                    team_type=team.type,
+                    leader_id=team.leader_id,
+                    leadership_member_ids=leadership_ids,
                     lencioni_target_team_id=team.id,
+                    minimum_completed=minimum_completed,
                 )
                 for team in team_snapshot.teams
             ],
@@ -2319,7 +2339,7 @@ def _build_team_lenses(
         )
 
     participant_by_id = {participant.id: participant for participant in participants}
-    teams_by_id: dict[str, tuple[str, set[UUID]]] = {}
+    teams_by_id: dict[str, tuple[str, str, set[UUID], UUID | None]] = {}
     direct_reports_by_manager_id = {
         manager_id: [
             participant_by_id[direct_report.id]
@@ -2343,11 +2363,13 @@ def _build_team_lenses(
         team_id = f"manager:{manager.id}"
         teams_by_id[team_id] = (
             f"Echipa {manager.full_name}",
+            "functional",
             {manager.id, *direct_report_ids},
+            manager.id,
         )
 
     if len(leadership_ids) > 1 or len(hierarchy.top_level_ids) > 1:
-        teams_by_id["leadership"] = ("Leadership", leadership_ids)
+        teams_by_id["leadership"] = ("Leadership", "leadership", leadership_ids, None)
 
     team_lenses = [
         _build_team_lens(
@@ -2357,8 +2379,12 @@ def _build_team_lenses(
             participants,
             assignment_results,
             pcm_values,
+            team_type=team_type,
+            leader_id=leader_id,
+            leadership_member_ids=leadership_ids,
+            minimum_completed=minimum_completed,
         )
-        for team_id, (name, member_ids) in teams_by_id.items()
+        for team_id, (name, team_type, member_ids, leader_id) in teams_by_id.items()
     ]
     team_lenses.sort(
         key=lambda team: (
@@ -2384,8 +2410,18 @@ def _build_team_lens(
     assignment_results: list[AssignmentResultWithDefinition],
     pcm_values: dict[UUID, dict[str, str]] | None = None,
     *,
+    team_type: TeamType | str = TeamType.functional,
+    leader_id: UUID | None = None,
+    leadership_member_ids: set[UUID] | frozenset[UUID] = frozenset(),
     lencioni_target_team_id: UUID | None = None,
+    minimum_completed: int = RECEIVED_360_MINIMUM_COMPLETED,
 ) -> ReportTeamLensResponse:
+    is_leadership_team = (
+        team_type == TeamType.leadership
+        or team_type == "leadership"
+        or team_id == "leadership"
+    )
+
     team_assignment_results = [
         (assignment, result, definition)
         for assignment, result, definition in assignment_results
@@ -2402,46 +2438,166 @@ def _build_team_lens(
             )
         )
     ]
-    team_assignments = [assignment for assignment, _result, _definition in team_assignment_results]
+
+    if is_leadership_team:
+        team_work_results = team_assignment_results
+        leadership_work_results: list[AssignmentResultWithDefinition] = []
+    else:
+        team_work_results = []
+        leadership_work_results = []
+        for row in team_assignment_results:
+            assignment = row[0]
+            if (
+                assignment.respondent_profile_id in leadership_member_ids
+                and (
+                    lencioni_target_team_id is None
+                    or assignment.target_team_id != lencioni_target_team_id
+                )
+            ):
+                leadership_work_results.append(row)
+            else:
+                team_work_results.append(row)
+
+    team_assignments = [assignment for assignment, _result, _definition in team_work_results]
     assigned_count = len(team_assignments)
     completed_count = sum(
         1 for assignment in team_assignments if assignment.status in COMPLETED_STATUSES
     )
-    score_summary = _build_score_summary(team_assignment_results)
-    team_participants = [
-        participant for participant in participants if participant.id in member_ids
+    completion_rate = (
+        round((completed_count / assigned_count) * 100) if assigned_count > 0 else 0
+    )
+
+    leadership_assignments = [
+        assignment for assignment, _result, _definition in leadership_work_results
     ]
-    pcm_base_distribution = _distribution_from_completed_pcm_assignments(
-        team_participants,
-        team_assignments,
-        "pcm_base",
-        pcm_values,
+    leadership_assigned_count = len(leadership_assignments)
+    leadership_completed_count = sum(
+        1 for assignment in leadership_assignments if assignment.status in COMPLETED_STATUSES
     )
-    pcm_phase_distribution = _distribution_from_completed_pcm_assignments(
-        team_participants,
-        team_assignments,
-        "pcm_phase",
-        pcm_values,
+    leadership_completion_rate = (
+        round((leadership_completed_count / leadership_assigned_count) * 100)
+        if leadership_assigned_count > 0
+        else 0
     )
+
+    participant_by_id = {participant.id: participant for participant in participants}
+    leader = participant_by_id.get(leader_id) if leader_id else None
+    leader_name = leader.full_name if leader else None
+    if leader_id:
+        leader_assigned_count = sum(
+            1 for a in leadership_assignments if a.respondent_profile_id == leader_id
+        )
+        leader_completed_count = sum(
+            1
+            for a in leadership_assignments
+            if a.respondent_profile_id == leader_id and a.status in COMPLETED_STATUSES
+        )
+        leader_completion_rate = (
+            round((leader_completed_count / leader_assigned_count) * 100)
+            if leader_assigned_count > 0
+            else 0
+        )
+    else:
+        leader_assigned_count = 0
+        leader_completed_count = 0
+        leader_completion_rate = 0
+
+    score_summary = _build_score_summary(team_assignment_results)
+
+    lencioni_count = score_summary.lencioni_count
+    if lencioni_count == 0:
+        lencioni_averages = []
+        lencioni_unavailable_reason = "no_responses"
+        lencioni_unavailable_message = "Nu există încă răspunsuri"
+    elif lencioni_count < minimum_completed:
+        lencioni_averages = []
+        lencioni_unavailable_reason = "privacy_threshold"
+        lencioni_unavailable_message = (
+            f"Rezultatele nu pot fi afișate pentru că numărul de răspunsuri este sub "
+            f"pragul minim de confidențialitate (minim {minimum_completed} răspunsuri)."
+        )
+    else:
+        lencioni_averages = score_summary.lencioni_averages
+        lencioni_unavailable_reason = None
+        lencioni_unavailable_message = None
+
+    if is_leadership_team:
+        team_participants = [
+            participant for participant in participants if participant.id in member_ids
+        ]
+        pcm_base_raw_dist = _distribution_from_completed_pcm_assignments(
+            team_participants,
+            team_assignments,
+            "pcm_base",
+            pcm_values,
+        )
+        pcm_phase_raw_dist = _distribution_from_completed_pcm_assignments(
+            team_participants,
+            team_assignments,
+            "pcm_phase",
+            pcm_values,
+        )
+        driver_count = score_summary.driver_count
+        driver_averages = (
+            score_summary.driver_averages
+            if driver_count >= minimum_completed
+            else []
+        )
+        boss_360_count = score_summary.boss_360_count
+        boss_360_averages = (
+            score_summary.boss_360_averages
+            if boss_360_count >= minimum_completed
+            else []
+        )
+        pcm_base_count = _distribution_count(pcm_base_raw_dist)
+        pcm_phase_count = _distribution_count(pcm_phase_raw_dist)
+        pcm_base_distribution = (
+            pcm_base_raw_dist
+            if pcm_base_count >= minimum_completed
+            else []
+        )
+        pcm_phase_distribution = (
+            pcm_phase_raw_dist
+            if pcm_phase_count >= minimum_completed
+            else []
+        )
+    else:
+        pcm_base_distribution = []
+        pcm_phase_distribution = []
+        driver_count = 0
+        driver_averages = []
+        boss_360_count = 0
+        boss_360_averages = []
+        pcm_base_count = 0
+        pcm_phase_count = 0
 
     return ReportTeamLensResponse(
         id=team_id,
         name=name,
+        team_type="leadership" if is_leadership_team else "functional",
         member_count=len(member_ids),
         assigned_count=assigned_count,
         completed_count=completed_count,
-        completion_rate=round((completed_count / assigned_count) * 100)
-        if assigned_count > 0
-        else 0,
-        lencioni_count=score_summary.lencioni_count,
-        driver_count=score_summary.driver_count,
-        boss_360_count=score_summary.boss_360_count,
-        pcm_base_count=_distribution_count(pcm_base_distribution),
-        pcm_phase_count=_distribution_count(pcm_phase_distribution),
-        lencioni_averages=score_summary.lencioni_averages,
+        completion_rate=completion_rate,
+        leader_id=leader_id,
+        leader_name=leader_name,
+        leader_assigned_count=leader_assigned_count,
+        leader_completed_count=leader_completed_count,
+        leader_completion_rate=leader_completion_rate,
+        leadership_assigned_count=leadership_assigned_count,
+        leadership_completed_count=leadership_completed_count,
+        leadership_completion_rate=leadership_completion_rate,
+        lencioni_count=lencioni_count,
+        driver_count=driver_count,
+        boss_360_count=boss_360_count,
+        pcm_base_count=pcm_base_count,
+        pcm_phase_count=pcm_phase_count,
+        lencioni_averages=lencioni_averages,
         lencioni_scale=score_summary.lencioni_scale,
-        driver_averages=score_summary.driver_averages,
-        boss_360_averages=score_summary.boss_360_averages,
+        lencioni_unavailable_reason=lencioni_unavailable_reason,
+        lencioni_unavailable_message=lencioni_unavailable_message,
+        driver_averages=driver_averages,
+        boss_360_averages=boss_360_averages,
         pcm_base_distribution=pcm_base_distribution,
         pcm_phase_distribution=pcm_phase_distribution,
     )
@@ -2477,23 +2633,7 @@ def _report_hierarchy_issue(issue: HierarchyIssue) -> ReportHierarchyIssueRespon
     )
 
 
-def _pcm_profile_key(value: str | None) -> str | None:
-    if not value:
-        return None
-    normalized = normalize_manager_token(value).replace("_", " ")
-    compact = normalized.replace(" ", "")
-    return PCM_ALIASES.get(normalized) or PCM_ALIASES.get(compact)
+_pcm_profile_key = pcm_profile_key
+_format_pcm_label = format_pcm_label
+_get_pcm_color = get_pcm_color
 
-
-def _format_pcm_label(value: str | None) -> str:
-    key = _pcm_profile_key(value)
-    if key is not None:
-        return PCM_PROFILES[key][0]
-    if not value:
-        return "Necompletată"
-    return " ".join(part.capitalize() for part in value.replace("_", " ").split())
-
-
-def _get_pcm_color(value: str | None) -> str | None:
-    key = _pcm_profile_key(value)
-    return PCM_PROFILES[key][1] if key is not None else None

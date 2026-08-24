@@ -27,11 +27,22 @@ export type ReportDistribution = {
 export type TeamLens = {
   id: string;
   name: string;
+  teamType?: string | null;
   memberCount: number;
   assignedCount: number;
   completedCount: number;
   completionRate: number;
+  leaderId?: string | null;
+  leaderName?: string | null;
+  leaderAssignedCount?: number;
+  leaderCompletedCount?: number;
+  leaderCompletionRate?: number;
+  leadershipAssignedCount?: number;
+  leadershipCompletedCount?: number;
+  leadershipCompletionRate?: number;
   lencioniCount: number;
+  lencioniUnavailableReason?: string | null;
+  lencioniUnavailableMessage?: string | null;
   driverCount: number;
   boss360Count: number;
   pcmBaseCount: number;
@@ -100,11 +111,22 @@ export function adaptReportTeamLenses(teamLenses: ReportTeamLens[]): TeamLens[] 
   return teamLenses.map((team) => ({
     id: team.id,
     name: team.name,
+    teamType: team.team_type,
     memberCount: team.member_count,
     assignedCount: team.assigned_count,
     completedCount: team.completed_count,
     completionRate: team.completion_rate,
+    leaderId: team.leader_id,
+    leaderName: team.leader_name,
+    leaderAssignedCount: team.leader_assigned_count,
+    leaderCompletedCount: team.leader_completed_count,
+    leaderCompletionRate: team.leader_completion_rate,
+    leadershipAssignedCount: team.leadership_assigned_count,
+    leadershipCompletedCount: team.leadership_completed_count,
+    leadershipCompletionRate: team.leadership_completion_rate,
     lencioniCount: team.lencioni_count,
+    lencioniUnavailableReason: team.lencioni_unavailable_reason,
+    lencioniUnavailableMessage: team.lencioni_unavailable_message,
     driverCount: team.driver_count,
     boss360Count: team.boss_360_count,
     pcmBaseCount: team.pcm_base_count,

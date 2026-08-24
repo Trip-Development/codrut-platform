@@ -225,3 +225,26 @@ def test_documented_boundary_exceptions_are_reflected_in_docs() -> None:
     ]
 
     assert missing == []
+
+
+def test_scoring_and_participants_have_no_circular_imports() -> None:
+    all_imports = iter_imports()
+
+    # scoring must never import from participants
+    scoring_to_participants = [
+        item
+        for item in all_imports
+        if item.source_module == "scoring" and item.imported_module == "participants"
+    ]
+    assert format_imports(scoring_to_participants) == []
+
+    # participants must never import from scoring.service
+    participants_to_scoring_service = [
+        item
+        for item in all_imports
+        if item.source_module == "participants"
+        and item.imported_module == "scoring"
+        and item.imported_layer == "service"
+    ]
+    assert format_imports(participants_to_scoring_service) == []
+

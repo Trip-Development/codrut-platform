@@ -13,8 +13,6 @@ export function LencioniTeamBreakdown({
   teams: TeamLens[];
   overviewHref: string;
 }) {
-  const teamsWithData = teams.filter((team) => team.lencioniCount > 0);
-
   return (
     <section id="lencioni-pe-echipe" className="flex flex-col gap-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -31,13 +29,13 @@ export function LencioniTeamBreakdown({
         </Link>
       </div>
 
-      {teamsWithData.length === 0 ? (
+      {teams.length === 0 ? (
         <Card asChild className="px-5 text-center text-muted-foreground [--card-spacing:--spacing(6)]">
           <p>Nu există încă rezultate Lencioni pe echipe.</p>
         </Card>
       ) : (
         <div className="grid gap-5 xl:grid-cols-2">
-          {teamsWithData.map((team) => {
+          {teams.map((team) => {
             const scale = resolveReportScoreScale(
               team.lencioniScale,
               { min: 0, max: 10, suffix: " / 10" },
@@ -45,14 +43,46 @@ export function LencioniTeamBreakdown({
             return (
               <Card key={team.id} asChild className="gap-0 px-5 [--card-spacing:--spacing(5)]">
                 <article>
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                     <div>
                       <h3 className="text-lg font-semibold text-foreground">{team.name}</h3>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {team.memberCount} membri · {formatResponseCount(team.lencioniCount)}
                       </p>
                     </div>
-                    <span className="text-xs font-semibold text-muted-foreground">{team.completionRate}% completat</span>
+                    {team.teamType === "leadership" || team.id === "leadership" ? (
+                      <span className="text-xs font-semibold text-muted-foreground">
+                        {team.completionRate}% completat
+                      </span>
+                    ) : (
+                      (() => {
+                        const leadershipAssigned =
+                          team.leadershipAssignedCount ?? team.leaderAssignedCount ?? 0;
+                        const leadershipCompleted =
+                          team.leadershipCompletedCount ?? team.leaderCompletedCount ?? 0;
+                        const leadershipRate =
+                          team.leadershipCompletionRate ??
+                          team.leaderCompletionRate ??
+                          (leadershipAssigned > 0
+                            ? Math.round((leadershipCompleted / leadershipAssigned) * 100)
+                            : 0);
+
+                        return (
+                          <div className="flex flex-col gap-0.5 text-xs text-muted-foreground sm:items-end">
+                            <span>
+                              <span className="font-medium text-foreground">Muncă echipă:</span>{" "}
+                              {team.completedCount}/{team.assignedCount} ({team.completionRate}%)
+                            </span>
+                            {leadershipAssigned > 0 ? (
+                              <span>
+                                <span className="font-medium text-foreground">Muncă conducere:</span>{" "}
+                                {leadershipCompleted}/{leadershipAssigned} ({leadershipRate}%)
+                              </span>
+                            ) : null}
+                          </div>
+                        );
+                      })()
+                    )}
                   </div>
                   <div className="mt-5 grid gap-4">
                     {team.lencioniAverages.length > 0 ? (
@@ -70,6 +100,14 @@ export function LencioniTeamBreakdown({
                           ) : null}
                         </div>
                       ))
+                    ) : team.lencioniUnavailableMessage ? (
+                      <p className="text-sm text-muted-foreground">
+                        {team.lencioniUnavailableMessage}
+                      </p>
+                    ) : team.lencioniCount === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Nu există încă răspunsuri
+                      </p>
                     ) : (
                       <p className="text-sm text-muted-foreground">
                         {reportScaleEmptyCopy(
