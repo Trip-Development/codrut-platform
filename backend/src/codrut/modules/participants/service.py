@@ -4,6 +4,10 @@ from uuid import UUID
 from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from codrut.contracts.scoring import (
+    RECEIVED_360_MINIMUM_COMPLETED,
+    format_pcm_label,
+)
 from codrut.core.config import get_settings
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import (
@@ -59,7 +63,7 @@ COMPLETED_ASSIGNMENT_STATUSES = {
     AssignmentStatus.scored,
 }
 RECEIVED_360_QUESTIONNAIRE_KEYS = {"boss_360", "boss_360_en", "icare"}
-RECEIVED_360_MINIMUM_COMPLETED = 2
+
 
 
 class ParticipantWorkspaceService:
@@ -1252,8 +1256,6 @@ class ParticipantWorkspaceService:
         self,
         assignments: list[QuestionnaireAssignment],
     ) -> tuple[str | None, str | None]:
-        from codrut.modules.scoring.service import _format_pcm_label
-
         pcm_assignment_ids = {
             assignment.id
             for assignment in assignments
@@ -1274,9 +1276,9 @@ class ParticipantWorkspaceService:
             base_value = response.answers.get("pcm_base")
             phase_value = response.answers.get("pcm_phase") or response.answers.get("phase")
             if isinstance(base_value, str) and base_value.strip():
-                pcm_base = _format_pcm_label(base_value.strip())
+                pcm_base = format_pcm_label(base_value.strip())
             if isinstance(phase_value, str) and phase_value.strip():
-                pcm_phase = _format_pcm_label(phase_value.strip())
+                pcm_phase = format_pcm_label(phase_value.strip())
         return pcm_base, pcm_phase
 
     async def _get_active_individual_publications(

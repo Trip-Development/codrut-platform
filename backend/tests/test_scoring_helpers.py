@@ -22,6 +22,7 @@ from codrut.modules.scoring.schemas import (
     ReportDistributionResponse,
 )
 from codrut.modules.scoring.service import (
+    AssignmentResultWithDefinition,
     DriverRowSelection,
     ReportDimensionAccumulator,
     ReportParticipant,
@@ -1628,7 +1629,9 @@ def test_pcm_distribution_requires_completed_known_profiles() -> None:
 
 
 def test_frederic_cauquil_team_with_peer_leadership_member_work_separation() -> None:
-    """Corecția 1: Munca de conducere se scoate pentru ORICE membru din conducere (lider sau subordonat)."""
+    """Corecția 1: Munca de conducere se scoate pentru ORICE membru din conducere
+    (lider sau subordonat).
+    """
     frederic_leader_id = uuid.uuid4()
     remy_peer_id = uuid.uuid4()
     sub_1_id = uuid.uuid4()
@@ -1639,12 +1642,60 @@ def test_frederic_cauquil_team_with_peer_leadership_member_work_separation() -> 
     frederic_team_id = uuid.uuid4()
 
     participants = [
-        ReportParticipant(id=frederic_leader_id, full_name="Frederic Cauquil", reports_to_name=None, role_group="leadership", pcm_base=None, pcm_phase=None, user_id=None),
-        ReportParticipant(id=remy_peer_id, full_name="Remy Bedu", reports_to_name="Frederic Cauquil", role_group="leadership", pcm_base=None, pcm_phase=None, user_id=None),
-        ReportParticipant(id=sub_1_id, full_name="Sub 1", reports_to_name="Frederic Cauquil", role_group="member", pcm_base=None, pcm_phase=None, user_id=None),
-        ReportParticipant(id=sub_2_id, full_name="Sub 2", reports_to_name="Frederic Cauquil", role_group="member", pcm_base=None, pcm_phase=None, user_id=None),
-        ReportParticipant(id=sub_3_id, full_name="Sub 3", reports_to_name="Frederic Cauquil", role_group="member", pcm_base=None, pcm_phase=None, user_id=None),
-        ReportParticipant(id=sub_4_id, full_name="Sub 4", reports_to_name="Frederic Cauquil", role_group="member", pcm_base=None, pcm_phase=None, user_id=None),
+        ReportParticipant(
+            id=frederic_leader_id,
+            full_name="Frederic Cauquil",
+            reports_to_name=None,
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=remy_peer_id,
+            full_name="Remy Bedu",
+            reports_to_name="Frederic Cauquil",
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=sub_1_id,
+            full_name="Sub 1",
+            reports_to_name="Frederic Cauquil",
+            role_group="member",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=sub_2_id,
+            full_name="Sub 2",
+            reports_to_name="Frederic Cauquil",
+            role_group="member",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=sub_3_id,
+            full_name="Sub 3",
+            reports_to_name="Frederic Cauquil",
+            role_group="member",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=sub_4_id,
+            full_name="Sub 4",
+            reports_to_name="Frederic Cauquil",
+            role_group="member",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
     ]
 
     snapshot = AssessmentCycleTeamSnapshot(
@@ -1663,17 +1714,22 @@ def test_frederic_cauquil_team_with_peer_leadership_member_work_separation() -> 
                 id=frederic_team_id,
                 name="Echipa Frederic Cauquil",
                 type=TeamType.functional,
-                member_ids=frozenset({frederic_leader_id, remy_peer_id, sub_1_id, sub_2_id, sub_3_id, sub_4_id}),
+                member_ids=frozenset(
+                    {frederic_leader_id, remy_peer_id, sub_1_id, sub_2_id, sub_3_id, sub_4_id}
+                ),
                 leader_id=frederic_leader_id,
             ),
         ),
     )
 
     rows: list[AssignmentResultWithDefinition] = []
-    # Frederic has 21 leadership tasks in lens (19 icare + 1 driver + 1 pcm; his lencioni is targeted to leadership_team_id)
+    # Frederic has 21 leadership tasks in lens (19 icare + 1 driver + 1 pcm; his lencioni is
+    # targeted to leadership_team_id)
     for _ in range(19):
         rows.append((_assignment("icare", respondent_profile_id=frederic_leader_id), None, None))
-    rows.append((_assignment("distress_drivers", respondent_profile_id=frederic_leader_id), None, None))
+    rows.append(
+        (_assignment("distress_drivers", respondent_profile_id=frederic_leader_id), None, None)
+    )
     rows.append((_assignment("pcm_base", respondent_profile_id=frederic_leader_id), None, None))
 
     # Remy has 22 leadership tasks (19 icare + 1 driver + 1 pcm + 1 lencioni targeted to leadership)
@@ -1681,12 +1737,38 @@ def test_frederic_cauquil_team_with_peer_leadership_member_work_separation() -> 
         rows.append((_assignment("icare", respondent_profile_id=remy_peer_id), None, None))
     rows.append((_assignment("distress_drivers", respondent_profile_id=remy_peer_id), None, None))
     rows.append((_assignment("pcm_base", respondent_profile_id=remy_peer_id), None, None))
-    rows.append((_assignment("lencioni", respondent_profile_id=remy_peer_id, target_team_id=leadership_team_id), None, None))
+    rows.append(
+        (
+            _assignment(
+                "lencioni",
+                respondent_profile_id=remy_peer_id,
+                target_team_id=leadership_team_id,
+            ),
+            None,
+            None,
+        )
+    )
 
     # The 4 regular members each have 2 tasks: 1 Lencioni targeted to frederic_team_id + 1 team task
     for sub_id in (sub_1_id, sub_2_id, sub_3_id, sub_4_id):
-        rows.append((_assignment("lencioni", respondent_profile_id=sub_id, target_team_id=frederic_team_id), None, None))
-        rows.append((_assignment("feedback_team", respondent_profile_id=sub_id, target_team_id=frederic_team_id), None, None))
+        rows.append(
+            (
+                _assignment(
+                    "lencioni", respondent_profile_id=sub_id, target_team_id=frederic_team_id
+                ),
+                None,
+                None,
+            )
+        )
+        rows.append(
+            (
+                _assignment(
+                    "feedback_team", respondent_profile_id=sub_id, target_team_id=frederic_team_id
+                ),
+                None,
+                None,
+            )
+        )
 
     result = _build_team_lenses(participants, rows, team_snapshot=snapshot)
     by_id = {team.id: team for team in result.team_lenses}
@@ -1710,9 +1792,33 @@ def test_team_lens_lencioni_privacy_threshold() -> None:
     team_id = uuid.uuid4()
 
     participants = [
-        ReportParticipant(id=leader_id, full_name="Leader", reports_to_name=None, role_group="leadership", pcm_base=None, pcm_phase=None, user_id=None),
-        ReportParticipant(id=sub_1_id, full_name="Sub 1", reports_to_name="Leader", role_group="member", pcm_base=None, pcm_phase=None, user_id=None),
-        ReportParticipant(id=sub_2_id, full_name="Sub 2", reports_to_name="Leader", role_group="member", pcm_base=None, pcm_phase=None, user_id=None),
+        ReportParticipant(
+            id=leader_id,
+            full_name="Leader",
+            reports_to_name=None,
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=sub_1_id,
+            full_name="Sub 1",
+            reports_to_name="Leader",
+            role_group="member",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=sub_2_id,
+            full_name="Sub 2",
+            reports_to_name="Leader",
+            role_group="member",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
     ]
     definition = SimpleNamespace(
         private_config={},

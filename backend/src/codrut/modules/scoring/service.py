@@ -7,6 +7,14 @@ from uuid import UUID
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from codrut.contracts.scoring import (
+    PCM_PROFILES,
+    PCM_REPORT_KEYS,
+    RECEIVED_360_MINIMUM_COMPLETED,
+    format_pcm_label,
+    get_pcm_color,
+    pcm_profile_key,
+)
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import (
     AssessmentCycle,
@@ -31,7 +39,6 @@ from codrut.modules.companies.hierarchy import (
 )
 from codrut.modules.companies.manager_matching import (
     clean_manager_reference,
-    normalize_manager_token,
 )
 from codrut.modules.companies.models import ParticipantProfile, ProjectMembership
 from codrut.modules.companies.repository import CompanyRepository
@@ -42,7 +49,6 @@ from codrut.modules.forms.models import (
     SubmissionProcessingJob,
     SubmissionProcessingStatus,
 )
-from codrut.modules.participants.service import RECEIVED_360_MINIMUM_COMPLETED
 from codrut.modules.scoring.models import ScoringResult
 from codrut.modules.scoring.repository import ScoringRepository
 from codrut.modules.scoring.scale import ScoreScale, derive_definition_score_scale
@@ -87,35 +93,6 @@ BOSS_360_REPORT_KEYS = {
     QuestionnaireKey.icare.value,
 }
 
-PCM_REPORT_KEYS = {
-    QuestionnaireKey.pcm_base.value,
-    QuestionnaireKey.phase.value,
-    "pcm_phase",
-}
-
-PCM_PROFILES = {
-    "harmonizer": ("Armonizator", "#f97316"),
-    "thinker": ("Gânditor", "#2563eb"),
-    "persister": ("Perseverent", "#7c3aed"),
-    "imaginer": ("Imaginator", "#fb923c"),
-    "rebel": ("Rebel", "#eab308"),
-    "promoter": ("Promotor", "#dc2626"),
-}
-
-PCM_ALIASES = {
-    "armonizator": "harmonizer",
-    "harmonizer": "harmonizer",
-    "ganditor": "thinker",
-    "gânditor": "thinker",
-    "thinker": "thinker",
-    "perseverent": "persister",
-    "persister": "persister",
-    "imaginator": "imaginer",
-    "imaginer": "imaginer",
-    "rebel": "rebel",
-    "promotor": "promoter",
-    "promoter": "promoter",
-}
 
 
 @dataclass(frozen=True)
@@ -303,10 +280,6 @@ class ScoringService:
             participants,
             team_snapshot=team_snapshot,
         )
-        driver_rank_summary = _build_driver_rank_summary(
-            driver_selection.rankable_rows,
-            insufficient_driver_score_count=(driver_selection.insufficient_driver_score_count),
-        )
         pcm_base_distribution = _distribution_from_completed_pcm_assignments(
             participants,
             assignments,
@@ -326,6 +299,40 @@ class ScoringService:
             team_snapshot=team_snapshot,
         )
 
+        pcm_base_count = _distribution_count(pcm_base_distribution)
+        pcm_phase_count = _distribution_count(pcm_phase_distribution)
+        pcm_base_reportable = (
+            pcm_base_distribution
+            if pcm_base_count >= RECEIVED_360_MINIMUM_COMPLETED
+            else []
+        )
+        pcm_phase_reportable = (
+            pcm_phase_distribution
+            if pcm_phase_count >= RECEIVED_360_MINIMUM_COMPLETED
+            else []
+        )
+        driver_count = score_summary.driver_count
+        driver_averages = (
+            score_summary.driver_averages
+            if driver_count >= RECEIVED_360_MINIMUM_COMPLETED
+            else []
+        )
+        driver_rank_summary = (
+            _build_driver_rank_summary(
+                driver_selection.rankable_rows,
+                insufficient_driver_score_count=(driver_selection.insufficient_driver_score_count),
+            )
+            if driver_count >= RECEIVED_360_MINIMUM_COMPLETED
+            else DriverRankSummaryResponse(
+                total_people=0,
+                first_rank=[],
+                second_rank=[],
+                first_rank_tie_breaks=0,
+                second_rank_tie_breaks=0,
+                insufficient_driver_score_count=driver_selection.insufficient_driver_score_count,
+            )
+        )
+
         return CompanyReportAggregateResponse(
             project_id=project_id,
             assessment_cycle_id=assessment_cycle_id,
@@ -339,13 +346,13 @@ class ScoringService:
             if total_assigned > 0
             else 0,
             lencioni_count=score_summary.lencioni_count,
-            driver_count=score_summary.driver_count,
+            driver_count=driver_count,
             boss_360_count=score_summary.boss_360_count,
-            pcm_base_count=_distribution_count(pcm_base_distribution),
-            pcm_phase_count=_distribution_count(pcm_phase_distribution),
+            pcm_base_count=pcm_base_count,
+            pcm_phase_count=pcm_phase_count,
             lencioni_averages=score_summary.lencioni_averages,
             lencioni_scale=score_summary.lencioni_scale,
-            driver_averages=score_summary.driver_averages,
+            driver_averages=driver_averages,
             driver_scale=score_summary.driver_scale,
             boss_360_averages=score_summary.boss_360_averages,
             icare_target_summaries=icare_target_summaries,
@@ -363,8 +370,8 @@ class ScoringService:
                     set(team_snapshot.leadership_ids) if team_snapshot is not None else None
                 ),
             ),
-            pcm_base_distribution=pcm_base_distribution,
-            pcm_phase_distribution=pcm_phase_distribution,
+            pcm_base_distribution=pcm_base_reportable,
+            pcm_phase_distribution=pcm_phase_reportable,
             team_lenses=team_lens_result.team_lenses,
             hierarchy_ambiguous=team_lens_result.hierarchy_ambiguous,
             hierarchy_ambiguity_message=team_lens_result.hierarchy_ambiguity_message,
@@ -2518,24 +2525,42 @@ def _build_team_lens(
         team_participants = [
             participant for participant in participants if participant.id in member_ids
         ]
-        pcm_base_distribution = _distribution_from_completed_pcm_assignments(
+        pcm_base_raw_dist = _distribution_from_completed_pcm_assignments(
             team_participants,
             team_assignments,
             "pcm_base",
             pcm_values,
         )
-        pcm_phase_distribution = _distribution_from_completed_pcm_assignments(
+        pcm_phase_raw_dist = _distribution_from_completed_pcm_assignments(
             team_participants,
             team_assignments,
             "pcm_phase",
             pcm_values,
         )
         driver_count = score_summary.driver_count
-        driver_averages = score_summary.driver_averages
+        driver_averages = (
+            score_summary.driver_averages
+            if driver_count >= minimum_completed
+            else []
+        )
         boss_360_count = score_summary.boss_360_count
-        boss_360_averages = score_summary.boss_360_averages
-        pcm_base_count = _distribution_count(pcm_base_distribution)
-        pcm_phase_count = _distribution_count(pcm_phase_distribution)
+        boss_360_averages = (
+            score_summary.boss_360_averages
+            if boss_360_count >= minimum_completed
+            else []
+        )
+        pcm_base_count = _distribution_count(pcm_base_raw_dist)
+        pcm_phase_count = _distribution_count(pcm_phase_raw_dist)
+        pcm_base_distribution = (
+            pcm_base_raw_dist
+            if pcm_base_count >= minimum_completed
+            else []
+        )
+        pcm_phase_distribution = (
+            pcm_phase_raw_dist
+            if pcm_phase_count >= minimum_completed
+            else []
+        )
     else:
         pcm_base_distribution = []
         pcm_phase_distribution = []
@@ -2608,23 +2633,7 @@ def _report_hierarchy_issue(issue: HierarchyIssue) -> ReportHierarchyIssueRespon
     )
 
 
-def _pcm_profile_key(value: str | None) -> str | None:
-    if not value:
-        return None
-    normalized = normalize_manager_token(value).replace("_", " ")
-    compact = normalized.replace(" ", "")
-    return PCM_ALIASES.get(normalized) or PCM_ALIASES.get(compact)
+_pcm_profile_key = pcm_profile_key
+_format_pcm_label = format_pcm_label
+_get_pcm_color = get_pcm_color
 
-
-def _format_pcm_label(value: str | None) -> str:
-    key = _pcm_profile_key(value)
-    if key is not None:
-        return PCM_PROFILES[key][0]
-    if not value:
-        return "Necompletată"
-    return " ".join(part.capitalize() for part in value.replace("_", " ").split())
-
-
-def _get_pcm_color(value: str | None) -> str | None:
-    key = _pcm_profile_key(value)
-    return PCM_PROFILES[key][1] if key is not None else None

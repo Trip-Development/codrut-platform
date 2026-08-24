@@ -33,7 +33,11 @@ from codrut.modules.forms.models import (
 )
 from codrut.modules.identity import models as identity_models  # noqa: F401
 from codrut.modules.scoring.models import ScoringResult
-from codrut.modules.scoring.service import ScoringService
+from codrut.modules.scoring.service import (
+    ScoringService,
+    _build_team_lens,
+    _report_participant_from_profile,
+)
 from codrut.tools.local_preview import build_preview_questionnaire_definitions
 
 PREVIEW_DEFINITIONS = {
@@ -1325,18 +1329,10 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results(
                 other_project_assignment.id,
             }
             assert aggregate.lencioni_averages[0].avg == 10.5
-            assert [item.id for item in aggregate.driver_averages] == [
-                "work_signal_a",
-                "work_signal_b",
-                "work_signal_c",
-                "work_signal_d",
-                "work_signal_e",
-            ]
-            assert [item.avg for item in aggregate.driver_averages] == [10, 20, 30, 60, 50]
-            assert all(item.interpretation is None for item in aggregate.driver_averages)
-            assert aggregate.driver_rank_summary.total_people == 1
-            assert sum(item.value for item in aggregate.driver_rank_summary.first_rank) == 1
-            assert sum(item.value for item in aggregate.driver_rank_summary.second_rank) == 1
+            assert aggregate.driver_averages == []
+            assert aggregate.driver_rank_summary.total_people == 0
+            assert aggregate.driver_rank_summary.first_rank == []
+            assert aggregate.driver_rank_summary.second_rank == []
             assert aggregate.driver_rank_summary.insufficient_driver_score_count == 0
             assert aggregate.pcm_base_count == 0
             assert aggregate.pcm_phase_count == 0
@@ -1562,15 +1558,33 @@ async def test_cycle_comparison_exposes_pinned_definition_compatibility_and_hide
                 ]
             )
             await session.flush()
-            session.add(
-                ProjectMembership(
-                    company_id=company.id,
-                    project_id=project.id,
-                    participant_profile_id=participant.id,
-                    reports_to_name=None,
-                    role_group="leadership",
-                    active=True,
-                )
+            participant_two = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Comparison Two",
+                email=f"comparison-two-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            session.add(participant_two)
+            await session.flush()
+            session.add_all(
+                [
+                    ProjectMembership(
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=participant.id,
+                        reports_to_name=None,
+                        role_group="leadership",
+                        active=True,
+                    ),
+                    ProjectMembership(
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=participant_two.id,
+                        reports_to_name=None,
+                        role_group="leadership",
+                        active=True,
+                    ),
+                ]
             )
             session.add_all(
                 [
@@ -1622,12 +1636,34 @@ async def test_cycle_comparison_exposes_pinned_definition_compatibility_and_hide
                 target_type=AssignmentTargetType.self_assessment,
                 status=AssignmentStatus.scored,
             )
+            comparison_lencioni_assignment_two = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                assessment_cycle_id=comparison_cycle.id,
+                respondent_profile_id=participant_two.id,
+                questionnaire_key="lencioni",
+                questionnaire_definition_id=comparison_lencioni.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.scored,
+            )
             baseline_drivers_assignment = QuestionnaireAssignment(
                 id=uuid.uuid4(),
                 company_id=company.id,
                 project_id=project.id,
                 assessment_cycle_id=baseline_cycle.id,
                 respondent_profile_id=participant.id,
+                questionnaire_key="distress_drivers",
+                questionnaire_definition_id=shared_drivers.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.scored,
+            )
+            baseline_drivers_assignment_two = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                assessment_cycle_id=baseline_cycle.id,
+                respondent_profile_id=participant_two.id,
                 questionnaire_key="distress_drivers",
                 questionnaire_definition_id=shared_drivers.id,
                 target_type=AssignmentTargetType.self_assessment,
@@ -1644,12 +1680,26 @@ async def test_cycle_comparison_exposes_pinned_definition_compatibility_and_hide
                 target_type=AssignmentTargetType.self_assessment,
                 status=AssignmentStatus.scored,
             )
+            comparison_drivers_assignment_two = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                assessment_cycle_id=comparison_cycle.id,
+                respondent_profile_id=participant_two.id,
+                questionnaire_key="distress_drivers",
+                questionnaire_definition_id=shared_drivers.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.scored,
+            )
             session.add_all(
                 [
                     baseline_lencioni_assignment,
                     comparison_lencioni_assignment,
+                    comparison_lencioni_assignment_two,
                     baseline_drivers_assignment,
+                    baseline_drivers_assignment_two,
                     comparison_drivers_assignment,
+                    comparison_drivers_assignment_two,
                 ]
             )
             await session.flush()
@@ -1664,12 +1714,24 @@ async def test_cycle_comparison_exposes_pinned_definition_compatibility_and_hide
                         scores={"team_signal_a": {"score": 7}},
                     ),
                     ScoringResult(
+                        assignment_id=comparison_lencioni_assignment_two.id,
+                        scores={"team_signal_a": {"score": 9}},
+                    ),
+                    ScoringResult(
                         assignment_id=baseline_drivers_assignment.id,
                         scores={"work_signal_a": 10, "work_signal_b": 5},
                     ),
                     ScoringResult(
+                        assignment_id=baseline_drivers_assignment_two.id,
+                        scores={"work_signal_a": 30, "work_signal_b": 15},
+                    ),
+                    ScoringResult(
                         assignment_id=comparison_drivers_assignment.id,
                         scores={"work_signal_a": 20, "work_signal_b": 15},
+                    ),
+                    ScoringResult(
+                        assignment_id=comparison_drivers_assignment_two.id,
+                        scores={"work_signal_a": 40, "work_signal_b": 25},
                     ),
                 ]
             )
@@ -2015,3 +2077,209 @@ async def test_company_report_aggregate_flags_ambiguous_referenced_manager_names
             await session.rollback()
     finally:
         await engine.dispose()
+
+
+async def test_company_report_aggregate_privacy_thresholds_for_pcm_and_drivers(
+    questionnaire_definition_factory,
+) -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            company = Company(id=uuid.uuid4(), name=f"Privacy Test {uuid.uuid4().hex[:8]}")
+            project = CompanyProject(id=uuid.uuid4(), company_id=company.id, name="Privacy Project")
+            cycle = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                sequence=1,
+                name="Ciclul 1",
+            )
+            session.add(company)
+            await session.flush()
+            session.add(project)
+            await session.flush()
+            session.add(cycle)
+            await session.flush()
+
+            leader = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Leader One",
+                email=f"leader-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            leader_two = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Leader Two",
+                email=f"leader-two-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            member = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Member One",
+                email=f"member-{uuid.uuid4().hex[:8]}@example.com",
+                reports_to_name="Leader One",
+            )
+            member_two = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Member Two",
+                email=f"member-two-{uuid.uuid4().hex[:8]}@example.com",
+                reports_to_name="Leader Two",
+            )
+            session.add_all([leader, leader_two, member, member_two])
+            await session.flush()
+
+            session.add_all(
+                [
+                    ProjectMembership(
+                        id=uuid.uuid4(),
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=leader.id,
+                        reports_to_name="1",
+                        role_group="leadership",
+                    ),
+                    ProjectMembership(
+                        id=uuid.uuid4(),
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=leader_two.id,
+                        reports_to_name="Leader One",
+                        role_group="manager",
+                    ),
+                    ProjectMembership(
+                        id=uuid.uuid4(),
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=member.id,
+                        reports_to_name="Leader One",
+                        role_group="member",
+                    ),
+                    ProjectMembership(
+                        id=uuid.uuid4(),
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=member_two.id,
+                        reports_to_name="Leader Two",
+                        role_group="member",
+                    ),
+                ]
+            )
+
+            # Single PCM completed response for leader
+            pcm_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                assessment_cycle_id=cycle.id,
+                respondent_profile_id=leader.id,
+                target_type=AssignmentTargetType.self_assessment,
+                questionnaire_key="pcm_base",
+                status=AssignmentStatus.submitted,
+            )
+            pcm_response = QuestionnaireResponse(
+                id=uuid.uuid4(),
+                assignment_id=pcm_assignment.id,
+                questionnaire_key="pcm_base",
+                questionnaire_version=1,
+                status=QuestionnaireResponseStatus.submitted,
+                answers={"pcm_base": "Perseverent"},
+            )
+            # Single Driver completed response for leader
+            driver_def = questionnaire_definition_factory("distress_drivers")
+            driver_def.feedback_policy = {
+                "score_unit": "percent",
+                "scale_min": 0,
+                "scale_max": 100,
+            }
+            session.add(driver_def)
+            await session.flush()
+
+            driver_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                assessment_cycle_id=cycle.id,
+                respondent_profile_id=leader.id,
+                target_type=AssignmentTargetType.self_assessment,
+                questionnaire_key="distress_drivers",
+                questionnaire_definition_id=driver_def.id,
+                status=AssignmentStatus.scored,
+            )
+            driver_result = ScoringResult(
+                id=uuid.uuid4(),
+                assignment_id=driver_assignment.id,
+                scores={"be_perfect": 75},
+            )
+
+            session.add_all(
+                [
+                    pcm_assignment,
+                    pcm_response,
+                    driver_assignment,
+                    driver_result,
+                ]
+            )
+            await session.flush()
+
+            aggregate = await ScoringService(session).get_company_report_aggregate(
+                company.id,
+                project.id,
+                cycle.id,
+            )
+
+            # Project level: 1 PCM response (< 2) -> distributions hidden
+            assert aggregate.pcm_base_count == 1
+            assert aggregate.pcm_base_distribution == []
+            assert aggregate.pcm_phase_distribution == []
+
+            # Project level: 1 Driver response (< 2) -> averages hidden
+            assert aggregate.driver_count == 1
+            assert aggregate.driver_averages == []
+            assert aggregate.driver_rank_summary.first_rank == []
+
+            # Leadership lens level: 1 response (< 2) -> lens averages and distributions hidden
+            participants_list = [_report_participant_from_profile(leader)]
+            assignment_results = [
+                (pcm_assignment, None, None),
+                (driver_assignment, driver_result, driver_def),
+            ]
+            pcm_values = {leader.id: {"pcm_base": "Perseverent"}}
+
+            leadership_lens_locked = _build_team_lens(
+                "leadership",
+                "Leadership",
+                {leader.id},
+                participants_list,
+                assignment_results,
+                pcm_values=pcm_values,
+                team_type=TeamType.leadership,
+                minimum_completed=2,
+            )
+            assert leadership_lens_locked.pcm_base_count == 1
+            assert leadership_lens_locked.pcm_base_distribution == []
+            assert leadership_lens_locked.driver_count == 1
+            assert leadership_lens_locked.driver_averages == []
+
+            # Leadership lens level: threshold met (1 response >= 1) ->
+            # lens averages and distributions visible
+            leadership_lens_unlocked = _build_team_lens(
+                "leadership",
+                "Leadership",
+                {leader.id},
+                participants_list,
+                assignment_results,
+                pcm_values=pcm_values,
+                team_type=TeamType.leadership,
+                minimum_completed=1,
+            )
+            assert leadership_lens_unlocked.pcm_base_count == 1
+            assert len(leadership_lens_unlocked.pcm_base_distribution) == 1
+            assert leadership_lens_unlocked.driver_count == 1
+            assert len(leadership_lens_unlocked.driver_averages) == 1
+
+            await session.rollback()
+    finally:
+        await engine.dispose()
+

@@ -130,4 +130,59 @@ describe("Lencioni team detail", () => {
 
     expect(screen.getByText(/Aceste rezultate folosesc scale diferite/)).toBeTruthy();
   });
+
+  it("displays team work and leadership work separately for functional teams", () => {
+    render(
+      <LencioniTeamBreakdown
+        overviewHref="/reports"
+        teams={[
+          team({
+            id: "manager-team-1",
+            name: "Echipa Vânzări",
+            teamType: "functional",
+            memberCount: 5,
+            assignedCount: 5,
+            completedCount: 4,
+            completionRate: 80,
+            leaderAssignedCount: 4,
+            leaderCompletedCount: 2,
+            leaderCompletionRate: 50,
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Echipa Vânzări")).toBeTruthy();
+    expect(screen.getByText("Muncă echipă:")).toBeTruthy();
+    expect(screen.getByText(/4\/5 \(80%\)/)).toBeTruthy();
+    expect(screen.getByText("Muncă conducere:")).toBeTruthy();
+    expect(screen.getByText(/2\/4 \(50%\)/)).toBeTruthy();
+  });
+
+  it("displays single completion rate without separation for leadership team", () => {
+    render(
+      <LencioniTeamBreakdown
+        overviewHref="/reports"
+        teams={[
+          team({
+            id: "leadership",
+            name: "Leadership",
+            teamType: "leadership",
+            memberCount: 4,
+            assignedCount: 8,
+            completedCount: 6,
+            completionRate: 75,
+            leaderAssignedCount: 4,
+            leaderCompletedCount: 2,
+            leaderCompletionRate: 50,
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Leadership")).toBeTruthy();
+    expect(screen.getByText("75% completat")).toBeTruthy();
+    expect(screen.queryByText("Muncă echipă:")).toBeNull();
+    expect(screen.queryByText("Muncă conducere:")).toBeNull();
+  });
 });
