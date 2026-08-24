@@ -144,9 +144,9 @@ describe("Lencioni team detail", () => {
             assignedCount: 5,
             completedCount: 4,
             completionRate: 80,
-            leaderAssignedCount: 4,
-            leaderCompletedCount: 2,
-            leaderCompletionRate: 50,
+            leadershipAssignedCount: 4,
+            leadershipCompletedCount: 2,
+            leadershipCompletionRate: 50,
           }),
         ]}
       />,
@@ -157,6 +157,53 @@ describe("Lencioni team detail", () => {
     expect(screen.getByText(/4\/5 \(80%\)/)).toBeTruthy();
     expect(screen.getByText("Muncă conducere:")).toBeTruthy();
     expect(screen.getByText(/2\/4 \(50%\)/)).toBeTruthy();
+  });
+
+  it("uses leadershipAssignedCount for Frederic-Remy case where sum of displayed assignments equals lens total", () => {
+    // Lens total: 51 assignments (8 regular team tasks + 43 total leadership tasks: 21 Frederic + 22 Remy)
+    // leaderAssignedCount is only 21 (Frederic), but leadershipAssignedCount is 43 (Frederic + Remy).
+    const teamWorkAssigned = 8;
+    const teamWorkCompleted = 6;
+    const leadershipWorkAssigned = 43;
+    const leadershipWorkCompleted = 30;
+    const lensTotalAssigned = teamWorkAssigned + leadershipWorkAssigned; // 51
+
+    render(
+      <LencioniTeamBreakdown
+        overviewHref="/reports"
+        teams={[
+          team({
+            id: "frederic-team",
+            name: "Echipa Frederic Cauquil",
+            teamType: "functional",
+            memberCount: 6,
+            assignedCount: teamWorkAssigned,
+            completedCount: teamWorkCompleted,
+            completionRate: Math.round((teamWorkCompleted / teamWorkAssigned) * 100),
+            leaderAssignedCount: 21,
+            leaderCompletedCount: 15,
+            leaderCompletionRate: 71,
+            leadershipAssignedCount: leadershipWorkAssigned,
+            leadershipCompletedCount: leadershipWorkCompleted,
+            leadershipCompletionRate: Math.round((leadershipWorkCompleted / leadershipWorkAssigned) * 100),
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Echipa Frederic Cauquil")).toBeTruthy();
+    // Verifică că se afișează munca de echipă (8)
+    expect(screen.getByText("Muncă echipă:")).toBeTruthy();
+    expect(screen.getByText(/6\/8 \(75%\)/)).toBeTruthy();
+
+    // Verifică că „Muncă conducere" folosește leadershipAssignedCount (43), nu doar leaderAssignedCount (21)
+    expect(screen.getByText("Muncă conducere:")).toBeTruthy();
+    expect(screen.getByText(/30\/43 \(70%\)/)).toBeTruthy();
+    expect(screen.queryByText(/21/)).toBeNull();
+
+    // Verifică că suma asignărilor afișate (8 + 43) este exact totalul lentilei (51)
+    expect(teamWorkAssigned + leadershipWorkAssigned).toBe(lensTotalAssigned);
+    expect(lensTotalAssigned).toBe(51);
   });
 
   it("displays single completion rate without separation for leadership team", () => {
@@ -172,9 +219,9 @@ describe("Lencioni team detail", () => {
             assignedCount: 8,
             completedCount: 6,
             completionRate: 75,
-            leaderAssignedCount: 4,
-            leaderCompletedCount: 2,
-            leaderCompletionRate: 50,
+            leadershipAssignedCount: 4,
+            leadershipCompletedCount: 2,
+            leadershipCompletionRate: 50,
           }),
         ]}
       />,

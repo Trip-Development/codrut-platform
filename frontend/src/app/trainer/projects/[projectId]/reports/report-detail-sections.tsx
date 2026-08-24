@@ -55,27 +55,33 @@ export function LencioniTeamBreakdown({
                         {team.completionRate}% completat
                       </span>
                     ) : (
-                      <div className="flex flex-col gap-0.5 text-xs text-muted-foreground sm:items-end">
-                        <span>
-                          <span className="font-medium text-foreground">Muncă echipă:</span>{" "}
-                          {team.completedCount}/{team.assignedCount} ({team.completionRate}%)
-                        </span>
-                        {(team.leaderAssignedCount ?? team.leadershipAssignedCount ?? 0) > 0 ? (
-                          <span>
-                            <span className="font-medium text-foreground">Muncă conducere:</span>{" "}
-                            {team.leaderCompletedCount ?? team.leadershipCompletedCount ?? 0}/
-                            {team.leaderAssignedCount ?? team.leadershipAssignedCount ?? 0} (
-                            {team.leaderCompletionRate ??
-                              team.leadershipCompletionRate ??
-                              Math.round(
-                                ((team.leaderCompletedCount ?? team.leadershipCompletedCount ?? 0) /
-                                  (team.leaderAssignedCount ?? team.leadershipAssignedCount ?? 1)) *
-                                  100,
-                              )}
-                            %)
-                          </span>
-                        ) : null}
-                      </div>
+                      (() => {
+                        const leadershipAssigned =
+                          team.leadershipAssignedCount ?? team.leaderAssignedCount ?? 0;
+                        const leadershipCompleted =
+                          team.leadershipCompletedCount ?? team.leaderCompletedCount ?? 0;
+                        const leadershipRate =
+                          team.leadershipCompletionRate ??
+                          team.leaderCompletionRate ??
+                          (leadershipAssigned > 0
+                            ? Math.round((leadershipCompleted / leadershipAssigned) * 100)
+                            : 0);
+
+                        return (
+                          <div className="flex flex-col gap-0.5 text-xs text-muted-foreground sm:items-end">
+                            <span>
+                              <span className="font-medium text-foreground">Muncă echipă:</span>{" "}
+                              {team.completedCount}/{team.assignedCount} ({team.completionRate}%)
+                            </span>
+                            {leadershipAssigned > 0 ? (
+                              <span>
+                                <span className="font-medium text-foreground">Muncă conducere:</span>{" "}
+                                {leadershipCompleted}/{leadershipAssigned} ({leadershipRate}%)
+                              </span>
+                            ) : null}
+                          </div>
+                        );
+                      })()
                     )}
                   </div>
                   <div className="mt-5 grid gap-4">
