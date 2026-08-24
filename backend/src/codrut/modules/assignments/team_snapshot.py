@@ -18,6 +18,7 @@ class AssessmentCycleTeam:
     name: str
     type: TeamType
     member_ids: frozenset[UUID]
+    leader_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,7 @@ async def load_assessment_cycle_team_snapshot(
                 name=name,
                 type=team_type,
                 member_ids=frozenset(member_ids),
+                leader_id=next(iter(functional_leaders_by_team_id.get(team_id, ())), None),
             )
             for team_id, (name, team_type, member_ids) in sorted(
                 team_details_by_id.items(),

@@ -4157,36 +4157,91 @@ export interface components {
             /** Assigned Count */
             assigned_count: number;
             /** Boss 360 Averages */
-            boss_360_averages: components["schemas"]["ReportAverageResponse"][];
-            /** Boss 360 Count */
+            boss_360_averages?: components["schemas"]["ReportAverageResponse"][];
+            /**
+             * Boss 360 Count
+             * @default 0
+             */
             boss_360_count: number;
             /** Completed Count */
             completed_count: number;
             /** Completion Rate */
             completion_rate: number;
             /** Driver Averages */
-            driver_averages: components["schemas"]["ReportAverageResponse"][];
-            /** Driver Count */
+            driver_averages?: components["schemas"]["ReportAverageResponse"][];
+            /**
+             * Driver Count
+             * @default 0
+             */
             driver_count: number;
             /** Id */
             id: string;
+            /**
+             * Leader Assigned Count
+             * @default 0
+             */
+            leader_assigned_count: number;
+            /**
+             * Leader Completed Count
+             * @default 0
+             */
+            leader_completed_count: number;
+            /**
+             * Leader Completion Rate
+             * @default 0
+             */
+            leader_completion_rate: number;
+            /** Leader Id */
+            leader_id?: string | null;
+            /** Leader Name */
+            leader_name?: string | null;
+            /**
+             * Leadership Assigned Count
+             * @default 0
+             */
+            leadership_assigned_count: number;
+            /**
+             * Leadership Completed Count
+             * @default 0
+             */
+            leadership_completed_count: number;
+            /**
+             * Leadership Completion Rate
+             * @default 0
+             */
+            leadership_completion_rate: number;
             /** Lencioni Averages */
             lencioni_averages: components["schemas"]["ReportAverageResponse"][];
             /** Lencioni Count */
             lencioni_count: number;
             lencioni_scale: components["schemas"]["ReportScoreScaleResponse"];
+            /** Lencioni Unavailable Message */
+            lencioni_unavailable_message?: string | null;
+            /** Lencioni Unavailable Reason */
+            lencioni_unavailable_reason?: string | null;
             /** Member Count */
             member_count: number;
             /** Name */
             name: string;
-            /** Pcm Base Count */
+            /**
+             * Pcm Base Count
+             * @default 0
+             */
             pcm_base_count: number;
             /** Pcm Base Distribution */
-            pcm_base_distribution: components["schemas"]["ReportDistributionResponse"][];
-            /** Pcm Phase Count */
+            pcm_base_distribution?: components["schemas"]["ReportDistributionResponse"][];
+            /**
+             * Pcm Phase Count
+             * @default 0
+             */
             pcm_phase_count: number;
             /** Pcm Phase Distribution */
-            pcm_phase_distribution: components["schemas"]["ReportDistributionResponse"][];
+            pcm_phase_distribution?: components["schemas"]["ReportDistributionResponse"][];
+            /**
+             * Team Type
+             * @default functional
+             */
+            team_type: string;
         };
         /** ReportingRelationshipImportResponse */
         ReportingRelationshipImportResponse: {

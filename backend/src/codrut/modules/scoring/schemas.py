@@ -40,21 +40,32 @@ class ReportDistributionResponse(BaseModel):
 class ReportTeamLensResponse(BaseModel):
     id: str
     name: str
+    team_type: str = "functional"
     member_count: int
     assigned_count: int
     completed_count: int
     completion_rate: int
+    leader_id: UUID | None = None
+    leader_name: str | None = None
+    leader_assigned_count: int = 0
+    leader_completed_count: int = 0
+    leader_completion_rate: int = 0
+    leadership_assigned_count: int = 0
+    leadership_completed_count: int = 0
+    leadership_completion_rate: int = 0
     lencioni_count: int
-    driver_count: int
-    boss_360_count: int
-    pcm_base_count: int
-    pcm_phase_count: int
+    driver_count: int = 0
+    boss_360_count: int = 0
+    pcm_base_count: int = 0
+    pcm_phase_count: int = 0
     lencioni_averages: list[ReportAverageResponse]
     lencioni_scale: ReportScoreScaleResponse
-    driver_averages: list[ReportAverageResponse]
-    boss_360_averages: list[ReportAverageResponse]
-    pcm_base_distribution: list[ReportDistributionResponse]
-    pcm_phase_distribution: list[ReportDistributionResponse]
+    lencioni_unavailable_reason: str | None = None
+    lencioni_unavailable_message: str | None = None
+    driver_averages: list[ReportAverageResponse] = Field(default_factory=list)
+    boss_360_averages: list[ReportAverageResponse] = Field(default_factory=list)
+    pcm_base_distribution: list[ReportDistributionResponse] = Field(default_factory=list)
+    pcm_phase_distribution: list[ReportDistributionResponse] = Field(default_factory=list)
 
 
 class ReportHierarchyIssueResponse(BaseModel):

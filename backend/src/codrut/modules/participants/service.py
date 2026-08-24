@@ -4,6 +4,10 @@ from uuid import UUID
 from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from codrut.contracts.scoring import (
+    RECEIVED_360_MINIMUM_COMPLETED,
+    format_pcm_label,
+)
 from codrut.core.config import get_settings
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import (
@@ -59,7 +63,7 @@ COMPLETED_ASSIGNMENT_STATUSES = {
     AssignmentStatus.scored,
 }
 RECEIVED_360_QUESTIONNAIRE_KEYS = {"boss_360", "boss_360_en", "icare"}
-RECEIVED_360_MINIMUM_COMPLETED = 2
+
 
 
 class ParticipantWorkspaceService:
@@ -138,7 +142,7 @@ class ParticipantWorkspaceService:
         pcm_base, pcm_phase = (
             await self._get_cycle_pcm_values(assignments)
             if cycle_id is not None
-            else (profile.pcm_base, profile.pcm_phase)
+            else (None, None)
         )
         projects = await self._get_projects(assignments)
         teams = await self._get_teams(assignments)
@@ -1270,11 +1274,11 @@ class ParticipantWorkspaceService:
         pcm_phase: str | None = None
         for response in result.scalars().all():
             base_value = response.answers.get("pcm_base")
-            phase_value = response.answers.get("pcm_phase")
+            phase_value = response.answers.get("pcm_phase") or response.answers.get("phase")
             if isinstance(base_value, str) and base_value.strip():
-                pcm_base = base_value.strip()
+                pcm_base = format_pcm_label(base_value.strip())
             if isinstance(phase_value, str) and phase_value.strip():
-                pcm_phase = phase_value.strip()
+                pcm_phase = format_pcm_label(phase_value.strip())
         return pcm_base, pcm_phase
 
     async def _get_active_individual_publications(
