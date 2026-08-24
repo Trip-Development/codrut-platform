@@ -161,8 +161,7 @@ export function ParticipantTaskList({
           const contentId = `participant-project-${project.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
           const pendingCount = project.totalCount - project.completedCount;
           const complete = project.totalCount > 0 && pendingCount === 0;
-          const isProjectReadOnly =
-            readOnly ||
+          const isHistorical =
             project.historyBucket === "history" ||
             project.status !== "active";
 
@@ -218,18 +217,16 @@ export function ParticipantTaskList({
                     "text-right text-xs font-semibold",
                     complete
                       ? "text-success-ink"
-                      : isProjectReadOnly
+                      : isHistorical
                         ? "text-muted-foreground"
                         : "text-brand-text",
                   )}
                 >
-                  {isProjectReadOnly && !complete && project.historyBucket === "history"
-                    ? "Istoric"
-                    : isProjectReadOnly && !complete
-                      ? "Doar citire"
-                      : complete
-                        ? "Finalizat"
-                        : `${pendingCount} de făcut`}
+                  {complete
+                    ? "Finalizat"
+                    : isHistorical
+                      ? "Istoric"
+                      : `${pendingCount} de făcut`}
                   <span className="mt-1 block font-mono font-medium tabular-nums text-muted-foreground">
                     {project.completedCount}/{project.totalCount}
                   </span>
@@ -244,7 +241,8 @@ export function ParticipantTaskList({
                       group={group}
                       returnTo={returnTo}
                       inviteToken={inviteToken}
-                      readOnly={isProjectReadOnly}
+                      readOnly={readOnly}
+                      isHistorical={isHistorical}
                     />
                   ))}
                 </div>
@@ -262,16 +260,19 @@ function ParticipantTaskRow({
   returnTo,
   inviteToken,
   readOnly,
+  isHistorical,
 }: {
   group: ParticipantTaskGroup;
   returnTo: string;
   inviteToken?: string;
   readOnly: boolean;
+  isHistorical: boolean;
 }) {
   const copy = participantTaskStatusCopy[group.status];
-  const href = readOnly
-    ? null
-    : participantTaskGroupHref(group, { returnTo, inviteToken });
+  const href =
+    readOnly || isHistorical
+      ? null
+      : participantTaskGroupHref(group, { returnTo, inviteToken });
   const isComplete = group.status === "completed";
   const firstTask = group.tasks[0];
   const cycleLabel = firstTask?.cycleSequence
@@ -290,6 +291,15 @@ function ParticipantTaskRow({
       ? "Echipa ta"
       : group.targetSummary;
 
+  const actionLabel =
+    group.kind === "review360"
+      ? group.completedCount > 0
+        ? "Continuă review-ul"
+        : "Începe review-ul"
+      : group.status === "in_progress"
+        ? "Continuă"
+        : "Deschide";
+
   return (
     <div className="grid gap-4 border-b border-border px-4 py-4 last:border-b-0 sm:px-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
       <div className="min-w-0 pl-7">
@@ -300,12 +310,12 @@ function ParticipantTaskRow({
               "text-xs font-semibold",
               isComplete
                 ? "text-success-ink"
-                : readOnly
+                : isHistorical
                   ? "text-muted-foreground"
                   : "text-brand-text",
             )}
           >
-            {readOnly && !isComplete ? "Închis" : copy.label}
+            {copy.label}
           </span>
         </div>
         <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -328,13 +338,7 @@ function ParticipantTaskRow({
               className: "w-fit",
             })}
           >
-            {group.kind === "review360"
-              ? group.completedCount > 0
-                ? "Continuă review-ul"
-                : "Începe review-ul"
-              : group.status === "in_progress"
-                ? "Continuă"
-                : "Deschide"}
+            {actionLabel}
             <ArrowRightIcon
               data-icon="inline-end"
               aria-hidden="true"
@@ -350,9 +354,13 @@ function ParticipantTaskRow({
             />
             Finalizat
           </span>
-        ) : (
+        ) : isHistorical ? (
           <span className="text-sm font-semibold text-muted-foreground">
             Proiect încheiat
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+            {actionLabel} (doar citire)
           </span>
         )}
       </div>

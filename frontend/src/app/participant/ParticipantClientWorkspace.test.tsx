@@ -208,7 +208,8 @@ describe("ParticipantClientWorkspace", () => {
 
     // No interactive questionnaire completion link
     expect(screen.queryByRole("link", { name: /Deschide|Continuă|Completează|Începe/i })).toBeNull();
-    expect(screen.getByText("Doar citire")).toBeDefined();
+    expect(screen.getAllByText("De completat").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Deschide (doar citire)")).toBeDefined();
 
     // Results panel is displayed inline in preview mode
     expect(screen.getAllByText("Lencioni Echipa").length).toBeGreaterThan(0);
@@ -1261,8 +1262,9 @@ describe("ParticipantTaskList", () => {
     expect(projectButton.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(projectButton);
 
-    expect(screen.getByText("Închis")).toBeDefined();
+    expect(screen.getByText("În lucru")).toBeDefined();
     expect(screen.getAllByText("Proiect încheiat").length).toBeGreaterThan(1);
+    expect(screen.queryByText("Închis")).toBeNull();
     expect(screen.queryByRole("link", { name: /Continuă review-ul/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /Deschide|Continuă/i })).toBeNull();
   });
@@ -1300,7 +1302,7 @@ describe("ParticipantTaskList", () => {
     expect(openLink.getAttribute("href")).toContain("/participant/tasks/active-task-1");
   });
 
-  it("disables all completion links and displays passive status badges when readOnly is true", () => {
+  it("disables all completion links and displays authentic task status with passive action label when readOnly is true", () => {
     const activeTask: InviteTask = {
       id: "active-task-2",
       assignmentId: "active-task-2",
@@ -1330,8 +1332,104 @@ describe("ParticipantTaskList", () => {
 
     // In readOnly mode, no interactive form links are rendered
     expect(screen.queryByRole("link", { name: /Deschide|Continuă|Completează|Începe/i })).toBeNull();
-    // Passive status label is shown
-    expect(screen.getByText("Doar citire")).toBeDefined();
-    expect(screen.getByText("Închis")).toBeDefined();
+    // Authentic task status and passive action label are shown
+    expect(screen.getByText("De completat")).toBeDefined();
+    expect(screen.getByText("Deschide (doar citire)")).toBeDefined();
+    expect(screen.queryByText("Închis")).toBeNull();
+    expect(screen.queryByText("Proiect încheiat")).toBeNull();
+  });
+
+  it("displays authentic task status and passive action label in readOnly mode for active project with active cycle (C1, C2, C3, C5)", () => {
+    const unstartedTask: InviteTask = {
+      id: "active-unstarted",
+      assignmentId: "active-unstarted",
+      title: "PCM Profil Personal",
+      status: "not_started",
+      detail: "De completat",
+      href: "/participant/tasks/active-unstarted",
+      targetLabel: "Autoevaluare",
+      estimatedMinutes: 20,
+      questionnaireKey: "pcm",
+      projectId: "project-michelin",
+      projectName: "Leadership Team Zalau 2026",
+      deadlineLabel: "15 septembrie 2026",
+      cycleName: "Evaluare inițială",
+      cycleSequence: 1,
+    };
+    const inProgressTask: InviteTask = {
+      id: "active-inprogress",
+      assignmentId: "active-inprogress",
+      title: "Distress Drivers",
+      status: "in_progress",
+      detail: "În lucru",
+      href: "/participant/tasks/active-inprogress",
+      targetLabel: "Autoevaluare",
+      estimatedMinutes: 10,
+      questionnaireKey: "distress_drivers",
+      projectId: "project-michelin",
+      projectName: "Leadership Team Zalau 2026",
+      deadlineLabel: "15 septembrie 2026",
+      cycleName: "Evaluare inițială",
+      cycleSequence: 1,
+    };
+    const review360Task: InviteTask = {
+      id: "active-360",
+      assignmentId: "active-360",
+      title: "Evaluare 360",
+      status: "not_started",
+      detail: "0/3 finalizate",
+      href: "/participant/tasks/active-360",
+      targetLabel: "Colegi",
+      estimatedMinutes: 15,
+      questionnaireKey: "boss_360",
+      projectId: "project-michelin",
+      projectName: "Leadership Team Zalau 2026",
+      deadlineLabel: "15 septembrie 2026",
+      cycleName: "Evaluare inițială",
+      cycleSequence: 1,
+    };
+
+    const projects = groupParticipantTasksByProject(
+      [unstartedTask, inProgressTask, review360Task],
+      [{
+        id: "project-michelin",
+        name: "Leadership Team Zalau 2026",
+        status: "active",
+        historyBucket: "current",
+        deadlineLabel: "15 septembrie 2026",
+      }],
+    );
+
+    render(
+      <ParticipantTaskList
+        projects={projects}
+        persistenceIdentityKey="participant-michelin-preview"
+        returnTo="/participant/questionnaires"
+        emptyTitle="Nu ai sarcini"
+        emptyDescription="Lista este goală."
+        readOnly={true}
+      />,
+    );
+
+    // Verify project accordion is expanded by default for active project with pending tasks
+    const projectButton = screen.getByRole("button", { name: /Leadership Team Zalau 2026/i });
+    expect(projectButton.getAttribute("aria-expanded")).toBe("true");
+
+    // C1: Authentic statuses displayed identically to participant view
+    expect(screen.getAllByText("De completat").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("În lucru")).toBeDefined();
+    expect(screen.getByText("3 de făcut")).toBeDefined();
+
+    // C2: Passive action labels indicating preview
+    expect(screen.getByText("Deschide (doar citire)")).toBeDefined();
+    expect(screen.getByText("Continuă (doar citire)")).toBeDefined();
+    expect(screen.getByText("Începe review-ul (doar citire)")).toBeDefined();
+
+    // C3 & C5: Must NOT say "Închis" or "Proiect încheiat" anywhere
+    expect(screen.queryByText("Închis")).toBeNull();
+    expect(screen.queryByText("Proiect încheiat")).toBeNull();
+
+    // No interactive links
+    expect(screen.queryByRole("link", { name: /Deschide|Continuă|Începe/i })).toBeNull();
   });
 });
