@@ -102,6 +102,120 @@ describe("ParticipantClientWorkspace", () => {
     expect(screen.queryByRole("complementary", { name: "Contextul fluxului" })).toBeNull();
   });
 
+  it("renders non-regression active navigation and links when readOnly is false (default)", () => {
+    render(
+      <ParticipantClientWorkspace
+        session={{
+          state: "authenticated",
+          user: {
+            id: "participant-1",
+            name: "Mihai Matei",
+            email: "mihai.matei@example.com",
+            role: "participant",
+          },
+        }}
+        summaryData={{
+          projectName: "Leadership Q3",
+          companyName: "Atlas Mobility",
+          participantFullName: "Mihai Matei",
+          participantEmail: "mihai.matei@example.com",
+          deadlineLabel: "Fără termen",
+          pcmBase: null,
+          pcmPhase: null,
+          results: [
+            {
+              assignmentId: "res-1",
+              questionnaireKey: "lencioni",
+              title: "Lencioni",
+              targetLabel: "Echipa",
+              scores: {},
+            },
+          ],
+          tasks: [
+            {
+              id: "task-active",
+              title: "Driveri de stres TA",
+              status: "not_started",
+              detail: "De completat",
+              href: "/participant/questionnaires/distress_drivers?assignmentId=task-active",
+              assignmentId: "task-active",
+              targetLabel: "Autoevaluare",
+              estimatedMinutes: 5,
+              questionnaireKey: "distress_drivers",
+            },
+          ],
+        }}
+        readOnly={false}
+      />,
+    );
+
+    // Active task link exists
+    const taskLink = screen.getByRole("link", { name: /Deschide/i });
+    expect(taskLink).toBeDefined();
+    expect(taskLink.getAttribute("href")).toContain("/participant/questionnaires/distress_drivers?assignmentId=task-active");
+
+    // Results link exists
+    const resultsLink = screen.getByRole("link", { name: /Vezi rezultatele/i });
+    expect(resultsLink).toBeDefined();
+  });
+
+  it("renders read-only mode with passive indicators, no active completion links, and inline results when readOnly is true", () => {
+    render(
+      <ParticipantClientWorkspace
+        session={{
+          state: "authenticated",
+          user: {
+            id: "participant-1",
+            name: "Mihai Matei",
+            email: "mihai.matei@example.com",
+            role: "participant",
+          },
+        }}
+        summaryData={{
+          projectName: "Leadership Q3",
+          companyName: "Atlas Mobility",
+          participantFullName: "Mihai Matei",
+          participantEmail: "mihai.matei@example.com",
+          deadlineLabel: "Fără termen",
+          pcmBase: "Thinker",
+          pcmPhase: null,
+          results: [
+            {
+              assignmentId: "res-1",
+              questionnaireKey: "lencioni",
+              title: "Lencioni Echipa",
+              targetLabel: "Echipa",
+              scores: {},
+            },
+          ],
+          tasks: [
+            {
+              id: "task-readonly",
+              title: "Driveri de stres TA",
+              status: "not_started",
+              detail: "De completat",
+              href: "/participant/questionnaires/distress_drivers?assignmentId=task-readonly",
+              assignmentId: "task-readonly",
+              targetLabel: "Autoevaluare",
+              estimatedMinutes: 5,
+              questionnaireKey: "distress_drivers",
+            },
+          ],
+        }}
+        readOnly={true}
+      />,
+    );
+
+    // No interactive questionnaire completion link
+    expect(screen.queryByRole("link", { name: /Deschide|Continuă|Completează|Începe/i })).toBeNull();
+    expect(screen.getAllByText("De completat").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Deschide (doar citire)")).toBeDefined();
+
+    // Results panel is displayed inline in preview mode
+    expect(screen.getAllByText("Lencioni Echipa").length).toBeGreaterThan(0);
+    expect(screen.getByText("Gânditor")).toBeDefined();
+  });
+
   it("makes ready results the primary action after every questionnaire is complete", () => {
     render(
       <ParticipantClientWorkspace
@@ -1148,9 +1262,174 @@ describe("ParticipantTaskList", () => {
     expect(projectButton.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(projectButton);
 
-    expect(screen.getByText("Închis")).toBeDefined();
+    expect(screen.getByText("În lucru")).toBeDefined();
     expect(screen.getAllByText("Proiect încheiat").length).toBeGreaterThan(1);
+    expect(screen.queryByText("Închis")).toBeNull();
     expect(screen.queryByRole("link", { name: /Continuă review-ul/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /Deschide|Continuă/i })).toBeNull();
+  });
+
+  it("renders active completion links by default when readOnly is false (non-regression)", () => {
+    const activeTask: InviteTask = {
+      id: "active-task-1",
+      assignmentId: "active-task-1",
+      title: "PCM Profil Personal",
+      status: "not_started",
+      detail: "De completat",
+      href: "/participant/tasks/active-task-1",
+      targetLabel: "Autoevaluare",
+      estimatedMinutes: 20,
+      questionnaireKey: "pcm",
+      projectId: "project-active",
+      projectName: "Proiect Activ",
+      deadlineLabel: "31 august 2026",
+    };
+    const projects = groupParticipantTasksByProject([activeTask]);
+
+    render(
+      <ParticipantTaskList
+        projects={projects}
+        persistenceIdentityKey="participant-active"
+        returnTo="/participant/questionnaires"
+        emptyTitle="Nu ai sarcini"
+        emptyDescription="Lista este goală."
+        readOnly={false}
+      />,
+    );
+
+    const openLink = screen.getByRole("link", { name: /Deschide/i });
+    expect(openLink).toBeDefined();
+    expect(openLink.getAttribute("href")).toContain("/participant/tasks/active-task-1");
+  });
+
+  it("disables all completion links and displays authentic task status with passive action label when readOnly is true", () => {
+    const activeTask: InviteTask = {
+      id: "active-task-2",
+      assignmentId: "active-task-2",
+      title: "PCM Profil Personal",
+      status: "not_started",
+      detail: "De completat",
+      href: "/participant/tasks/active-task-2",
+      targetLabel: "Autoevaluare",
+      estimatedMinutes: 20,
+      questionnaireKey: "pcm",
+      projectId: "project-active",
+      projectName: "Proiect Activ",
+      deadlineLabel: "31 august 2026",
+    };
+    const projects = groupParticipantTasksByProject([activeTask]);
+
+    render(
+      <ParticipantTaskList
+        projects={projects}
+        persistenceIdentityKey="participant-readonly"
+        returnTo="/participant/questionnaires"
+        emptyTitle="Nu ai sarcini"
+        emptyDescription="Lista este goală."
+        readOnly={true}
+      />,
+    );
+
+    // In readOnly mode, no interactive form links are rendered
+    expect(screen.queryByRole("link", { name: /Deschide|Continuă|Completează|Începe/i })).toBeNull();
+    // Authentic task status and passive action label are shown
+    expect(screen.getByText("De completat")).toBeDefined();
+    expect(screen.getByText("Deschide (doar citire)")).toBeDefined();
+    expect(screen.queryByText("Închis")).toBeNull();
+    expect(screen.queryByText("Proiect încheiat")).toBeNull();
+  });
+
+  it("displays authentic task status and passive action label in readOnly mode for active project with active cycle (C1, C2, C3, C5)", () => {
+    const unstartedTask: InviteTask = {
+      id: "active-unstarted",
+      assignmentId: "active-unstarted",
+      title: "PCM Profil Personal",
+      status: "not_started",
+      detail: "De completat",
+      href: "/participant/tasks/active-unstarted",
+      targetLabel: "Autoevaluare",
+      estimatedMinutes: 20,
+      questionnaireKey: "pcm",
+      projectId: "project-michelin",
+      projectName: "Leadership Team Zalau 2026",
+      deadlineLabel: "15 septembrie 2026",
+      cycleName: "Evaluare inițială",
+      cycleSequence: 1,
+    };
+    const inProgressTask: InviteTask = {
+      id: "active-inprogress",
+      assignmentId: "active-inprogress",
+      title: "Distress Drivers",
+      status: "in_progress",
+      detail: "În lucru",
+      href: "/participant/tasks/active-inprogress",
+      targetLabel: "Autoevaluare",
+      estimatedMinutes: 10,
+      questionnaireKey: "distress_drivers",
+      projectId: "project-michelin",
+      projectName: "Leadership Team Zalau 2026",
+      deadlineLabel: "15 septembrie 2026",
+      cycleName: "Evaluare inițială",
+      cycleSequence: 1,
+    };
+    const review360Task: InviteTask = {
+      id: "active-360",
+      assignmentId: "active-360",
+      title: "Evaluare 360",
+      status: "not_started",
+      detail: "0/3 finalizate",
+      href: "/participant/tasks/active-360",
+      targetLabel: "Colegi",
+      estimatedMinutes: 15,
+      questionnaireKey: "boss_360",
+      projectId: "project-michelin",
+      projectName: "Leadership Team Zalau 2026",
+      deadlineLabel: "15 septembrie 2026",
+      cycleName: "Evaluare inițială",
+      cycleSequence: 1,
+    };
+
+    const projects = groupParticipantTasksByProject(
+      [unstartedTask, inProgressTask, review360Task],
+      [{
+        id: "project-michelin",
+        name: "Leadership Team Zalau 2026",
+        status: "active",
+        historyBucket: "current",
+        deadlineLabel: "15 septembrie 2026",
+      }],
+    );
+
+    render(
+      <ParticipantTaskList
+        projects={projects}
+        persistenceIdentityKey="participant-michelin-preview"
+        returnTo="/participant/questionnaires"
+        emptyTitle="Nu ai sarcini"
+        emptyDescription="Lista este goală."
+        readOnly={true}
+      />,
+    );
+
+    // Verify project accordion is expanded by default for active project with pending tasks
+    const projectButton = screen.getByRole("button", { name: /Leadership Team Zalau 2026/i });
+    expect(projectButton.getAttribute("aria-expanded")).toBe("true");
+
+    // C1: Authentic statuses displayed identically to participant view
+    expect(screen.getAllByText("De completat").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("În lucru")).toBeDefined();
+    expect(screen.getByText("3 de făcut")).toBeDefined();
+
+    // C2: Passive action labels indicating preview
+    expect(screen.getByText("Deschide (doar citire)")).toBeDefined();
+    expect(screen.getByText("Continuă (doar citire)")).toBeDefined();
+    expect(screen.getByText("Începe review-ul (doar citire)")).toBeDefined();
+
+    // C3 & C5: Must NOT say "Închis" or "Proiect încheiat" anywhere
+    expect(screen.queryByText("Închis")).toBeNull();
+    expect(screen.queryByText("Proiect încheiat")).toBeNull();
+
+    // No interactive links
+    expect(screen.queryByRole("link", { name: /Deschide|Continuă|Începe/i })).toBeNull();
   });
 });

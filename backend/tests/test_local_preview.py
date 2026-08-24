@@ -191,3 +191,13 @@ async def test_preview_replacement_does_not_deactivate_system_definitions(
             await session.rollback()
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_seed_local_preview_with_isolated_company_name() -> None:
+    from codrut.tools.seed_local_preview import seed_local_preview
+
+    result = await seed_local_preview(company_name="Isolated Seed Preview Co")
+    assert result.company_count == 1
+    assert result.participant_count >= 1
+    assert result.assignment_count >= 1

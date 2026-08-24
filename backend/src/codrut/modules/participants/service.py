@@ -68,17 +68,13 @@ class ParticipantWorkspaceService:
 
     async def _anonymous_name_exists(self, anonymous_name: str) -> bool:
         result = await self.session.execute(
-            select(
-                exists().where(
-                    ParticipantProfile.anonymous_name == anonymous_name
-                )
-            )
+            select(exists().where(ParticipantProfile.anonymous_name == anonymous_name))
         )
         return bool(result.scalar())
 
     async def get_workspace_summary(
         self,
-        user_id: UUID,
+        user_id: UUID | None = None,
         *,
         participant_profile_id: UUID | None = None,
         project_id: UUID | None = None,
@@ -86,7 +82,10 @@ class ParticipantWorkspaceService:
         allowed_assignment_ids: tuple[UUID, ...] | None = None,
         scoped_project_id: UUID | None = None,
     ) -> ParticipantWorkspaceSummary:
-        profile_rows = await self._list_profiles_and_companies(user_id)
+        profile_rows = await self._list_profiles_and_companies(
+            user_id,
+            participant_profile_id=participant_profile_id,
+        )
         contexts = await self._get_authorized_contexts(profile_rows)
         questionnaire_projects = await self._get_questionnaire_projects(
             profile_rows,
@@ -110,13 +109,10 @@ class ParticipantWorkspaceService:
                 questionnaire_projects=questionnaire_projects,
             )
         if not profile.anonymous_name:
-            profile.anonymous_name = await allocate_anonymous_name(
-                self._anonymous_name_exists
-            )
+            profile.anonymous_name = await allocate_anonymous_name(self._anonymous_name_exists)
             await self.session.flush()
         visible_cycle_ids = {
-            cycle.id
-            for cycle in self._selected_cycles(contexts, profile.id, project_id)
+            cycle.id for cycle in self._selected_cycles(contexts, profile.id, project_id)
         }
         selected_project = next(
             (
@@ -129,8 +125,7 @@ class ParticipantWorkspaceService:
             None,
         )
         history_only = bool(
-            selected_project is not None
-            and selected_project.history_bucket == "history"
+            selected_project is not None and selected_project.history_bucket == "history"
         )
         assignments = await self._list_assignments(
             profile,
@@ -272,14 +267,9 @@ class ParticipantWorkspaceService:
         allowed_assignment_ids: tuple[UUID, ...] | None,
         scoped_project_id: UUID | None,
     ) -> list[ParticipantQuestionnaireProject]:
-        profiles_by_id = {
-            profile.id: (profile, company)
-            for profile, company in profile_rows
-        }
+        profiles_by_id = {profile.id: (profile, company) for profile, company in profile_rows}
         visible_project_ids_by_profile = {
-            context.participant_profile_id: {
-                project.id for project in context.projects
-            }
+            context.participant_profile_id: {project.id for project in context.projects}
             for context in contexts
         }
         profile_ids = set(profiles_by_id)
@@ -290,15 +280,10 @@ class ParticipantWorkspaceService:
             select(QuestionnaireAssignment)
             .outerjoin(
                 AssessmentCycle,
-                AssessmentCycle.id
-                == QuestionnaireAssignment.assessment_cycle_id,
+                AssessmentCycle.id == QuestionnaireAssignment.assessment_cycle_id,
             )
-            .where(
-                QuestionnaireAssignment.respondent_profile_id.in_(profile_ids)
-            )
-            .where(
-                QuestionnaireAssignment.status != AssignmentStatus.cancelled
-            )
+            .where(QuestionnaireAssignment.respondent_profile_id.in_(profile_ids))
+            .where(QuestionnaireAssignment.status != AssignmentStatus.cancelled)
             .where(
                 or_(
                     QuestionnaireAssignment.assessment_cycle_id.is_(None),
@@ -313,13 +298,9 @@ class ParticipantWorkspaceService:
         if allowed_assignment_ids is not None:
             if not allowed_assignment_ids:
                 return []
-            statement = statement.where(
-                QuestionnaireAssignment.id.in_(allowed_assignment_ids)
-            )
+            statement = statement.where(QuestionnaireAssignment.id.in_(allowed_assignment_ids))
         if scoped_project_id is not None:
-            statement = statement.where(
-                QuestionnaireAssignment.project_id == scoped_project_id
-            )
+            statement = statement.where(QuestionnaireAssignment.project_id == scoped_project_id)
         assignment_result = await self.session.execute(statement)
         assignments = [
             assignment
@@ -335,9 +316,7 @@ class ParticipantWorkspaceService:
 
         projects = await self._get_projects(assignments)
         teams = await self._get_teams(assignments)
-        company_ids = {
-            company.id for _profile, company in profile_rows
-        }
+        company_ids = {company.id for _profile, company in profile_rows}
         people: dict[UUID, ParticipantProfile] = {}
         for company_id in company_ids:
             people.update(await self._get_people(assignments, company_id))
@@ -350,13 +329,9 @@ class ParticipantWorkspaceService:
         cycles: dict[UUID, AssessmentCycle] = {}
         if cycle_ids:
             cycle_result = await self.session.execute(
-                select(AssessmentCycle).where(
-                    AssessmentCycle.id.in_(cycle_ids)
-                )
+                select(AssessmentCycle).where(AssessmentCycle.id.in_(cycle_ids))
             )
-            cycles = {
-                cycle.id: cycle for cycle in cycle_result.scalars().all()
-            }
+            cycles = {cycle.id: cycle for cycle in cycle_result.scalars().all()}
 
         catalog: list[ParticipantQuestionnaireProject] = []
         for context in contexts:
@@ -364,8 +339,7 @@ class ParticipantWorkspaceService:
                 project_assignments = [
                     assignment
                     for assignment in assignments
-                    if assignment.respondent_profile_id
-                    == context.participant_profile_id
+                    if assignment.respondent_profile_id == context.participant_profile_id
                     and assignment.project_id == workspace_project.id
                 ]
                 if not project_assignments:
@@ -391,19 +365,14 @@ class ParticipantWorkspaceService:
                     task_payload = task.model_dump()
                     task_payload.update(
                         cycleName=cycle.name if cycle is not None else None,
-                        cycleSequence=(
-                            cycle.sequence if cycle is not None else None
-                        ),
+                        cycleSequence=(cycle.sequence if cycle is not None else None),
                         deadlineLabel=_format_deadline(deadline_at),
                         dueAt=deadline_at,
                     )
-                    questionnaires.append(
-                        ParticipantQuestionnaireTask.model_validate(task_payload)
-                    )
+                    questionnaires.append(ParticipantQuestionnaireTask.model_validate(task_payload))
 
                 completed_count = sum(
-                    questionnaire.status == "completed"
-                    for questionnaire in questionnaires
+                    questionnaire.status == "completed" for questionnaire in questionnaires
                 )
                 catalog.append(
                     ParticipantQuestionnaireProject(
@@ -496,8 +465,7 @@ class ParticipantWorkspaceService:
                 project_id=publication.project_id,
                 project_name=(
                     projects[publication.project_id].name
-                    if publication.project_id is not None
-                    and publication.project_id in projects
+                    if publication.project_id is not None and publication.project_id in projects
                     else "Fără proiect"
                 ),
             )
@@ -704,14 +672,13 @@ class ParticipantWorkspaceService:
             ]
         else:
             participants = []
-        if not participants or profile.id not in {
-            participant.id for participant in participants
-        }:
+        if not participants or profile.id not in {participant.id for participant in participants}:
             profiles = list(
                 (
                     await self.session.execute(
-                        select(ParticipantProfile)
-                        .where(ParticipantProfile.company_id == profile.company_id)
+                        select(ParticipantProfile).where(
+                            ParticipantProfile.company_id == profile.company_id
+                        )
                     )
                 ).scalars()
             )
@@ -733,13 +700,15 @@ class ParticipantWorkspaceService:
             for participant in hierarchy.direct_reports_by_manager_id.get(profile.id, [])
         }
         return {
-            "direct_team": persisted["direct_team"] + [
+            "direct_team": persisted["direct_team"]
+            + [
                 assignment
                 for assignment in legacy_assignments
                 if assignment.respondent_profile_id in direct_report_ids
                 and assignment.respondent_profile_id not in hierarchy.leadership_ids
             ],
-            "leadership_peers": persisted["leadership_peers"] + [
+            "leadership_peers": persisted["leadership_peers"]
+            + [
                 assignment
                 for assignment in legacy_assignments
                 if assignment.respondent_profile_id in hierarchy.leadership_ids
@@ -803,8 +772,33 @@ class ParticipantWorkspaceService:
 
     async def _list_profiles_and_companies(
         self,
-        user_id: UUID,
+        user_id: UUID | None,
+        *,
+        participant_profile_id: UUID | None = None,
     ) -> list[tuple[ParticipantProfile, Company]]:
+        if participant_profile_id is not None:
+            stmt = (
+                select(ParticipantProfile, Company)
+                .join(Company, Company.id == ParticipantProfile.company_id)
+                .where(ParticipantProfile.id == participant_profile_id)
+            )
+            if user_id is not None:
+                stmt = stmt.where(ParticipantProfile.user_id == user_id)
+            result = await self.session.execute(stmt)
+            rows = list(result.all())
+            if not rows:
+                raise DomainError(
+                    "Participant profile not found.",
+                    code="participant_profile_not_found",
+                )
+            return [(row[0], row[1]) for row in rows]
+
+        if user_id is None:
+            raise DomainError(
+                "Participant profile not found for this account.",
+                code="participant_profile_not_found",
+            )
+
         result = await self.session.execute(
             select(ParticipantProfile, Company)
             .join(Company, Company.id == ParticipantProfile.company_id)
@@ -821,10 +815,13 @@ class ParticipantWorkspaceService:
 
     async def _get_profile_and_company(
         self,
-        user_id: UUID,
+        user_id: UUID | None,
         participant_profile_id: UUID | None = None,
     ) -> tuple[ParticipantProfile, Company]:
-        rows = await self._list_profiles_and_companies(user_id)
+        rows = await self._list_profiles_and_companies(
+            user_id,
+            participant_profile_id=participant_profile_id,
+        )
         if participant_profile_id is not None:
             selected = next(
                 (row for row in rows if row[0].id == participant_profile_id),
@@ -998,9 +995,7 @@ class ParticipantWorkspaceService:
                 )
             )
             allowed_assignments = list(result.scalars().all())
-            if {assignment.id for assignment in allowed_assignments} != set(
-                allowed_assignment_ids
-            ):
+            if {assignment.id for assignment in allowed_assignments} != set(allowed_assignment_ids):
                 raise DomainError(
                     "Secure invitation assignment scope is invalid.",
                     code="participant_context_forbidden",
@@ -1063,9 +1058,7 @@ class ParticipantWorkspaceService:
                     "Assessment cycle does not belong to this account.",
                     code="participant_cycle_forbidden",
                 )
-            cycle_profiles = {
-                profile_id for profile_id, _cycle_project_id in matching_cycles
-            }
+            cycle_profiles = {profile_id for profile_id, _cycle_project_id in matching_cycles}
             cycle_project_ids = {
                 cycle_project_id for _profile_id, cycle_project_id in matching_cycles
             }
@@ -1136,9 +1129,7 @@ class ParticipantWorkspaceService:
                 for project in selected_context.projects
                 if project.id == effective_project_id
             )
-            active_cycles = [
-                cycle for cycle in selected_project.cycles if cycle.status == "active"
-            ]
+            active_cycles = [cycle for cycle in selected_project.cycles if cycle.status == "active"]
             if len(active_cycles) == 1:
                 cycle_id = active_cycles[0].id
         return selected[0], selected[1], effective_project_id, cycle_id
@@ -1417,8 +1408,7 @@ class ParticipantWorkspaceService:
             or publication.source_count != 1
             or publication.source_assignment_id != assignment.id
             or publication.questionnaire_definition_id != definition.id
-            or publication.questionnaire_definition_id
-            != assignment.questionnaire_definition_id
+            or publication.questionnaire_definition_id != assignment.questionnaire_definition_id
             or not publication.definition_checksum
             or publication.definition_checksum != definition_publication_checksum(definition)
             or publication.questionnaire_key != assignment.questionnaire_key
@@ -1426,9 +1416,7 @@ class ParticipantWorkspaceService:
         ):
             return None
         policy = (
-            publication.policy_snapshot
-            if isinstance(publication.policy_snapshot, dict)
-            else {}
+            publication.policy_snapshot if isinstance(publication.policy_snapshot, dict) else {}
         )
         publication_mode = policy.get("publication", "none")
         target_type = assignment.target_type.value
@@ -1470,8 +1458,7 @@ class ParticipantWorkspaceService:
                     public_value["interpretation"] = interpretation.strip()
             feedback = feedback_by_dimension.get(dimension_id)
             if (
-                assignment.questionnaire_key
-                in {"distress_drivers", "distress_drivers_en"}
+                assignment.questionnaire_key in {"distress_drivers", "distress_drivers_en"}
                 and score > 50
                 and feedback
             ):
@@ -1567,9 +1554,7 @@ class ParticipantWorkspaceService:
                     name=project.name,
                     status=project.status.value,
                     history_bucket=(
-                        "current"
-                        if project.status == CompanyProjectStatus.active
-                        else "history"
+                        "current" if project.status == CompanyProjectStatus.active else "history"
                     ),
                     deadline_label=_format_deadline(deadline_at),
                     deadline_at=deadline_at,
@@ -1598,11 +1583,7 @@ class ParticipantWorkspaceService:
         project_id: UUID | None,
     ) -> list[ParticipantWorkspaceCycle]:
         context = next(
-            (
-                item
-                for item in contexts
-                if item.participant_profile_id == participant_profile_id
-            ),
+            (item for item in contexts if item.participant_profile_id == participant_profile_id),
             None,
         )
         if context is None:

@@ -51,11 +51,14 @@ class ParticipantReceivedFeedbackSummary(BaseModel):
     scale_min: float
     scale_max: float
     visible: bool
-    unavailable_reason: Literal[
-        "privacy_threshold",
-        "no_eligible_dimensions",
-        "scoring_unavailable",
-    ] | None = None
+    unavailable_reason: (
+        Literal[
+            "privacy_threshold",
+            "no_eligible_dimensions",
+            "scoring_unavailable",
+        ]
+        | None
+    ) = None
     overall_average: float | None = None
     dimensions: list[ParticipantReceivedFeedbackDimension] = Field(default_factory=list)
 
@@ -126,9 +129,7 @@ class ParticipantWorkspaceSummary(BaseModel):
     contexts: list[ParticipantWorkspaceContext] = Field(default_factory=list)
     cycles: list[ParticipantWorkspaceCycle] = Field(default_factory=list)
     projects: list[ParticipantWorkspaceProject] = Field(default_factory=list)
-    questionnaire_projects: list[ParticipantQuestionnaireProject] = Field(
-        default_factory=list
-    )
+    questionnaire_projects: list[ParticipantQuestionnaireProject] = Field(default_factory=list)
     deadline_label: str = "finalul evaluării"
     deadline_at: datetime | None = None
     tasks: list[InviteTask] = Field(default_factory=list)
