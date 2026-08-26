@@ -499,7 +499,19 @@ describe("ProjectParticipantsWorkspace", () => {
     expect(screen.getAllByText("Ana Manager").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Dan Membru")).toBeTruthy();
   });
+
+  it("renders 'Vezi ca participant' action link on each row with audit notice in title and correct project preview href", () => {
+    renderWorkspace();
+
+    const previewLink = screen.getByLabelText("Vezi ca participant: Ana Manager");
+    expect(previewLink).toBeTruthy();
+    expect(previewLink.getAttribute("href")).toBe(
+      "/trainer/companies/company-1/participants/manager-1/preview?projectId=project-1",
+    );
+    expect(previewLink.getAttribute("title")).toContain("se înregistrează în jurnalul de acces");
+  });
 });
+
 
 function renderWorkspace() {
   render(

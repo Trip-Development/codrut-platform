@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import {
   ArrowLeftIcon,
+  EyeIcon,
   ShieldCheckIcon,
 } from "lucide-react";
 
@@ -88,17 +89,33 @@ export default async function TrainerParticipantReportPage({ params }: TrainerPa
 
       <section className="grid gap-6 border-b border-border pb-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div>
-          <div className="flex min-w-0 items-start gap-5">
-            <IdentityMark
-              kind="person"
-              label={participant.full_name}
-              seed={`participant:${participant.id}`}
-              paletteKey={participant.avatar_palette_key}
-              size="lg"
-            />
-            <div className="min-w-0">
-              <h2 className="text-3xl font-semibold leading-tight text-foreground">{participant.full_name}</h2>
-              <p className="mt-2 break-words text-sm text-muted-foreground">{participant.email ?? "Email lipsă"}</p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 items-start gap-5">
+              <IdentityMark
+                kind="person"
+                label={participant.full_name}
+                seed={`participant:${participant.id}`}
+                paletteKey={participant.avatar_palette_key}
+                size="lg"
+              />
+              <div className="min-w-0">
+                <h2 className="text-3xl font-semibold leading-tight text-foreground">{participant.full_name}</h2>
+                <p className="mt-2 break-words text-sm text-muted-foreground">{participant.email ?? "Email lipsă"}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-start sm:items-end gap-1.5 shrink-0">
+              <Link
+                href={`/trainer/companies/${project.company_id}/participants/${participant.id}/preview?projectId=${project.id}`}
+                className="inline-flex items-center gap-2 rounded-md bg-secondary px-3.5 py-2 text-sm font-semibold text-secondary-foreground shadow-xs transition-colors hover:bg-secondary/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                title="Se deschide în mod citire și se înregistrează în jurnalul de acces"
+              >
+                <EyeIcon className="size-4" aria-hidden="true" />
+                <span>Vezi ca participant</span>
+              </Link>
+              <span className="text-xs text-muted-foreground">
+                Mod citire · Se înregistrează în jurnalul de acces
+              </span>
             </div>
           </div>
 

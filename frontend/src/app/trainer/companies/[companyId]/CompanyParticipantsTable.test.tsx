@@ -85,6 +85,15 @@ describe("CompanyParticipantsTable", () => {
     );
   });
 
+  it("renders preview action link for each participant with audit notice in title", () => {
+    render(<CompanyParticipantsTable companyId="company-1" participants={participants} />);
+
+    const previewLink = screen.getByLabelText("Vezi ca participant: Ștefan Ionescu");
+    expect(previewLink).toBeTruthy();
+    expect(previewLink.getAttribute("href")).toBe("/trainer/companies/company-1/participants/participant-1/preview");
+    expect(previewLink.getAttribute("title")).toContain("se înregistrează în jurnalul de acces");
+  });
+
   it("shows only real linked accounts as active", () => {
     render(<CompanyParticipantsTable companyId="company-1" participants={participants} />);
 
