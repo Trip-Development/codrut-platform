@@ -242,7 +242,7 @@ export function CompanyParticipantsTable({
                           <Link
                             href={`/trainer/companies/${companyId}/participants/${participant.id}/preview`}
                             aria-label={`Vezi ca participant: ${participant.full_name}`}
-                            title={`Vezi ca participant: ${participant.full_name}`}
+                            title={`Vezi ca participant: ${participant.full_name} (se deschide în mod citire și se înregistrează în jurnalul de acces)`}
                             className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                           >
                             <EyeIcon className="h-4 w-4" aria-hidden="true" />
