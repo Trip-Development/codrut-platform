@@ -11,7 +11,6 @@ from sqlalchemy import select
 
 from codrut.contracts.generation import (
     GenerationError,
-    GenerationMessage,
     GenerationProviderKey,
     GenerationPurpose,
     GenerationRequest,
@@ -24,8 +23,6 @@ from codrut.modules.companies.models import (
     Company,
     CompanyProject,
     CompanyProjectStatus,
-    ParticipantProfile,
-    ProjectMembership,
 )
 from codrut.modules.identity.models import User  # noqa: F401
 from codrut.modules.practice.budget import (
@@ -86,7 +83,6 @@ def test_estimate_pessimistic_cost() -> None:
         thinking_budget=1024,
         settings=settings,
     )
-    # 100/1e6*0.30 + (1024+1024)/1e6*2.50 = 0.00003 + 0.00512 = 0.00515 -> 0.0052
     assert cost == Decimal("0.0052")
 
 
@@ -99,9 +95,7 @@ async def test_local_generation_provider_returns_result_without_network() -> Non
     assert provider.key == GenerationProviderKey.local
 
     request = GenerationRequest(
-        messages=(
-            GenerationMessage(role="user", text="Salut, putem discuta despre proiect?"),
-        ),
+        messages=(),
         system_instruction="Ești un coleg cooperant.",
         purpose=GenerationPurpose.actor,
         max_output_tokens=1024,
@@ -178,9 +172,7 @@ async def test_vertex_generation_provider_with_mock_client() -> None:
         )
 
         request = GenerationRequest(
-            messages=(
-                GenerationMessage(role="user", text="Test prompt"),
-            ),
+            messages=(),
             system_instruction="Instrucțiuni de sistem",
             purpose=GenerationPurpose.actor,
             max_output_tokens=512,
@@ -200,7 +192,6 @@ async def test_vertex_generation_provider_with_mock_client() -> None:
         assert result.usage.thought_tokens == 902
         assert result.estimated_usd == Decimal("0.0024")
 
-        # Verify outgoing HTTP request details
         assert len(captured_requests) == 1
         http_req = captured_requests[0]
         assert http_req.headers["authorization"] == "Bearer mock-bearer-token-12345"
@@ -236,7 +227,7 @@ async def test_vertex_generation_provider_abnormal_finish_reason_raises_error() 
         )
 
         request = GenerationRequest(
-            messages=(GenerationMessage(role="user", text="Test"),),
+            messages=(),
         )
 
         with pytest.raises(GenerationError) as exc_info:
@@ -248,9 +239,8 @@ async def test_vertex_generation_provider_abnormal_finish_reason_raises_error() 
 
 @pytest.mark.asyncio
 async def test_budget_reservation_lifecycle() -> None:
-    """Test budget reservation, cap enforcement, settlement, and release."""
+    """Test budget reservation, cap enforcement, settlement, and release with cap_usd."""
     async with SessionLocal() as session:
-        # 1. Setup company, project, participants, program settings
         test_suffix = uuid.uuid4().hex[:8]
         company = Company(name=f"Budget Test Co {test_suffix}")
         session.add(company)
@@ -262,33 +252,6 @@ async def test_budget_reservation_lifecycle() -> None:
             status=CompanyProjectStatus.active,
         )
         session.add(project)
-        await session.flush()
-
-        # Add 2 participants to project -> cap with 3.00 USD/participant = 6.00 USD
-        p1 = ParticipantProfile(
-            company_id=company.id,
-            full_name=f"Participant One {test_suffix}",
-            email=f"p1_{test_suffix}@example.com",
-        )
-        p2 = ParticipantProfile(
-            company_id=company.id,
-            full_name=f"Participant Two {test_suffix}",
-            email=f"p2_{test_suffix}@example.com",
-        )
-        session.add_all([p1, p2])
-        await session.flush()
-
-        m1 = ProjectMembership(
-            company_id=company.id,
-            project_id=project.id,
-            participant_profile_id=p1.id,
-        )
-        m2 = ProjectMembership(
-            company_id=company.id,
-            project_id=project.id,
-            participant_profile_id=p2.id,
-        )
-        session.add_all([m1, m2])
         await session.flush()
 
         theme = PracticeTheme(
@@ -308,11 +271,16 @@ async def test_budget_reservation_lifecycle() -> None:
         await session.flush()
 
         prog_id = program_settings.id
+        cap_usd = Decimal("6.0000")
 
-        # 2. Test cap enforcement:
-        # Cap = 2 * 3.00 = 6.00 USD. Attempting to reserve 6.01 USD must fail.
+        # 1. Test cap enforcement: Attempting to reserve 6.01 USD against cap 6.00 must fail.
         with pytest.raises(BudgetExceeded):
-            await reserve(session, prog_id, estimated_usd=Decimal("6.0100"))
+            await reserve(
+                session,
+                prog_id,
+                estimated_usd=Decimal("6.0100"),
+                cap_usd=cap_usd,
+            )
 
         # Verify NO reservation row was written on failure
         stmt_check = select(PracticeBudgetReservation).where(
@@ -321,15 +289,25 @@ async def test_budget_reservation_lifecycle() -> None:
         rows = (await session.execute(stmt_check)).scalars().all()
         assert len(rows) == 0
 
-        # 3. Reserve 4.00 USD (under 6.00 USD cap) -> Succeeds
-        res1_id = await reserve(session, prog_id, estimated_usd=Decimal("4.0000"))
+        # 2. Reserve 4.00 USD (under 6.00 USD cap) -> Succeeds
+        res1_id = await reserve(
+            session,
+            prog_id,
+            estimated_usd=Decimal("4.0000"),
+            cap_usd=cap_usd,
+        )
         assert res1_id is not None
 
-        # 4. Attempt to reserve another 2.50 USD (4.00 + 2.50 = 6.50 > 6.00) -> Fails
+        # 3. Attempt to reserve another 2.50 USD (4.00 + 2.50 = 6.50 > 6.00) -> Fails
         with pytest.raises(BudgetExceeded):
-            await reserve(session, prog_id, estimated_usd=Decimal("2.5000"))
+            await reserve(
+                session,
+                prog_id,
+                estimated_usd=Decimal("2.5000"),
+                cap_usd=cap_usd,
+            )
 
-        # 5. Settle res1 with actual cost 1.50 USD
+        # 4. Settle res1 with actual cost 1.50 USD
         await settle(session, res1_id, actual_usd=Decimal("1.5000"))
 
         # Check row state
@@ -338,15 +316,92 @@ async def test_budget_reservation_lifecycle() -> None:
         assert res1_row.state == BudgetReservationState.settled
         assert res1_row.actual_usd == Decimal("1.5000")
 
-        # 6. Now spent is 1.50 USD. Reserving 2.50 USD (1.50 + 2.50 = 4.00 <= 6.00) -> Succeeds!
-        res2_id = await reserve(session, prog_id, estimated_usd=Decimal("2.5000"))
+        # 5. Now spent is 1.50 USD. Reserving 2.50 USD (1.50 + 2.50 = 4.00 <= 6.00) -> Succeeds!
+        res2_id = await reserve(
+            session,
+            prog_id,
+            estimated_usd=Decimal("2.5000"),
+            cap_usd=cap_usd,
+        )
         assert res2_id is not None
 
-        # 7. Release res2 -> State becomes 'released', freed from budget
+        # 6. Release res2 -> State becomes 'released', freed from budget
         await release(session, res2_id)
         stmt_res2 = select(PracticeBudgetReservation).where(PracticeBudgetReservation.id == res2_id)
         res2_row = (await session.execute(stmt_res2)).scalar_one()
         assert res2_row.state == BudgetReservationState.released
 
-        # Clean up database records
+        await session.rollback()
+
+
+@pytest.mark.asyncio
+async def test_budget_reconciliation_refusal_on_released_or_settled_reservation() -> None:
+    """Verifies that settle() and release() reject reservations not in 'reserved' state."""
+    async with SessionLocal() as session:
+        test_suffix = uuid.uuid4().hex[:8]
+        company = Company(name=f"Reconcile Guard Co {test_suffix}")
+        session.add(company)
+        await session.flush()
+
+        project = CompanyProject(
+            company_id=company.id,
+            name=f"Reconcile Guard Project {test_suffix}",
+            status=CompanyProjectStatus.active,
+        )
+        session.add(project)
+        await session.flush()
+
+        theme = PracticeTheme(
+            slug=f"theme-guard-{test_suffix}",
+            name="Theme Guard Test",
+        )
+        session.add(theme)
+        await session.flush()
+
+        program_settings = PracticeProgramSettings(
+            project_id=project.id,
+            mode=ProgramMode.training,
+            theme_id=theme.id,
+            usd_cap_per_participant=Decimal("3.00"),
+        )
+        session.add(program_settings)
+        await session.flush()
+
+        prog_id = program_settings.id
+        cap_usd = Decimal("10.0000")
+
+        # 1. Test against already released reservation
+        res_released_id = await reserve(
+            session,
+            prog_id,
+            estimated_usd=Decimal("1.0000"),
+            cap_usd=cap_usd,
+        )
+        await release(session, res_released_id)
+
+        with pytest.raises(DomainError) as exc_settle:
+            await settle(session, res_released_id, actual_usd=Decimal("0.8000"))
+        assert exc_settle.value.code == "invalid_reservation_state"
+
+        with pytest.raises(DomainError) as exc_release:
+            await release(session, res_released_id)
+        assert exc_release.value.code == "invalid_reservation_state"
+
+        # 2. Test against already settled reservation
+        res_settled_id = await reserve(
+            session,
+            prog_id,
+            estimated_usd=Decimal("2.0000"),
+            cap_usd=cap_usd,
+        )
+        await settle(session, res_settled_id, actual_usd=Decimal("1.5000"))
+
+        with pytest.raises(DomainError) as exc_settle_again:
+            await settle(session, res_settled_id, actual_usd=Decimal("1.8000"))
+        assert exc_settle_again.value.code == "invalid_reservation_state"
+
+        with pytest.raises(DomainError) as exc_release_settled:
+            await release(session, res_settled_id)
+        assert exc_release_settled.value.code == "invalid_reservation_state"
+
         await session.rollback()

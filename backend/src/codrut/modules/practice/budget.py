@@ -8,11 +8,9 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
-from codrut.modules.companies.models import ProjectMembership
 from codrut.modules.practice.models import (
     BudgetReservationState,
     PracticeBudgetReservation,
-    PracticeProgramSettings,
 )
 
 
@@ -29,25 +27,15 @@ async def reserve(
     session: AsyncSession,
     program_settings_id: uuid.UUID,
     estimated_usd: Decimal,
+    cap_usd: Decimal,
     session_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
     """Reserve budget for a practice generation call before execution.
 
     1. Sums existing reserved + settled amounts for the program.
-    2. Calculates cap = usd_cap_per_participant * active project participants.
-    3. If current + estimated > cap, raises BudgetExceeded.
-    4. Otherwise creates a PracticeBudgetReservation in 'reserved' state.
+    2. If current + estimated > cap_usd, raises BudgetExceeded.
+    3. Otherwise creates a PracticeBudgetReservation in 'reserved' state.
     """
-    stmt_settings = select(PracticeProgramSettings).where(
-        PracticeProgramSettings.id == program_settings_id
-    )
-    program_settings = (await session.execute(stmt_settings)).scalar_one_or_none()
-    if program_settings is None:
-        raise DomainError(
-            f"Practice program settings not found: {program_settings_id}",
-            code="program_settings_not_found",
-        )
-
     spending_expr = case(
         (
             PracticeBudgetReservation.state == BudgetReservationState.reserved,
@@ -71,28 +59,15 @@ async def reserve(
         await session.execute(sum_stmt)
     ).scalar_one()
 
-    count_stmt = select(func.count(ProjectMembership.id)).where(
-        ProjectMembership.project_id == program_settings.project_id
-    )
-    active_participants_count: int = (
-        await session.execute(count_stmt)
-    ).scalar_one() or 0
-
-    cap = (
-        Decimal(active_participants_count)
-        * program_settings.usd_cap_per_participant
-    )
-
-    if current_spent_and_reserved + estimated_usd > cap:
+    if current_spent_and_reserved + estimated_usd > cap_usd:
         raise BudgetExceeded(
             f"Budget cap exceeded for program {program_settings_id}: "
-            f"current={current_spent_and_reserved}, estimated={estimated_usd}, cap={cap}",
+            f"current={current_spent_and_reserved}, estimated={estimated_usd}, cap={cap_usd}",
             details={
                 "program_settings_id": str(program_settings_id),
                 "current_spent_and_reserved": str(current_spent_and_reserved),
                 "estimated_usd": str(estimated_usd),
-                "cap": str(cap),
-                "active_participants_count": active_participants_count,
+                "cap_usd": str(cap_usd),
             },
         )
 
@@ -122,6 +97,12 @@ async def settle(
             f"Budget reservation not found: {reservation_id}",
             code="reservation_not_found",
         )
+    if reservation.state != BudgetReservationState.reserved:
+        raise DomainError(
+            f"Cannot settle budget reservation in state '{reservation.state}'; "
+            "expected 'reserved'",
+            code="invalid_reservation_state",
+        )
     reservation.state = BudgetReservationState.settled
     reservation.actual_usd = actual_usd
     await session.flush()
@@ -140,6 +121,12 @@ async def release(
         raise DomainError(
             f"Budget reservation not found: {reservation_id}",
             code="reservation_not_found",
+        )
+    if reservation.state != BudgetReservationState.reserved:
+        raise DomainError(
+            f"Cannot release budget reservation in state '{reservation.state}'; "
+            "expected 'reserved'",
+            code="invalid_reservation_state",
         )
     reservation.state = BudgetReservationState.released
     await session.flush()
