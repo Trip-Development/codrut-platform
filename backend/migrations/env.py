@@ -14,6 +14,7 @@ from codrut.modules.communications import models as communication_models  # noqa
 from codrut.modules.companies import models as company_models  # noqa: F401
 from codrut.modules.forms import models as form_models  # noqa: F401
 from codrut.modules.identity import models as identity_models  # noqa: F401
+from codrut.modules.practice import models as practice_models  # noqa: F401
 from codrut.modules.scoring import models as scoring_models  # noqa: F401
 
 config = context.config
@@ -62,11 +63,7 @@ def do_run_migrations(connection) -> None:
             )
             connection.execute(
                 text("select set_config('statement_timeout', :value, true)"),
-                {
-                    "value": (
-                        f"{_timeout_ms('CODRUT_MIGRATION_STATEMENT_TIMEOUT_MS', 900000)}ms"
-                    )
-                },
+                {"value": (f"{_timeout_ms('CODRUT_MIGRATION_STATEMENT_TIMEOUT_MS', 900000)}ms")},
             )
         context.run_migrations()
 
