@@ -301,19 +301,19 @@ class PracticeSessionService:
                 session_id=session_id,
             )
 
-            # 8. Flush state before calling model
-            await self.session.flush()
+            # 8. Close transaction before calling model (frees DB connection)
+            await self.session.commit()
 
             # 9. Invoke model generation provider
             try:
                 result = await self.generation_provider.generate(request)
             except Exception:
-                # 11. On failure: release budget, participant turn remains
+                # 11. On failure: release budget, commit, participant turn remains saved in DB
                 await release(self.session, reservation_id)
-                await self.session.flush()
+                await self.session.commit()
                 raise
 
-            # 10. Settle budget reservation with actual cost and record actor turn
+            # 10. New transaction: settle budget reservation with actual cost and record actor turn
             await settle(self.session, reservation_id, actual_usd=result.estimated_usd)
 
             actor_turn = PracticeTurn(
@@ -327,8 +327,12 @@ class PracticeSessionService:
                 expires_at=expires_at,
             )
             self.session.add(actor_turn)
-            session_obj.turn_count += 1
-            await self.session.flush()
+
+            stmt_sess = select(PracticeSession).where(PracticeSession.id == session_id)
+            current_session = (await self.session.execute(stmt_sess)).scalar_one()
+            current_session.turn_count += 1
+
+            await self.session.commit()
 
             return actor_turn
 
