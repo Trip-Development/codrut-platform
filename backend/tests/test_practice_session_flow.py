@@ -31,6 +31,7 @@ from codrut.modules.practice.models import (
     PracticeKnowledgePack,
     PracticeOutcome,
     PracticeProgramSettings,
+    PracticeSession,
     PracticeTheme,
     PracticeTurn,
     ProgramMode,
@@ -411,3 +412,78 @@ async def test_refusal_budget_exceeded_model_never_called() -> None:
 
         await redis.aclose()
         await session.rollback()
+
+
+@pytest.mark.asyncio
+async def test_generation_failure_releases_budget_and_persists_participant_turn() -> None:
+    """Verifies that on model failure:
+
+    1. Error is raised.
+    2. Budget reservation is released and committed.
+    3. Participant turn remains written and committed.
+    4. Session remains open.
+    5. Redis lock is freed.
+    """
+    settings = Settings(generation_provider="local")
+    async with SessionLocal() as session:
+        ctx = await create_test_context(session)
+        redis = Redis.from_url(settings.redis_url, decode_responses=True)
+
+        mock_provider = AsyncMock()
+        mock_provider.generate.side_effect = DomainError(
+            "Vertex AI timeout", code="vertex_network_error"
+        )
+
+        service = PracticeSessionService(
+            session=session,
+            redis=redis,
+            generation_provider=mock_provider,
+            settings=settings,
+        )
+
+        practice_session = await service.start_session(
+            principal=ctx["principal"],
+            project_id=ctx["project"].id,
+            kind=SessionKind.roleplay,
+        )
+
+        with pytest.raises(DomainError) as exc_info:
+            await service.add_participant_turn(
+                principal=ctx["principal"],
+                session_id=practice_session.id,
+                text="Aceasta replica va esua in timpul generarii",
+            )
+
+        assert exc_info.value.code == "vertex_network_error"
+
+        # 1. Budget reservation is released in DB
+        stmt_res = (
+            select(PracticeBudgetReservation)
+            .where(PracticeBudgetReservation.session_id == practice_session.id)
+        )
+        res_row = (await session.execute(stmt_res)).scalar_one()
+        assert res_row.state == BudgetReservationState.released
+
+        # 2. Participant turn remains written
+        stmt_turns = (
+            select(PracticeTurn)
+            .where(PracticeTurn.session_id == practice_session.id)
+        )
+        turns = (await session.execute(stmt_turns)).scalars().all()
+        assert len(turns) == 1
+        assert turns[0].role == TurnRole.participant
+        assert turns[0].text == "Aceasta replica va esua in timpul generarii"
+
+        # 3. Session remains open
+        stmt_sess = select(PracticeSession).where(PracticeSession.id == practice_session.id)
+        sess_row = (await session.execute(stmt_sess)).scalar_one()
+        assert sess_row.state == SessionState.open
+        assert sess_row.turn_count == 0
+
+        # 4. Redis lock is freed
+        lock_key = f"codrut:practice:lock:{ctx['profile'].id}"
+        assert await redis.get(lock_key) is None
+
+        await redis.aclose()
+        await session.rollback()
+
