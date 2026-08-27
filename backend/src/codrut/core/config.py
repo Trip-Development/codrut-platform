@@ -1,6 +1,7 @@
 import base64
 import binascii
 import json
+from decimal import Decimal
 from functools import cached_property, lru_cache
 from ipaddress import ip_network
 from typing import Literal
@@ -92,6 +93,18 @@ class Settings(BaseSettings):
     local_auth_trainer_email: str = "trainer@example.com"
     local_auth_participant_email: str = "participant@example.com"
     protected_result_guidance_b64: SecretStr | None = None
+    generation_provider: str = "local"
+    vertex_project_id: str = "codrut-cody"
+    vertex_region: str = "europe-west4"
+    vertex_credentials_path: str = "/etc/codrut/cody-vertex.json"
+    vertex_actor_model: str = "gemini-2.5-flash"
+    vertex_evaluator_model: str = "gemini-2.5-flash"
+    vertex_timeout_seconds: int = Field(default=60, ge=5, le=300)
+    vertex_max_output_tokens: int = Field(default=1024, ge=64, le=8192)
+    thinking_budget_actor: int = Field(default=0, ge=0, le=8192)
+    thinking_budget_evaluator: int = Field(default=1024, ge=0, le=8192)
+    price_input_per_million_usd: Decimal = Decimal("0.30")
+    price_output_per_million_usd: Decimal = Decimal("2.50")
 
     @field_validator("cors_origins", mode="before")
     @classmethod
