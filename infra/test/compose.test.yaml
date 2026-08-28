@@ -1,0 +1,190 @@
+x-logging: &test-logging
+  driver: json-file
+  options:
+    max-size: 50m
+    max-file: "5"
+
+services:
+  testdb:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-codytest}
+      POSTGRES_USER: ${POSTGRES_USER:-codytest}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - cody_test_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-codytest} -d ${POSTGRES_DB:-codytest}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    mem_limit: 512M
+    networks:
+      - interna
+    logging: *test-logging
+    restart: unless-stopped
+
+  testredis:
+    image: redis:7-bookworm
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - cody_test_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    mem_limit: 128M
+    networks:
+      - interna
+    logging: *test-logging
+    restart: unless-stopped
+
+  backend:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE in .env}
+    command:
+      - uvicorn
+      - codrut.main:create_app
+      - --factory
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "${CODRUT_API_WORKERS:-2}"
+      - --no-access-log
+    environment:
+      CODRUT_ENV: ${CODRUT_ENV:-production}
+      CODRUT_DATABASE_URL: ${CODRUT_DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-codytest}:${POSTGRES_PASSWORD}@testdb:5432/${POSTGRES_DB:-codytest}}
+      CODRUT_DB_POOL_SIZE: ${CODRUT_DB_POOL_SIZE:-3}
+      CODRUT_DB_MAX_OVERFLOW: ${CODRUT_DB_MAX_OVERFLOW:-2}
+      CODRUT_DB_POOL_TIMEOUT_SECONDS: ${CODRUT_DB_POOL_TIMEOUT_SECONDS:-10}
+      CODRUT_WORKER_MAX_JOBS: ${CODRUT_WORKER_MAX_JOBS:-2}
+      CODRUT_REDIS_URL: ${CODRUT_REDIS_URL:-redis://testredis:6379/0}
+      CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:?Set CODRUT_SESSION_SECRET in .env}
+      CODRUT_LOCAL_AUTH_BYPASS: "false"
+      CODRUT_TASK_LINK_SECRET: ${CODRUT_TASK_LINK_SECRET:?Set CODRUT_TASK_LINK_SECRET in .env}
+      CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET: ${CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET:?Set CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET in .env}
+      CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET: ${CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET:?Set CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET in .env}
+      CODRUT_CORS_ORIGINS: ${CODRUT_CORS_ORIGINS:-["https://test.cody.andreivacaru.ro"]}
+      CODRUT_PUBLIC_APP_URL: ${CODRUT_PUBLIC_APP_URL:-https://test.cody.andreivacaru.ro}
+      CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER:-brevo}
+      CODRUT_EMAIL_BREVO_SANDBOX_ENABLED: ${CODRUT_EMAIL_BREVO_SANDBOX_ENABLED:-true}
+      CODRUT_EMAIL_BREVO_API_KEY: ${CODRUT_EMAIL_BREVO_API_KEY:-CHEIE-INVALIDA-INTENTIONAT}
+      CODRUT_EMAIL_DAILY_SEND_CAP: ${CODRUT_EMAIL_DAILY_SEND_CAP:-0}
+      CODRUT_EMAIL_FROM_ADDRESS: ${CODRUT_EMAIL_FROM_ADDRESS:-test@andreivacaru.ro}
+      CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME:-Cody Test}
+      CODRUT_EMAIL_WEBHOOK_TOKEN: ${CODRUT_EMAIL_WEBHOOK_TOKEN:-test-webhook-token}
+      CODRUT_RATE_LIMIT_ENABLED: "true"
+      CODRUT_RATE_LIMIT_BACKEND: redis
+      CODRUT_RATE_LIMIT_INVITE_EXCHANGE_MAX_REQUESTS: 2000
+      CODRUT_RATE_LIMIT_TRUSTED_PROXIES: ${CODRUT_RATE_LIMIT_TRUSTED_PROXIES:-["127.0.0.1/32","172.16.0.0/12","10.0.0.0/8"]}
+      CODRUT_MAINTENANCE_MODE: "false"
+      CODRUT_PASSWORD_BREACH_CHECK_ENABLED: "false"
+    volumes:
+      - cody_test_campaign_assets:/app/var/campaign-assets
+    depends_on:
+      testdb:
+        condition: service_healthy
+      testredis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=5).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+    mem_limit: 768M
+    networks:
+      - interna
+      - edge
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.codytest-api.rule: Host(`${CODRUT_HOST:-test.cody.andreivacaru.ro}`) && PathPrefix(`/api`)
+      traefik.http.routers.codytest-api.entrypoints: websecure
+      traefik.http.routers.codytest-api.tls.certresolver: letsencrypt
+      traefik.http.services.codytest-api.loadbalancer.server.port: "8000"
+    logging: *test-logging
+    restart: unless-stopped
+
+  worker:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE in .env}
+    command: ["python", "-m", "codrut.workers.main"]
+    environment:
+      CODRUT_ENV: ${CODRUT_ENV:-production}
+      CODRUT_DATABASE_URL: ${CODRUT_DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-codytest}:${POSTGRES_PASSWORD}@testdb:5432/${POSTGRES_DB:-codytest}}
+      CODRUT_REDIS_URL: ${CODRUT_REDIS_URL:-redis://testredis:6379/0}
+      CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:?Set CODRUT_SESSION_SECRET in .env}
+      CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET: ${CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET:?Set CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET in .env}
+      CODRUT_PUBLIC_APP_URL: ${CODRUT_PUBLIC_APP_URL:-https://test.cody.andreivacaru.ro}
+      CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER:-brevo}
+      CODRUT_EMAIL_BREVO_SANDBOX_ENABLED: ${CODRUT_EMAIL_BREVO_SANDBOX_ENABLED:-true}
+      CODRUT_EMAIL_BREVO_API_KEY: ${CODRUT_EMAIL_BREVO_API_KEY:-CHEIE-INVALIDA-INTENTIONAT}
+      CODRUT_EMAIL_DAILY_SEND_CAP: ${CODRUT_EMAIL_DAILY_SEND_CAP:-0}
+      CODRUT_EMAIL_FROM_ADDRESS: ${CODRUT_EMAIL_FROM_ADDRESS:-test@andreivacaru.ro}
+      CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME:-Cody Test}
+    volumes:
+      - cody_test_campaign_assets:/app/var/campaign-assets
+    depends_on:
+      testdb:
+        condition: service_healthy
+      testredis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    mem_limit: 512M
+    networks:
+      - interna
+    logging: *test-logging
+    restart: unless-stopped
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?Set FRONTEND_IMAGE in .env}
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_BASE_URL: /api
+      CODRUT_FRONTEND_DEMO_FALLBACK: "false"
+      NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK: "false"
+      CODRUT_LOCAL_AUTH_BYPASS: "false"
+      NEXT_PUBLIC_CODRUT_LOCAL_AUTH_BYPASS: "false"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    mem_limit: 512M
+    networks:
+      - interna
+      - edge
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.codytest-frontend.rule: Host(`${CODRUT_HOST:-test.cody.andreivacaru.ro}`)
+      traefik.http.routers.codytest-frontend.entrypoints: websecure
+      traefik.http.routers.codytest-frontend.tls.certresolver: letsencrypt
+      traefik.http.services.codytest-frontend.loadbalancer.server.port: "3000"
+    logging: *test-logging
+    restart: unless-stopped
+
+networks:
+  interna:
+  edge:
+    external: true
+    name: codrut-platform_default
+
+volumes:
+  cody_test_postgres_data:
+  cody_test_redis_data:
+  cody_test_campaign_assets:
