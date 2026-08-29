@@ -1,0 +1,78 @@
+name: Deploy Test (cody-test)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: cody-test-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-test:
+    name: Deploy to Test Environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: test
+
+    steps:
+      - name: Guard Branch Ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" != "refs/heads/feat/practice-schema" ]]; then
+            echo "Error: Test deployment must run strictly from refs/heads/feat/practice-schema; received ${GITHUB_REF}." >&2
+            exit 1
+          fi
+
+      - name: Setup SSH for Test Deploy
+        shell: bash
+        env:
+          SSH_KEY: ${{ secrets.TEST_DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.TEST_DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SSH_KEY:-}" || -z "${HOST:-}" ]]; then
+            echo "Error: TEST_DEPLOY_SSH_KEY or TEST_DEPLOY_HOST secret is missing in environment 'test'." >&2
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${SSH_KEY}" > ~/.ssh/test_deploy
+          chmod 600 ~/.ssh/test_deploy
+          ssh-keyscan -H "${HOST}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Trigger Remote Deployment
+        shell: bash
+        env:
+          HOST: ${{ secrets.TEST_DEPLOY_HOST }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${GITHUB_TOKEN}" | ssh -i ~/.ssh/test_deploy \
+            root@"${HOST}" \
+            "deploy ${{ github.sha }} ${{ github.actor }}"
+
+      - name: Verify Health Endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Checking test environment health..."
+          test_code=$(curl -s -o /dev/null -w "%{http_code}" https://test.cody.andreivacaru.ro/api/health/live)
+          if [[ "${test_code}" != "200" ]]; then
+            echo "Error: Test environment health check failed (HTTP ${test_code})." >&2
+            exit 1
+          fi
+          echo "Test environment is healthy (HTTP 200)."
+
+          echo "Checking production health (must remain untouched)..."
+          prod_code=$(curl -s -o /dev/null -w "%{http_code}" https://cody.andreivacaru.ro/api/health/live)
+          if [[ "${prod_code}" != "200" ]]; then
+            echo "Error: Production health check failed (HTTP ${prod_code})." >&2
+            exit 1
+          fi
+          echo "Production environment is healthy (HTTP 200)."
