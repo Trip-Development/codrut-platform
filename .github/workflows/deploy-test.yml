@@ -1,9 +1,6 @@
 name: Deploy Test (cody-test)
 
 on:
-  push:
-    branches:
-      - feat/practice-schema
   workflow_dispatch:
 
 permissions:
