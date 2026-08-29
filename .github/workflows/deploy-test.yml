@@ -56,7 +56,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          printf '%s' "${GITHUB_TOKEN}" | ssh -i ~/.ssh/test_deploy \
+          printf '%s\n' "${GITHUB_TOKEN}" | ssh -i ~/.ssh/test_deploy \
             root@"${HOST}" \
             "deploy ${{ github.sha }} ${{ github.actor }}"
 
