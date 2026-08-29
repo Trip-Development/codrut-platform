@@ -94,8 +94,13 @@ services:
       CODRUT_CAMPAIGN_ASSET_DIR: ${CODRUT_CAMPAIGN_ASSET_DIR:-/app/var/campaign-assets}
       CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH: ${CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH:-/api/campaign-assets}
       CODRUT_READINESS_TIMEOUT_SECONDS: ${CODRUT_READINESS_TIMEOUT_SECONDS:-3}
+      CODRUT_GENERATION_PROVIDER: ${CODRUT_GENERATION_PROVIDER:-local}
+      CODRUT_VERTEX_PROJECT_ID: ${CODRUT_VERTEX_PROJECT_ID:-codrut-cody}
+      CODRUT_VERTEX_REGION: ${CODRUT_VERTEX_REGION:-europe-west4}
+      CODRUT_VERTEX_CREDENTIALS_PATH: ${CODRUT_VERTEX_CREDENTIALS_PATH:-/etc/codrut/cody-vertex.json}
     volumes:
       - cody_test_campaign_assets:/app/var/campaign-assets
+      - /etc/codrut/cody-vertex.json:/etc/codrut/cody-vertex.json:ro
     depends_on:
       testdb:
         condition: service_healthy
@@ -153,8 +158,13 @@ services:
       CODRUT_CAMPAIGN_ASSET_DIR: ${CODRUT_CAMPAIGN_ASSET_DIR:-/app/var/campaign-assets}
       CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH: ${CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH:-/api/campaign-assets}
       CODRUT_READINESS_TIMEOUT_SECONDS: ${CODRUT_READINESS_TIMEOUT_SECONDS:-3}
+      CODRUT_GENERATION_PROVIDER: ${CODRUT_GENERATION_PROVIDER:-local}
+      CODRUT_VERTEX_PROJECT_ID: ${CODRUT_VERTEX_PROJECT_ID:-codrut-cody}
+      CODRUT_VERTEX_REGION: ${CODRUT_VERTEX_REGION:-europe-west4}
+      CODRUT_VERTEX_CREDENTIALS_PATH: ${CODRUT_VERTEX_CREDENTIALS_PATH:-/etc/codrut/cody-vertex.json}
     volumes:
       - cody_test_campaign_assets:/app/var/campaign-assets
+      - /etc/codrut/cody-vertex.json:/etc/codrut/cody-vertex.json:ro
     depends_on:
       testdb:
         condition: service_healthy
