@@ -1,6 +1,9 @@
 name: Deploy Test (cody-test)
 
 on:
+  push:
+    branches:
+      - feat/practice-schema
   workflow_dispatch:
 
 permissions:
@@ -15,7 +18,7 @@ jobs:
   deploy-test:
     name: Deploy to Test Environment
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     environment: test
 
     steps:
