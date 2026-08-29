@@ -1,0 +1,148 @@
+from __future__ import annotations
+
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from codrut.api.dependencies import current_principal, db_session
+from codrut.core.config import Settings, get_settings
+from codrut.modules.identity.models import UserRole
+from codrut.modules.identity.schemas import SessionPrincipal
+from codrut.modules.practice.schemas import (
+    PracticeSessionCreateRequest,
+    PracticeSessionDetailResponse,
+    PracticeSessionEndRequest,
+    PracticeSessionResponse,
+    PracticeTurnCreateRequest,
+    PracticeTurnResponse,
+    PracticeTurnSubmitResponse,
+)
+from codrut.modules.practice.service import PracticeSessionService
+
+router = APIRouter()
+
+
+@router.post(
+    "/sessions",
+    response_model=PracticeSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def start_practice_session(
+    payload: PracticeSessionCreateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeSessionResponse:
+    """Start a new practice session for an authenticated participant."""
+    service = PracticeSessionService(session=session)
+    practice_session = await service.start_session(
+        principal=principal,
+        project_id=payload.project_id,
+        kind=payload.kind,
+        scenario_id=payload.scenario_id,
+    )
+    await session.commit()
+    return PracticeSessionResponse.model_validate(practice_session)
+
+
+@router.post(
+    "/trainer/sessions",
+    response_model=PracticeSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def start_trainer_practice_session(
+    payload: PracticeSessionCreateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> PracticeSessionResponse:
+    """Start a practice session directly for a trainer (only when enabled)."""
+    if not settings.practice_trainer_direct_entry:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not Found",
+        )
+
+    if not principal.can_access_workspace(UserRole.trainer):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not Found",
+        )
+
+    service = PracticeSessionService(session=session, settings=settings)
+    practice_session = await service.start_trainer_session(
+        principal=principal,
+        project_id=payload.project_id,
+        kind=payload.kind,
+        scenario_id=payload.scenario_id,
+    )
+    await session.commit()
+    return PracticeSessionResponse.model_validate(practice_session)
+
+
+@router.post(
+    "/sessions/{session_id}/turns",
+    response_model=PracticeTurnSubmitResponse,
+)
+async def submit_practice_turn(
+    session_id: UUID,
+    payload: PracticeTurnCreateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeTurnSubmitResponse:
+    """Submit a participant turn, trigger actor generation, and return turn results."""
+    service = PracticeSessionService(session=session)
+    p_turn, actor_turn, session_state = await service.submit_turn(
+        principal=principal,
+        session_id=session_id,
+        text=payload.text,
+    )
+    return PracticeTurnSubmitResponse(
+        participant_turn=PracticeTurnResponse.model_validate(p_turn),
+        actor_turn=PracticeTurnResponse.model_validate(actor_turn) if actor_turn else None,
+        session_state=session_state,
+    )
+
+
+@router.get(
+    "/sessions/{session_id}",
+    response_model=PracticeSessionDetailResponse,
+)
+async def get_practice_session_history(
+    session_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeSessionDetailResponse:
+    """Retrieve practice session details and its ordered conversation history."""
+    service = PracticeSessionService(session=session)
+    session_obj, turns = await service.get_session_history(
+        principal=principal,
+        session_id=session_id,
+    )
+    return PracticeSessionDetailResponse(
+        session=PracticeSessionResponse.model_validate(session_obj),
+        turns=[PracticeTurnResponse.model_validate(t) for t in turns],
+    )
+
+
+@router.post(
+    "/sessions/{session_id}/end",
+    response_model=PracticeSessionResponse,
+)
+async def end_practice_session(
+    session_id: UUID,
+    payload: PracticeSessionEndRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeSessionResponse:
+    """Explicitly end a practice session and record outcome."""
+    service = PracticeSessionService(session=session)
+    session_obj = await service.end_session(
+        principal=principal,
+        session_id=session_id,
+        outcome_kind=payload.outcome_kind,
+        note=payload.note,
+    )
+    await session.commit()
+    return PracticeSessionResponse.model_validate(session_obj)

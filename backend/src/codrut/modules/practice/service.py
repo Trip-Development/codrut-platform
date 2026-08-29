@@ -15,7 +15,8 @@ from codrut.contracts.generation import (
 )
 from codrut.core.config import Settings, get_settings
 from codrut.core.errors import DomainError
-from codrut.modules.companies.models import ParticipantProfile, ProjectMembership
+from codrut.modules.companies.models import CompanyProject, ParticipantProfile, ProjectMembership
+from codrut.modules.identity.models import User, UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.practice.budget import release, reserve, settle
 from codrut.modules.practice.generation_provider import (
@@ -34,16 +35,12 @@ from codrut.modules.practice.models import (
 )
 from codrut.modules.practice.policies import ensure_participant_may_practice
 from codrut.modules.practice.pricing import estimate_pessimistic_cost
+from codrut.modules.practice.prompts import CODY_PROMPT_VERSION, CODY_SYSTEM_PROMPT
 from codrut.modules.practice.quotas import (
     acquire_generation_lock,
     ensure_daily_session_limit,
     ensure_turn_length,
     is_session_turn_limit_reached,
-)
-
-PLACEHOLDER_SYSTEM_INSTRUCTION = (
-    "Esti un partener de exercitiu. Raspunde scurt, in romana. "
-    "TEMPORAR - se inlocuieste in Faza 2 cu persona reala."
 )
 
 
@@ -156,7 +153,7 @@ class PracticeSessionService:
                 code="practice_pack_missing",
             )
 
-        # 6. Create practice session with fixed active pack_id
+        # 6. Create practice session with fixed active pack_id and prompt version
         practice_session = PracticeSession(
             program_settings_id=program_settings.id,
             participant_profile_id=profile.id,
@@ -166,10 +163,103 @@ class PracticeSessionService:
             state=SessionState.open,
             started_at=now,
             turn_count=0,
+            prompt_version=CODY_PROMPT_VERSION,
         )
         self.session.add(practice_session)
         await self.session.flush()
         return practice_session
+
+    async def start_trainer_session(
+        self,
+        principal: SessionPrincipal,
+        project_id: uuid.UUID,
+        kind: SessionKind,
+        scenario_id: uuid.UUID | None = None,
+    ) -> PracticeSession:
+        """Start a direct practice session for a trainer without requiring invitations."""
+        if not principal.can_access_workspace(UserRole.trainer):
+            raise DomainError("Trainer access required", code="trainer_required")
+
+        stmt_settings = select(PracticeProgramSettings).where(
+            PracticeProgramSettings.project_id == project_id
+        )
+        program_settings = (await self.session.execute(stmt_settings)).scalar_one_or_none()
+        if program_settings is None or program_settings.active_pack_id is None:
+            raise DomainError(
+                f"Practice is not configured for project {project_id}",
+                code="practice_not_configured",
+            )
+
+        stmt_profile = select(ParticipantProfile).where(
+            or_(
+                ParticipantProfile.user_id == principal.user_id,
+                ParticipantProfile.email == principal.email,
+            )
+        )
+        profile = (await self.session.execute(stmt_profile)).scalar_one_or_none()
+        if profile is None:
+            stmt_proj = select(CompanyProject).where(CompanyProject.id == project_id)
+            project = (await self.session.execute(stmt_proj)).scalar_one_or_none()
+            if project is None:
+                raise DomainError(f"Project not found: {project_id}", code="project_not_found")
+
+            stmt_user = select(User).where(User.id == principal.user_id)
+            user_exists = (await self.session.execute(stmt_user)).scalar_one_or_none() is not None
+
+            profile = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=project.company_id,
+                user_id=principal.user_id if user_exists else None,
+                full_name="Trainer",
+                email=principal.email,
+            )
+            self.session.add(profile)
+            await self.session.flush()
+
+        now = datetime.now(UTC)
+        practice_session = PracticeSession(
+            program_settings_id=program_settings.id,
+            participant_profile_id=profile.id,
+            pack_id=program_settings.active_pack_id,
+            scenario_id=scenario_id,
+            kind=kind,
+            state=SessionState.open,
+            started_at=now,
+            turn_count=0,
+            prompt_version=CODY_PROMPT_VERSION,
+        )
+        self.session.add(practice_session)
+        await self.session.flush()
+        return practice_session
+
+    async def get_session_history(
+        self,
+        principal: SessionPrincipal,
+        session_id: uuid.UUID,
+    ) -> tuple[PracticeSession, list[PracticeTurn]]:
+        """Get a practice session and its conversation turns in order."""
+        stmt_session = select(PracticeSession).where(PracticeSession.id == session_id)
+        session_obj = (await self.session.execute(stmt_session)).scalar_one_or_none()
+        if session_obj is None:
+            raise DomainError(
+                f"Practice session not found: {session_id}",
+                code="session_not_found",
+            )
+
+        profile = await self._resolve_participant_profile(principal)
+        if session_obj.participant_profile_id != profile.id:
+            raise DomainError(
+                "Participant does not own this practice session",
+                code="session_forbidden",
+            )
+
+        stmt_turns = (
+            select(PracticeTurn)
+            .where(PracticeTurn.session_id == session_id)
+            .order_by(PracticeTurn.ordinal.asc())
+        )
+        turns = list((await self.session.execute(stmt_turns)).scalars().all())
+        return session_obj, turns
 
     async def add_participant_turn(
         self,
@@ -261,7 +351,7 @@ class PracticeSessionService:
 
             request = GenerationRequest(
                 messages=tuple(messages),
-                system_instruction=PLACEHOLDER_SYSTEM_INSTRUCTION,
+                system_instruction=CODY_SYSTEM_PROMPT,
                 purpose=GenerationPurpose.actor,
                 max_output_tokens=self.settings.vertex_max_output_tokens,
                 temperature=0.7,
@@ -288,10 +378,7 @@ class PracticeSessionService:
             active_participants_count = (
                 await self.session.execute(stmt_active_members)
             ).scalar_one() or 0
-            cap_usd = (
-                Decimal(active_participants_count)
-                * program_settings.usd_cap_per_participant
-            )
+            cap_usd = Decimal(active_participants_count) * program_settings.usd_cap_per_participant
 
             reservation_id = await reserve(
                 session=self.session,
@@ -336,13 +423,39 @@ class PracticeSessionService:
 
             return actor_turn
 
+    async def submit_turn(
+        self,
+        principal: SessionPrincipal,
+        session_id: uuid.UUID,
+        text: str,
+    ) -> tuple[PracticeTurn, PracticeTurn | None, SessionState]:
+        """Submit participant turn, trigger actor reply, and return turns and session state."""
+        actor_turn = await self.add_participant_turn(
+            principal=principal,
+            session_id=session_id,
+            text=text,
+        )
+        stmt_pturn = (
+            select(PracticeTurn)
+            .where(
+                PracticeTurn.session_id == session_id,
+                PracticeTurn.role == TurnRole.participant,
+            )
+            .order_by(PracticeTurn.ordinal.desc())
+            .limit(1)
+        )
+        p_turn = (await self.session.execute(stmt_pturn)).scalar_one()
+        stmt_sess = select(PracticeSession).where(PracticeSession.id == session_id)
+        sess = (await self.session.execute(stmt_sess)).scalar_one()
+        return p_turn, actor_turn, sess.state
+
     async def end_session(
         self,
         principal: SessionPrincipal,
         session_id: uuid.UUID,
         outcome_kind: OutcomeKind,
         note: str | None = None,
-    ) -> None:
+    ) -> PracticeSession:
         """Explicitly end a practice session and record outcome idempotently."""
         stmt = select(PracticeSession).where(PracticeSession.id == session_id)
         session_obj = (await self.session.execute(stmt)).scalar_one_or_none()
@@ -360,9 +473,7 @@ class PracticeSessionService:
             )
 
         if session_obj.state == SessionState.closed:
-            stmt_outcome = select(PracticeOutcome).where(
-                PracticeOutcome.session_id == session_id
-            )
+            stmt_outcome = select(PracticeOutcome).where(PracticeOutcome.session_id == session_id)
             existing_outcome = (await self.session.execute(stmt_outcome)).scalar_one_or_none()
             if existing_outcome is None:
                 outcome = PracticeOutcome(
@@ -372,7 +483,7 @@ class PracticeSessionService:
                 )
                 self.session.add(outcome)
                 await self.session.flush()
-            return
+            return session_obj
 
         session_obj.state = SessionState.closed
         session_obj.ended_at = datetime.now(UTC)
@@ -383,3 +494,4 @@ class PracticeSessionService:
         )
         self.session.add(outcome)
         await self.session.flush()
+        return session_obj

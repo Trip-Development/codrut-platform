@@ -171,9 +171,7 @@ class VertexGenerationProvider:
         }
 
         if request.system_instruction is not None:
-            payload["systemInstruction"] = {
-                "parts": [{"text": request.system_instruction}]
-            }
+            payload["systemInstruction"] = {"parts": [{"text": request.system_instruction}]}
 
         return payload
 
@@ -191,9 +189,7 @@ class VertexGenerationProvider:
         client = self._client
         owns_client = False
         if client is None:
-            client = httpx.AsyncClient(
-                timeout=float(self.settings.vertex_timeout_seconds)
-            )
+            client = httpx.AsyncClient(timeout=float(self.settings.vertex_timeout_seconds))
             owns_client = True
 
         try:

@@ -105,6 +105,7 @@ class Settings(BaseSettings):
     thinking_budget_evaluator: int = Field(default=1024, ge=0, le=8192)
     price_input_per_million_usd: Decimal = Decimal("0.30")
     price_output_per_million_usd: Decimal = Decimal("2.50")
+    practice_trainer_direct_entry: bool = False
 
     @field_validator("cors_origins", mode="before")
     @classmethod
