@@ -8,6 +8,7 @@ from sqlalchemy import select
 from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
 from codrut.modules.companies.models import Company, CompanyProject, CompanyProjectStatus
+from codrut.modules.identity import models as _identity_models  # noqa: F401
 from codrut.modules.practice.models import (
     KnowledgePackState,
     PracticeKnowledgePack,
