@@ -50,14 +50,10 @@ async def reserve(
         ),
         else_=Decimal("0.0000"),
     )
-    sum_stmt = select(
-        func.coalesce(func.sum(spending_expr), Decimal("0.0000"))
-    ).where(
+    sum_stmt = select(func.coalesce(func.sum(spending_expr), Decimal("0.0000"))).where(
         PracticeBudgetReservation.program_settings_id == program_settings_id
     )
-    current_spent_and_reserved: Decimal = (
-        await session.execute(sum_stmt)
-    ).scalar_one()
+    current_spent_and_reserved: Decimal = (await session.execute(sum_stmt)).scalar_one()
 
     if current_spent_and_reserved + estimated_usd > cap_usd:
         raise BudgetExceeded(
@@ -88,9 +84,7 @@ async def settle(
     actual_usd: Decimal,
 ) -> None:
     """Settle an existing reservation with actual incurred cost."""
-    stmt = select(PracticeBudgetReservation).where(
-        PracticeBudgetReservation.id == reservation_id
-    )
+    stmt = select(PracticeBudgetReservation).where(PracticeBudgetReservation.id == reservation_id)
     reservation = (await session.execute(stmt)).scalar_one_or_none()
     if reservation is None:
         raise DomainError(
@@ -99,8 +93,7 @@ async def settle(
         )
     if reservation.state != BudgetReservationState.reserved:
         raise DomainError(
-            f"Cannot settle budget reservation in state '{reservation.state}'; "
-            "expected 'reserved'",
+            f"Cannot settle budget reservation in state '{reservation.state}'; expected 'reserved'",
             code="invalid_reservation_state",
         )
     reservation.state = BudgetReservationState.settled
@@ -113,9 +106,7 @@ async def release(
     reservation_id: uuid.UUID,
 ) -> None:
     """Release a reserved budget allocation when an operation fails or is aborted."""
-    stmt = select(PracticeBudgetReservation).where(
-        PracticeBudgetReservation.id == reservation_id
-    )
+    stmt = select(PracticeBudgetReservation).where(PracticeBudgetReservation.id == reservation_id)
     reservation = (await session.execute(stmt)).scalar_one_or_none()
     if reservation is None:
         raise DomainError(

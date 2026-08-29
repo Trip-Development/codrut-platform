@@ -5280,6 +5280,16 @@
         "title": "LoginRequest",
         "type": "object"
       },
+      "OutcomeKind": {
+        "enum": [
+          "good",
+          "bad",
+          "turn_limit",
+          "safety_stop"
+        ],
+        "title": "OutcomeKind",
+        "type": "string"
+      },
       "ParticipantAccountLinkRepairRequest": {
         "additionalProperties": false,
         "properties": {
@@ -7150,6 +7160,254 @@
         "title": "PasswordResetResponse",
         "type": "object"
       },
+      "PracticeSessionCreateRequest": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/SessionKind",
+            "default": "roleplay"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "scenario_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenario Id"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "title": "PracticeSessionCreateRequest",
+        "type": "object"
+      },
+      "PracticeSessionDetailResponse": {
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/PracticeSessionResponse"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/PracticeTurnResponse"
+            },
+            "title": "Turns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "session",
+          "turns"
+        ],
+        "title": "PracticeSessionDetailResponse",
+        "type": "object"
+      },
+      "PracticeSessionEndRequest": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "outcome_kind": {
+            "$ref": "#/components/schemas/OutcomeKind",
+            "default": "good"
+          }
+        },
+        "title": "PracticeSessionEndRequest",
+        "type": "object"
+      },
+      "PracticeSessionResponse": {
+        "properties": {
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "first_turn": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PracticeTurnResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SessionKind"
+          },
+          "pack_id": {
+            "format": "uuid",
+            "title": "Pack Id",
+            "type": "string"
+          },
+          "participant_profile_id": {
+            "format": "uuid",
+            "title": "Participant Profile Id",
+            "type": "string"
+          },
+          "program_settings_id": {
+            "format": "uuid",
+            "title": "Program Settings Id",
+            "type": "string"
+          },
+          "prompt_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Version"
+          },
+          "scenario_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenario Id"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/SessionState"
+          },
+          "turn_count": {
+            "default": 0,
+            "title": "Turn Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "program_settings_id",
+          "participant_profile_id",
+          "pack_id",
+          "kind",
+          "state",
+          "started_at"
+        ],
+        "title": "PracticeSessionResponse",
+        "type": "object"
+      },
+      "PracticeTurnCreateRequest": {
+        "properties": {
+          "text": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "PracticeTurnCreateRequest",
+        "type": "object"
+      },
+      "PracticeTurnResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "ordinal": {
+            "title": "Ordinal",
+            "type": "integer"
+          },
+          "role": {
+            "$ref": "#/components/schemas/TurnRole"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "session_id",
+          "ordinal",
+          "role",
+          "text",
+          "created_at"
+        ],
+        "title": "PracticeTurnResponse",
+        "type": "object"
+      },
+      "PracticeTurnSubmitResponse": {
+        "properties": {
+          "actor_turn": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PracticeTurnResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "participant_turn": {
+            "$ref": "#/components/schemas/PracticeTurnResponse"
+          },
+          "session_state": {
+            "$ref": "#/components/schemas/SessionState",
+            "default": "open"
+          }
+        },
+        "required": [
+          "participant_turn"
+        ],
+        "title": "PracticeTurnSubmitResponse",
+        "type": "object"
+      },
       "ProjectLifecycleEventResponse": {
         "properties": {
           "action": {
@@ -8486,6 +8744,16 @@
         "title": "ScoringResultResponse",
         "type": "object"
       },
+      "SessionKind": {
+        "enum": [
+          "roleplay",
+          "coaching",
+          "knowledge",
+          "research"
+        ],
+        "title": "SessionKind",
+        "type": "string"
+      },
       "SessionPrincipal": {
         "properties": {
           "access_mode": {
@@ -8579,6 +8847,14 @@
         ],
         "title": "SessionPrincipal",
         "type": "object"
+      },
+      "SessionState": {
+        "enum": [
+          "open",
+          "closed"
+        ],
+        "title": "SessionState",
+        "type": "string"
       },
       "TeamCreateRequest": {
         "additionalProperties": false,
@@ -8692,6 +8968,15 @@
           "functional"
         ],
         "title": "TeamType",
+        "type": "string"
+      },
+      "TurnRole": {
+        "enum": [
+          "participant",
+          "actor",
+          "system"
+        ],
+        "title": "TurnRole",
         "type": "string"
       },
       "UserAccountType": {
@@ -20485,6 +20770,492 @@
         "summary": "Get My Workspace",
         "tags": [
           "participants"
+        ]
+      }
+    },
+    "/api/practice/sessions": {
+      "post": {
+        "description": "Start a new practice session for an authenticated participant.",
+        "operationId": "start_practice_session_api_practice_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PracticeSessionCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Start Practice Session",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/sessions/{session_id}": {
+      "get": {
+        "description": "Retrieve practice session details and its ordered conversation history.",
+        "operationId": "get_practice_session_history_api_practice_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeSessionDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Practice Session History",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/sessions/{session_id}/end": {
+      "post": {
+        "description": "Explicitly end a practice session and record outcome.",
+        "operationId": "end_practice_session_api_practice_sessions__session_id__end_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PracticeSessionEndRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "End Practice Session",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/sessions/{session_id}/turns": {
+      "post": {
+        "description": "Submit a participant turn, trigger actor generation, and return turn results.",
+        "operationId": "submit_practice_turn_api_practice_sessions__session_id__turns_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PracticeTurnCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeTurnSubmitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Submit Practice Turn",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/trainer/sessions": {
+      "post": {
+        "description": "Start a practice session directly for a trainer (only available when enabled in configuration).",
+        "operationId": "start_trainer_practice_session_api_practice_trainer_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PracticeSessionCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Start Trainer Practice Session",
+        "tags": [
+          "practice"
         ]
       }
     },

@@ -10,10 +10,7 @@ def require_current_terms(principal: SessionPrincipal) -> None:
     """Ensure principal has accepted the current privacy and confidentiality terms."""
     if not principal.can_access_workspace(UserRole.participant):
         return
-    if (
-        principal.terms_accepted_at is None
-        or principal.terms_version != CURRENT_TERMS_VERSION
-    ):
+    if principal.terms_accepted_at is None or principal.terms_version != CURRENT_TERMS_VERSION:
         raise DomainError(
             "Privacy and confidentiality terms must be accepted.",
             code="terms_required",

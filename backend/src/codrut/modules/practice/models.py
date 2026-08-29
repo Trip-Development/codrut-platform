@@ -276,6 +276,7 @@ class PracticeSession(TimestampMixin, Base):
         nullable=True,
     )
     turn_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    prompt_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
 
 class PracticeTurn(TimestampMixin, Base):

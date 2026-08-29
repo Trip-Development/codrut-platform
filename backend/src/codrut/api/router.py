@@ -7,6 +7,7 @@ from codrut.modules.forms.router import router as forms_router
 from codrut.modules.health.router import router as health_router
 from codrut.modules.identity.router import router as identity_router
 from codrut.modules.participants.router import router as participants_router
+from codrut.modules.practice.router import router as practice_router
 from codrut.modules.scoring.router import router as scoring_router
 
 api_router = APIRouter()
@@ -18,3 +19,4 @@ api_router.include_router(communications_router, prefix="/communications", tags=
 api_router.include_router(assignments_router, tags=["assignments"])
 api_router.include_router(forms_router, prefix="/forms", tags=["forms"])
 api_router.include_router(scoring_router, prefix="/scoring", tags=["scoring"])
+api_router.include_router(practice_router, prefix="/practice", tags=["practice"])
