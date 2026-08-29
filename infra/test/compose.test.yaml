@@ -123,6 +123,7 @@ services:
       - edge
     labels:
       traefik.enable: "true"
+      traefik.docker.network: codrut-platform_default
       traefik.http.routers.codytest-api.rule: Host(`${CODRUT_HOST:-test.cody.andreivacaru.ro}`) && PathPrefix(`/api`)
       traefik.http.routers.codytest-api.entrypoints: websecure
       traefik.http.routers.codytest-api.tls.certresolver: letsencrypt
@@ -200,6 +201,7 @@ services:
       - edge
     labels:
       traefik.enable: "true"
+      traefik.docker.network: codrut-platform_default
       traefik.http.routers.codytest-frontend.rule: Host(`${CODRUT_HOST:-test.cody.andreivacaru.ro}`)
       traefik.http.routers.codytest-frontend.entrypoints: websecure
       traefik.http.routers.codytest-frontend.tls.certresolver: letsencrypt
