@@ -30,27 +30,33 @@ Scopul ei este să permită testarea funcționalităților noi (de exemplu modul
 
 ---
 
-## 3. Comenzi de Rulare (Pas cu Pas)
+## 3. Comenzi de Rulare (Pas cu Pas — Ordine Corectă)
 
-> **Important:** Toate comenzile de mai jos se rulează din directorul unde este salvat `compose.test.yaml` pe server.
+> **Important:** Toate comenzile de mai jos se rulează din directorul `/opt/cody-test` pe server.
 
 ### A. Pornirea stivei de test
 ```bash
 # 1. Trage imaginile construite din GitHub
 docker compose --env-file .env -f compose.test.yaml pull
 
-# 2. Pornește serviciile în fundal
+# 2. Pornește mai întâi baza de date și redis-ul de test
+docker compose --env-file .env -f compose.test.yaml up -d testdb testredis
+
+# 3. Așteaptă până când testdb și testredis sunt (healthy)
+docker compose --env-file .env -f compose.test.yaml ps
+
+# 4. Rulează migrarea bazei de date ÎNAINTE de a porni backendul
+docker compose --env-file .env -f compose.test.yaml run --rm -T backend alembic upgrade head
+
+# 5. Pornește restul serviciilor (backend, worker, frontend)
 docker compose --env-file .env -f compose.test.yaml up -d
 
-# 3. Aplică migrarea bazei de date pe baza de test
-docker compose --env-file .env -f compose.test.yaml exec backend alembic upgrade head
+# 6. Verifică starea containerelor și sănătatea aplicației
+docker compose --env-file .env -f compose.test.yaml ps
 ```
 
 ### B. Verificarea stării și jurnalelor
 ```bash
-# Verifică starea containerelor de test
-docker compose --env-file .env -f compose.test.yaml ps
-
 # Vezi jurnalele în timp real pentru backend
 docker compose --env-file .env -f compose.test.yaml logs -f backend
 
@@ -70,16 +76,16 @@ docker compose --env-file .env -f compose.test.yaml stop
 Când împingi un nou commit pe ramura `feat/practice-schema`, GitHub Actions va construi automat o imagine nouă cu eticheta `test-<SHA>`.
 
 Pentru a actualiza casa de probă:
-1. Deschide `.env` pe server și actualizează:
+1. Deschide `/opt/cody-test/.env` pe server și actualizează:
    ```text
    BACKEND_IMAGE=ghcr.io/trip-development/codrut-platform-backend:test-<NOUL_SHA>
    FRONTEND_IMAGE=ghcr.io/trip-development/codrut-platform-frontend:test-<NOUL_SHA>
    ```
-2. Rulează comenzile:
+2. Rulează comenzile în ordinea corectă:
    ```bash
    docker compose --env-file .env -f compose.test.yaml pull
+   docker compose --env-file .env -f compose.test.yaml run --rm -T backend alembic upgrade head
    docker compose --env-file .env -f compose.test.yaml up -d
-   docker compose --env-file .env -f compose.test.yaml exec backend alembic upgrade head
    ```
 
 ---
