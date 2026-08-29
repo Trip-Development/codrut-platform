@@ -366,7 +366,7 @@ class PracticeSessionService:
             active_participants_count = (
                 await self.session.execute(stmt_active_members)
             ).scalar_one() or 0
-            cap_usd = Decimal(max(1, active_participants_count)) * program_settings.usd_cap_per_participant
+            cap_usd = Decimal(active_participants_count) * program_settings.usd_cap_per_participant
 
             reservation_id = await reserve(
                 session=self.session,

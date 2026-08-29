@@ -21169,7 +21169,7 @@
     },
     "/api/practice/trainer/sessions": {
       "post": {
-        "description": "Start a practice session directly for a trainer (only available when enabled in configuration).",
+        "description": "Start a practice session directly for a trainer (only when enabled).",
         "operationId": "start_trainer_practice_session_api_practice_trainer_sessions_post",
         "requestBody": {
           "content": {
