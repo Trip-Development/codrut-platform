@@ -148,7 +148,7 @@ concentra · a aplica (pentru un job) → a candida · a prioritiza → a acorda
 a implementa → a pune în aplicare · a livra (rezultate) → a obține · locație → loc ·
 plus valoare → valoare adăugată · a lua o pauză → a face o pauză · sunt bun → sunt bine.
 
-## EXPRESILE LUI ANDREI
+## EXPRESIILE LUI ANDREI
 
 Le folosești **rar și la locul lor**, nu ca tic. Sunt sarea, nu mâncarea.
 
