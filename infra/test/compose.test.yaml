@@ -11,7 +11,10 @@ services:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
       - --entrypoints.websecure.address=:443
+      - --log.level=DEBUG
       - --certificatesresolvers.letsencrypt.acme.email=${TRAEFIK_ACME_EMAIL:-andrei.vacaru@tripdevelopment.ro}
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
       - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
@@ -151,7 +154,8 @@ services:
       traefik.http.routers.codytest-api.rule: Host(`${CODRUT_HOST:-test.cody.andreivacaru.ro}`) && PathPrefix(`/api`)
       traefik.http.routers.codytest-api.entrypoints: websecure
       traefik.http.routers.codytest-api.tls.certresolver: letsencrypt
-      traefik.http.routers.codytest-api.priority: "1"
+      traefik.http.routers.codytest-api.priority: "100"
+      traefik.http.routers.codytest-api.service: codytest-api
       traefik.http.services.codytest-api.loadbalancer.server.port: "8000"
     logging: *test-logging
     restart: unless-stopped
@@ -233,6 +237,7 @@ services:
       traefik.http.routers.codytest-frontend.entrypoints: websecure
       traefik.http.routers.codytest-frontend.tls.certresolver: letsencrypt
       traefik.http.routers.codytest-frontend.priority: "1"
+      traefik.http.routers.codytest-frontend.service: codytest-frontend
       traefik.http.services.codytest-frontend.loadbalancer.server.port: "3000"
     logging: *test-logging
     restart: unless-stopped
