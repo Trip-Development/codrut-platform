@@ -69,15 +69,28 @@ def test_test_stack_traefik_routers_prefixed_with_codytest():
                     )
 
 
+# Singurul serviciu din casa de probă care are voie să publice porturi pe gazdă
+# este intrarea proprie de trafic. Orice altceva publicat pe gazdă e o scurgere.
+ALLOWED_PUBLISHED_PORTS = {"testtraefik": {"80:80", "443:443"}}
+
+
 def test_test_stack_declares_no_published_ports():
     test_compose = load_yaml(TEST_COMPOSE_PATH)
     services = test_compose.get("services", {})
 
     for service_name, service_cfg in services.items():
         ports = service_cfg.get("ports", [])
-        assert not ports, (
+        if not ports:
+            continue
+        allowed = ALLOWED_PUBLISHED_PORTS.get(service_name)
+        assert allowed is not None, (
             f"Service '{service_name}' in test compose defines published ports: {ports}. "
-            "Test stack services must NOT publish host ports; routing goes exclusively via Traefik."
+            "Only 'testtraefik' may publish host ports; everything else routes internally."
+        )
+        declared = {str(p) for p in ports}
+        assert declared <= allowed, (
+            f"Service '{service_name}' publishes {declared - allowed}, "
+            f"outside the allowed set {allowed}."
         )
 
 
