@@ -262,11 +262,19 @@ async def test_participant_cannot_access_another_participants_session():
         session.add(other_profile)
         await session.commit()
 
-    # Participant B attempts to read history
     client_b = make_test_client(ctx["other_participant"])
+
+    # Non-existent session
+    random_session_id = uuid.uuid4()
+    nonexistent_resp = await client_b.get(f"/api/practice/sessions/{random_session_id}")
+    assert nonexistent_resp.status_code == 400
+    assert nonexistent_resp.json()["error"]["code"] == "session_not_found"
+
+    # Participant B attempts to read history of Participant A's session -> exactly identical error
     read_resp = await client_b.get(f"/api/practice/sessions/{session_id}")
     assert read_resp.status_code == 400
-    assert read_resp.json()["error"]["code"] == "session_forbidden"
+    assert read_resp.json()["error"]["code"] == "session_not_found"
+    assert read_resp.json()["error"]["message"] == f"Practice session not found: {session_id}"
 
     # Participant B attempts to submit turn
     turn_resp = await client_b.post(
@@ -274,7 +282,17 @@ async def test_participant_cannot_access_another_participants_session():
         json={"text": "Incerc sa trimit replica in sesiunea altuia"},
     )
     assert turn_resp.status_code == 400
-    assert turn_resp.json()["error"]["code"] == "session_forbidden"
+    assert turn_resp.json()["error"]["code"] == "session_not_found"
+    assert turn_resp.json()["error"]["message"] == f"Practice session not found: {session_id}"
+
+    # Participant B attempts to end session
+    end_resp = await client_b.post(
+        f"/api/practice/sessions/{session_id}/end",
+        json={"outcome_kind": "good"},
+    )
+    assert end_resp.status_code == 400
+    assert end_resp.json()["error"]["code"] == "session_not_found"
+    assert end_resp.json()["error"]["message"] == f"Practice session not found: {session_id}"
 
 
 @pytest.mark.asyncio
