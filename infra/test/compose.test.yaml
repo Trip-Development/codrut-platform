@@ -21,6 +21,7 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "0.25"
           memory: 512M
     mem_limit: 512M
     networks:
@@ -41,6 +42,7 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "0.25"
           memory: 128M
     mem_limit: 128M
     networks:
@@ -48,7 +50,7 @@ services:
     logging: *test-logging
     restart: unless-stopped
 
-  backend:
+  testbackend:
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE in .env}
     command:
       - uvicorn
@@ -116,22 +118,23 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "0.5"
           memory: 768M
     mem_limit: 768M
     networks:
       - interna
-      - edge
     labels:
       traefik.enable: "true"
-      traefik.docker.network: codrut-platform_default
+      traefik.docker.network: cody-test_interna
       traefik.http.routers.codytest-api.rule: Host(`${CODRUT_HOST:-test.cody.andreivacaru.ro}`) && PathPrefix(`/api`)
       traefik.http.routers.codytest-api.entrypoints: websecure
       traefik.http.routers.codytest-api.tls.certresolver: letsencrypt
+      traefik.http.routers.codytest-api.priority: "1"
       traefik.http.services.codytest-api.loadbalancer.server.port: "8000"
     logging: *test-logging
     restart: unless-stopped
 
-  worker:
+  testworker:
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE in .env}
     command: ["python", "-m", "codrut.workers.main"]
     environment:
@@ -175,6 +178,7 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "0.25"
           memory: 512M
     mem_limit: 512M
     networks:
@@ -182,7 +186,7 @@ services:
     logging: *test-logging
     restart: unless-stopped
 
-  frontend:
+  testfrontend:
     image: ${FRONTEND_IMAGE:?Set FRONTEND_IMAGE in .env}
     environment:
       NODE_ENV: production
@@ -194,26 +198,24 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "0.5"
           memory: 512M
     mem_limit: 512M
     networks:
       - interna
-      - edge
     labels:
       traefik.enable: "true"
-      traefik.docker.network: codrut-platform_default
+      traefik.docker.network: cody-test_interna
       traefik.http.routers.codytest-frontend.rule: Host(`${CODRUT_HOST:-test.cody.andreivacaru.ro}`)
       traefik.http.routers.codytest-frontend.entrypoints: websecure
       traefik.http.routers.codytest-frontend.tls.certresolver: letsencrypt
+      traefik.http.routers.codytest-frontend.priority: "1"
       traefik.http.services.codytest-frontend.loadbalancer.server.port: "3000"
     logging: *test-logging
     restart: unless-stopped
 
 networks:
   interna:
-  edge:
-    external: true
-    name: codrut-platform_default
 
 volumes:
   cody_test_postgres_data:
