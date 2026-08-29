@@ -79,3 +79,16 @@ def test_test_stack_declares_no_published_ports():
             f"Service '{service_name}' in test compose defines published ports: {ports}. "
             "Test stack services must NOT publish host ports; routing goes exclusively via Traefik."
         )
+
+
+def test_test_stack_frontend_configures_internal_api_base_url():
+    test_compose = load_yaml(TEST_COMPOSE_PATH)
+    testfrontend_env = test_compose.get("services", {}).get("testfrontend", {}).get("environment", {})
+    assert "INTERNAL_API_BASE_URL" in testfrontend_env, (
+        "testfrontend must define INTERNAL_API_BASE_URL so server-side page rendering calls testbackend instead of backend"
+    )
+    val = testfrontend_env["INTERNAL_API_BASE_URL"]
+    assert "testbackend" in str(val), (
+        f"INTERNAL_API_BASE_URL must target testbackend, got: {val}"
+    )
+
