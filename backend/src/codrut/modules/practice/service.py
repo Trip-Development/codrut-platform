@@ -240,17 +240,11 @@ class PracticeSessionService:
         """Get a practice session and its conversation turns in order."""
         stmt_session = select(PracticeSession).where(PracticeSession.id == session_id)
         session_obj = (await self.session.execute(stmt_session)).scalar_one_or_none()
-        if session_obj is None:
+        profile = await self._resolve_participant_profile(principal)
+        if session_obj is None or session_obj.participant_profile_id != profile.id:
             raise DomainError(
                 f"Practice session not found: {session_id}",
                 code="session_not_found",
-            )
-
-        profile = await self._resolve_participant_profile(principal)
-        if session_obj.participant_profile_id != profile.id:
-            raise DomainError(
-                "Participant does not own this practice session",
-                code="session_forbidden",
             )
 
         stmt_turns = (
@@ -271,7 +265,8 @@ class PracticeSessionService:
         # 1. Verify session exists, is open, and belongs to principal
         stmt_session = select(PracticeSession).where(PracticeSession.id == session_id)
         session_obj = (await self.session.execute(stmt_session)).scalar_one_or_none()
-        if session_obj is None:
+        profile = await self._resolve_participant_profile(principal)
+        if session_obj is None or session_obj.participant_profile_id != profile.id:
             raise DomainError(
                 f"Practice session not found: {session_id}",
                 code="session_not_found",
@@ -280,13 +275,6 @@ class PracticeSessionService:
             raise DomainError(
                 f"Practice session is {session_obj.state.value}",
                 code="session_closed",
-            )
-
-        profile = await self._resolve_participant_profile(principal)
-        if session_obj.participant_profile_id != profile.id:
-            raise DomainError(
-                "Participant does not own this practice session",
-                code="session_forbidden",
             )
 
         stmt_prog = select(PracticeProgramSettings).where(
@@ -459,17 +447,11 @@ class PracticeSessionService:
         """Explicitly end a practice session and record outcome idempotently."""
         stmt = select(PracticeSession).where(PracticeSession.id == session_id)
         session_obj = (await self.session.execute(stmt)).scalar_one_or_none()
-        if session_obj is None:
+        profile = await self._resolve_participant_profile(principal)
+        if session_obj is None or session_obj.participant_profile_id != profile.id:
             raise DomainError(
                 f"Practice session not found: {session_id}",
                 code="session_not_found",
-            )
-
-        profile = await self._resolve_participant_profile(principal)
-        if session_obj.participant_profile_id != profile.id:
-            raise DomainError(
-                "Participant does not own this practice session",
-                code="session_forbidden",
             )
 
         if session_obj.state == SessionState.closed:
