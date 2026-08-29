@@ -190,6 +190,7 @@ services:
     image: ${FRONTEND_IMAGE:?Set FRONTEND_IMAGE in .env}
     environment:
       NODE_ENV: production
+      INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL:-http://testbackend:8000/api}
       NEXT_PUBLIC_API_BASE_URL: /api
       CODRUT_FRONTEND_DEMO_FALLBACK: "false"
       NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK: "false"
