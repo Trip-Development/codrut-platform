@@ -7,8 +7,14 @@ from sqlalchemy import select
 
 from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
-from codrut.modules.companies.models import Company, CompanyProject, CompanyProjectStatus
-from codrut.modules.identity import models as _identity_models  # noqa: F401
+from codrut.modules.companies.models import (
+    Company,
+    CompanyProject,
+    CompanyProjectStatus,
+    ParticipantProfile,
+    ProjectMembership,
+)
+from codrut.modules.identity.models import User
 from codrut.modules.practice.models import (
     KnowledgePackState,
     PracticeKnowledgePack,
@@ -185,6 +191,46 @@ async def seed_practice_test() -> dict[str, str]:
             prog_sett.max_sessions_per_day = 5
             prog_sett.max_chars_per_turn = 1200
             prog_sett.usd_cap_per_participant = Decimal("3.00")
+
+        # 7. Trainer profile and project membership
+        trainer_email = (
+            os.getenv("CODRUT_SEED_TRAINER_EMAIL", "andrei@andreivacaru.ro").strip().lower()
+        )
+        stmt_user = select(User).where(User.email == trainer_email)
+        user = (await session.execute(stmt_user)).scalar_one_or_none()
+        if user is not None:
+            stmt_prof = select(ParticipantProfile).where(
+                ParticipantProfile.company_id == company.id,
+                ParticipantProfile.email == trainer_email,
+            )
+            profile = (await session.execute(stmt_prof)).scalar_one_or_none()
+            if profile is None:
+                profile = ParticipantProfile(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    user_id=user.id,
+                    full_name="Andrei Vacaru",
+                    email=trainer_email,
+                )
+                session.add(profile)
+                await session.flush()
+
+            stmt_mem = select(ProjectMembership).where(
+                ProjectMembership.project_id == project.id,
+                ProjectMembership.participant_profile_id == profile.id,
+            )
+            membership = (await session.execute(stmt_mem)).scalar_one_or_none()
+            if membership is None:
+                membership = ProjectMembership(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    project_id=project.id,
+                    participant_profile_id=profile.id,
+                    active=True,
+                )
+                session.add(membership)
+            else:
+                membership.active = True
 
         await session.commit()
 
