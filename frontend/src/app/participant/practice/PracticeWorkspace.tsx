@@ -182,14 +182,18 @@ export function PracticeWorkspace({
     }
   };
 
+  const [sessionSummary, setSessionSummary] = useState<string | null>(null);
+
   const handleEndSession = async () => {
-    if (!session) return;
+    if (!session || isEnding) return;
     setIsEnding(true);
+    setErrorMsg(null);
     try {
-      const endedSession = await endPracticeSession(session.id, {
+      const res = await endPracticeSession(session.id, {
         note: "Încheiat manual de participant",
       });
-      setSession(endedSession);
+      setSession(res.session);
+      setSessionSummary(res.summary);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Eroare la încheierea sesiunii");
     } finally {
@@ -202,6 +206,7 @@ export function PracticeWorkspace({
     setTurns([]);
     setInputText("");
     setErrorMsg(null);
+    setSessionSummary(null);
   };
 
   // Ecran 1: Selecția modului și pornirea sesiunii
@@ -403,7 +408,7 @@ export function PracticeWorkspace({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Zona de input */}
+      {/* Zona de input / sumar */}
       {session.state === "open" ? (
         <form
           onSubmit={handleSendMessage}
@@ -430,14 +435,32 @@ export function PracticeWorkspace({
           </div>
         </form>
       ) : (
-        <div className="p-3 text-center border-t text-xs text-muted-foreground">
-          Această sesiune de practică a fost încheiată.{" "}
-          <button
-            onClick={handleReset}
-            className="text-primary underline font-medium hover:opacity-80 ml-1"
-          >
-            Începe o sesiune nouă
-          </button>
+        <div className="space-y-4 pt-3 border-t">
+          {sessionSummary ? (
+            <div className="p-4 rounded-lg border border-primary/20 bg-primary/5 text-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground flex items-center gap-1.5">
+                  <span>📊</span> Sinteza și Evaluarea Sesiunii
+                </span>
+                <Badge variant="outline" className="text-xs bg-surface">
+                  Finalizat
+                </Badge>
+              </div>
+              <div className="whitespace-pre-wrap leading-relaxed text-foreground font-sans text-xs bg-surface p-3 rounded border">
+                {sessionSummary}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="p-3 text-center text-xs text-muted-foreground bg-muted/20 rounded">
+            Această sesiune de practică a fost încheiată.{" "}
+            <button
+              onClick={handleReset}
+              className="text-primary underline font-medium hover:opacity-80 ml-1"
+            >
+              Începe o sesiune nouă
+            </button>
+          </div>
         </div>
       )}
     </div>

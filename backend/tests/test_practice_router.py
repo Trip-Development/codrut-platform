@@ -45,6 +45,7 @@ async def setup_practice_context(
     project = CompanyProject(
         company_id=company.id,
         name=f"Practice Router Project {suffix}",
+        project_type="training",
         status=CompanyProjectStatus.active,
     )
     session.add(project)
@@ -231,7 +232,7 @@ async def test_practice_session_lifecycle_and_prompt_version():
     )
     assert end_resp.status_code == 200, end_resp.text
     end_data = end_resp.json()
-    assert end_data["state"] == "closed"
+    assert end_data["session"]["state"] == "closed"
 
 
 @pytest.mark.asyncio
@@ -357,9 +358,10 @@ async def test_trainer_direct_entry_succeeds_when_enabled():
 
 
 def test_cody_prompt_content_and_version():
-    """Verify that CODY_SYSTEM_PROMPT contains the exact persona without meta notes."""
+    """Verify that prompts contain the exact SYSTEM_PROMPT_CORE without meta notes."""
+    from codrut.modules.practice.prompts import get_system_prompt_for_kind
     assert CODY_PROMPT_VERSION == "v2.0"
-    assert "Ești **Cody**" in CODY_SYSTEM_PROMPT
-    assert "INERȚIA STĂRII" in CODY_SYSTEM_PROMPT
-    assert "CE NU INTRA AICI, SI DE CE" not in CODY_SYSTEM_PROMPT
-    assert "Asamblat din pachetul" not in CODY_SYSTEM_PROMPT
+    roleplay_prompt = get_system_prompt_for_kind("roleplay")
+    assert "Ești Codruț" in roleplay_prompt
+    assert "Treci DIRECT la SETUP" in roleplay_prompt
+

@@ -14,7 +14,9 @@ from codrut.modules.practice.schemas import (
     PracticeSessionCreateRequest,
     PracticeSessionDetailResponse,
     PracticeSessionEndRequest,
+    PracticeSessionEndResponse,
     PracticeSessionResponse,
+    PracticeStareSummaryResponse,
     PracticeTurnCreateRequest,
     PracticeTurnResponse,
     PracticeTurnSubmitResponse,
@@ -128,21 +130,39 @@ async def get_practice_session_history(
 
 @router.post(
     "/sessions/{session_id}/end",
-    response_model=PracticeSessionResponse,
+    response_model=PracticeSessionEndResponse,
 )
 async def end_practice_session(
     session_id: UUID,
     payload: PracticeSessionEndRequest,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
-) -> PracticeSessionResponse:
-    """Explicitly end a practice session and record outcome."""
+) -> PracticeSessionEndResponse:
+    """Explicitly end a practice session, generate summary, and record outcome."""
     service = PracticeSessionService(session=session)
-    session_obj = await service.end_session(
+    session_obj, summary = await service.end_session(
         principal=principal,
         session_id=session_id,
         outcome_kind=payload.outcome_kind,
         note=payload.note,
     )
     await session.commit()
-    return PracticeSessionResponse.model_validate(session_obj)
+    return PracticeSessionEndResponse(
+        session=PracticeSessionResponse.model_validate(session_obj),
+        summary=summary,
+    )
+
+
+@router.get(
+    "/stare-summary",
+    response_model=PracticeStareSummaryResponse,
+)
+async def get_stare_summary(
+    session: Annotated[AsyncSession, Depends(db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> PracticeStareSummaryResponse:
+    """Get system health and Cody prompt/stat summary for the /stare page."""
+    service = PracticeSessionService(session=session, settings=settings)
+    data = await service.get_stare_summary()
+    return PracticeStareSummaryResponse(**data)
+
