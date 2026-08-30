@@ -5,7 +5,7 @@ import uuid
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from codrut.app import create_app
+from codrut.main import create_app
 from codrut.core.config import Settings
 from codrut.modules.identity.schemas import SessionPrincipal
 
