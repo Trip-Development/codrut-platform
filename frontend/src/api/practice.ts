@@ -135,7 +135,15 @@ export async function getPracticeSessionHistory(
       createdAt: data.session.created_at,
       updatedAt: data.session.updated_at,
     },
-    turns: (data.turns || []).map((t: any) => ({
+    turns: (data.turns || []).map((t: {
+      id: string;
+      session_id: string;
+      ordinal: number;
+      role: TurnRole;
+      text: string;
+      created_at: string;
+      expires_at: string;
+    }) => ({
       id: t.id,
       sessionId: t.session_id,
       ordinal: t.ordinal,
