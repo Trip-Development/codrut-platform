@@ -13,6 +13,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { MicIcon, MicOffIcon, Loader2Icon } from "lucide-react";
+import { useVoiceToText } from "@/hooks/useVoiceToText";
 
 const PRACTICE_OPTIONS: {
   kind: SessionKind;
@@ -208,6 +210,21 @@ export function PracticeWorkspace({
     setErrorMsg(null);
     setSessionSummary(null);
   };
+
+  const {
+    isListening,
+    isTranscribing,
+    error: voiceError,
+    startListening,
+    stopListening,
+  } = useVoiceToText({
+    onTranscript: (transcribedText) => {
+      setInputText((prev) => (prev ? `${prev} ${transcribedText}` : transcribedText));
+    },
+    onError: (err) => {
+      setErrorMsg(`Eroare voce: ${err}`);
+    },
+  });
 
   // Ecran 1: Selecția modului și pornirea sesiunii
   if (!session) {
@@ -419,19 +436,41 @@ export function PracticeWorkspace({
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Scrie un mesaj... (Enter pentru a trimite, Shift+Enter pentru rând nou)"
+              placeholder={isListening ? "Ascult... vorbește liber..." : isTranscribing ? "Se transcrie mesajul audio..." : "Scrie un mesaj... (Enter pentru a trimite, Shift+Enter pentru rând nou)"}
               rows={2}
-              className="resize-none pr-20 text-sm focus-visible:ring-1"
-              disabled={isLoading}
+              className="resize-none pr-28 text-sm focus-visible:ring-1"
+              disabled={isLoading || isListening || isTranscribing}
             />
-            <Button
-              type="submit"
-              size="sm"
-              className="absolute right-2 bottom-2 h-8 px-3 text-xs"
-              disabled={!inputText.trim() || isLoading}
-            >
-              Trimite
-            </Button>
+            <div className="absolute right-2 bottom-2 flex items-center gap-1.5">
+              <Button
+                type="button"
+                variant={isListening ? "destructive" : "outline"}
+                size="sm"
+                className={`h-8 w-8 p-0 rounded-full ${
+                  isListening ? "animate-pulse" : ""
+                }`}
+                disabled={isLoading || isTranscribing}
+                onClick={isListening ? stopListening : startListening}
+                title={isListening ? "Oprește înregistrarea" : "Vorbește (microfon)"}
+              >
+                {isTranscribing ? (
+                  <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+                ) : isListening ? (
+                  <MicOffIcon className="size-4 text-destructive-foreground" />
+                ) : (
+                  <MicIcon className="size-4 text-foreground" />
+                )}
+              </Button>
+
+              <Button
+                type="submit"
+                size="sm"
+                className="h-8 px-3 text-xs"
+                disabled={!inputText.trim() || isLoading || isListening || isTranscribing}
+              >
+                Trimite
+              </Button>
+            </div>
           </div>
         </form>
       ) : (

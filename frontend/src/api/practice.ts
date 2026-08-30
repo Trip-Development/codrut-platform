@@ -166,8 +166,51 @@ export type PracticeStareSummary = {
   sessionsToday: number;
   turnsToday: number;
   cachedTurns: number;
+  cachePercent: number;
   costTodayUsd: number;
   lastError?: string | null;
+};
+
+export type CompetencyDashboardItem = {
+  name: string;
+  level: "INTEGRARE" | "CONSOLIDARE" | "APLICARE" | "CONȘTIENTIZARE";
+  levelDescription: string;
+  color: string;
+  totalRoleplays: number;
+  scores70Count: number;
+  daysSpan70: number;
+  distinctDays70: number;
+  averageScore: number;
+  whyNotHigher: string;
+};
+
+export type InsightMomentItem = {
+  id: string;
+  summary: string;
+  competencyName?: string | null;
+  createdAt: string;
+};
+
+export type SessionSampleItem = {
+  id: string;
+  realWeak?: string | null;
+  realImproved?: string | null;
+  inventedWeak?: string | null;
+  inventedImproved?: string | null;
+  createdAt: string;
+};
+
+export type PracticeDashboardData = {
+  participantName: string;
+  xpToday: number;
+  xpDailyCap: number;
+  xpTotal: number;
+  streakDays: number;
+  streakBonusPct: number;
+  evidenceCeiling: number;
+  competencies: CompetencyDashboardItem[];
+  insightMoments: InsightMomentItem[];
+  sessionSamples: SessionSampleItem[];
 };
 
 export async function endPracticeSession(
@@ -221,8 +264,77 @@ export async function getPracticeStareSummary(): Promise<PracticeStareSummary> {
     sessionsToday: data.sessions_today,
     turnsToday: data.turns_today,
     cachedTurns: data.cached_turns,
+    cachePercent: data.cache_percent || 0,
     costTodayUsd: data.cost_today_usd,
     lastError: data.last_error,
+  };
+}
+
+export async function transcribeAudio(
+  audioBlob: Blob,
+): Promise<{ text: string; estimatedUsd: number }> {
+  const formData = new FormData();
+  formData.append("file", audioBlob, "recording.webm");
+
+  const res = await apiFetch("/api/practice/transcribe", {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Nu am putut transcrie înregistrarea audio");
+  }
+  const data = await res.json();
+  return {
+    text: data.text,
+    estimatedUsd: data.estimated_usd || 0,
+  };
+}
+
+export async function getPracticeDashboard(
+  projectId?: string,
+): Promise<PracticeDashboardData> {
+  const query = projectId ? `?project_id=${projectId}` : "";
+  const res = await apiFetch(`/api/practice/dashboard${query}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Nu am putut încărca tabloul participantului");
+  }
+  const data = await res.json();
+  return {
+    participantName: data.participant_name,
+    xpToday: data.xp_today,
+    xpDailyCap: data.xp_daily_cap || 100,
+    xpTotal: data.xp_total,
+    streakDays: data.streak_days,
+    streakBonusPct: data.streak_bonus_pct,
+    evidenceCeiling: data.evidence_ceiling,
+    competencies: (data.competencies || []).map((c: any) => ({
+      name: c.name,
+      level: c.level,
+      levelDescription: c.level_description,
+      color: c.color,
+      totalRoleplays: c.total_roleplays,
+      scores70Count: c.scores_70_count,
+      daysSpan70: c.days_span_70,
+      distinctDays70: c.distinct_days_70,
+      averageScore: c.average_score,
+      whyNotHigher: c.why_not_higher,
+    })),
+    insightMoments: (data.insight_moments || []).map((m: any) => ({
+      id: m.id,
+      summary: m.summary,
+      competencyName: m.competency_name,
+      createdAt: m.created_at,
+    })),
+    sessionSamples: (data.session_samples || []).map((s: any) => ({
+      id: s.id,
+      realWeak: s.real_weak,
+      realImproved: s.real_improved,
+      inventedWeak: s.invented_weak,
+      inventedImproved: s.invented_improved,
+      createdAt: s.created_at,
+    })),
   };
 }
 

@@ -607,6 +607,18 @@ class PracticeSessionService:
 
         return session_obj, summary_text
 
+    async def transcribe(
+        self,
+        audio_bytes: bytes,
+        mime_type: str = "audio/webm",
+    ) -> tuple[str, Decimal]:
+        """Transcribe an audio recording and return text and estimated cost."""
+        text, usage, cost_usd = await self.generation_provider.transcribe_audio(
+            audio_bytes=audio_bytes,
+            mime_type=mime_type,
+        )
+        return text, cost_usd
+
     async def get_stare_summary(self) -> dict[str, Any]:
         """Summary for the /stare dashboard."""
         from codrut.contracts.generation import TokenUsage
@@ -623,6 +635,12 @@ class PracticeSessionService:
         stmt_turns = select(func.count(PracticeTurn.id)).where(PracticeTurn.created_at >= today_start)
         turns_today = (await self.session.execute(stmt_turns)).scalar_one() or 0
 
+        stmt_cached_turns = select(func.count(PracticeTurn.id)).where(
+            PracticeTurn.created_at >= today_start,
+            PracticeTurn.cached_tokens > 0,
+        )
+        cached_turns = (await self.session.execute(stmt_cached_turns)).scalar_one() or 0
+
         # Cost exact calculation from usageMetadata on PracticeTurn
         stmt_turns_data = select(
             func.sum(PracticeTurn.prompt_tokens),
@@ -635,6 +653,8 @@ class PracticeSessionService:
         cached_t = row[1] or 0
         output_t = row[2] or 0
         thought_t = row[3] or 0
+
+        cache_percent = float(round((Decimal(cached_t) / Decimal(prompt_t) * 100), 1)) if prompt_t > 0 else 0.0
 
         usage_today = TokenUsage(
             prompt_tokens=prompt_t,
@@ -654,7 +674,8 @@ class PracticeSessionService:
             "region": self.settings.vertex_region,
             "sessions_today": sessions_today,
             "turns_today": turns_today,
-            "cached_turns": 0,
+            "cached_turns": cached_turns,
+            "cache_percent": cache_percent,
             "cost_today_usd": float(round(cost_usd, 6)),
             "last_error": None,
         }

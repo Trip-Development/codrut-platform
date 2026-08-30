@@ -67,9 +67,29 @@ class HttpxAuthRequest(GoogleAuthRequest):
             raise TransportError(f"HTTP auth request failed: {exc}") from exc
 
 
+import base64
+
+
+TRANSCRIBE_PROMPT = (
+    "Ești un asistent specializat în transcrierea audio în text pentru limba română.\n"
+    "Transcrie înregistrarea audio cu acuratețe maximă în limba română.\n"
+    "Punctuația trebuie dedusă din intonație și pauze.\n"
+    "Elimină bâlbele, repetițiile involuntare și sunetele de ezitare („ăăă\", „îîî\", „mda\", „păi\").\n"
+    "Păstrează doar textul curat și inteligibil. Nu adăuga comentarii, explicații sau note proprii. Returnează doar transcrierea."
+)
+
+
 class GenerationProvider(Protocol):
     async def generate(self, request: GenerationRequest) -> GenerationResult:
         """Generate content from the model according to the given request."""
+        ...
+
+    async def transcribe_audio(
+        self,
+        audio_bytes: bytes,
+        mime_type: str = "audio/webm",
+    ) -> tuple[str, TokenUsage, Decimal]:
+        """Transcribe an audio recording into clean text using Gemini audio multimodal input."""
         ...
 
 
@@ -106,6 +126,15 @@ class LocalGenerationProvider:
             finish_reason="STOP",
             estimated_usd=estimated_usd,
         )
+
+    async def transcribe_audio(
+        self,
+        audio_bytes: bytes,
+        mime_type: str = "audio/webm",
+    ) -> tuple[str, TokenUsage, Decimal]:
+        text = "Mesaj transcris de probă local."
+        usage = TokenUsage(prompt_tokens=50, output_tokens=10, thought_tokens=0, cached_tokens=0)
+        return text, usage, Decimal("0.000040")
 
 
 class VertexGenerationProvider:
@@ -257,6 +286,94 @@ class VertexGenerationProvider:
             region=self.settings.vertex_region,
             finish_reason=finish_reason,
             estimated_usd=estimated_usd,
+        )
+
+    async def transcribe_audio(
+        self,
+        audio_bytes: bytes,
+        mime_type: str = "audio/webm",
+    ) -> tuple[str, TokenUsage, Decimal]:
+        token = await self._get_access_token()
+        b64_audio = base64.b64encode(audio_bytes).decode("utf-8")
+        clean_mime = mime_type.split(";")[0].strip() or "audio/webm"
+
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "inlineData": {
+                                "mimeType": clean_mime,
+                                "data": b64_audio,
+                            }
+                        },
+                        {
+                            "text": TRANSCRIBE_PROMPT,
+                        },
+                    ],
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.0,
+                "maxOutputTokens": 2048,
+            },
+        }
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+
+        models_to_try = [self.settings.vertex_actor_model, "gemini-2.5-flash", "gemini-2.5-pro"]
+        seen: set[str] = set()
+        candidate_models = [m for m in models_to_try if not (m in seen or seen.add(m))]
+
+        client = self._client
+        owns_client = False
+        if client is None:
+            client = httpx.AsyncClient(timeout=float(self.settings.vertex_timeout_seconds))
+            owns_client = True
+
+        last_exc: Exception | None = None
+        try:
+            for model in candidate_models:
+                url = self._build_url(model)
+                try:
+                    response = await client.post(url, json=payload, headers=headers)
+                    if response.status_code != 200:
+                        continue
+                    data = response.json()
+                    candidates = data.get("candidates")
+                    if not candidates:
+                        continue
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    text = "".join(part.get("text", "") for part in parts if isinstance(part, dict)).strip()
+
+                    usage_metadata = data.get("usageMetadata", {})
+                    prompt_tokens = usage_metadata.get("promptTokenCount", 0)
+                    output_tokens = usage_metadata.get("candidatesTokenCount", 0)
+                    thought_tokens = usage_metadata.get("thoughtsTokenCount", 0)
+                    cached_tokens = usage_metadata.get("cachedContentTokenCount", 0)
+
+                    usage = TokenUsage(
+                        prompt_tokens=prompt_tokens,
+                        output_tokens=output_tokens,
+                        thought_tokens=thought_tokens,
+                        cached_tokens=cached_tokens,
+                    )
+                    cost_usd = estimate_cost(usage, self.settings, model=model)
+                    return text, usage, cost_usd
+                except Exception as exc:
+                    last_exc = exc
+                    continue
+        finally:
+            if owns_client:
+                await client.aclose()
+
+        raise GenerationError(
+            f"Transcription failed across models: {last_exc}",
+            code="transcription_failed",
         )
 
 
