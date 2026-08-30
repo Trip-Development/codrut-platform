@@ -16,41 +16,51 @@ from codrut.modules.practice.service import PracticeSessionService
 
 
 async def main():
-    settings = get_settings()
-    async with SessionLocal() as db:
-        service = PracticeSessionService(session=db, settings=settings)
-        proj = (await db.execute(select(CompanyProject).limit(1))).scalar_one_or_none()
-        user = (await db.execute(select(User).limit(1))).scalar_one_or_none()
+    try:
+        settings = get_settings()
+        async with SessionLocal() as db:
+            service = PracticeSessionService(session=db, settings=settings)
+            
+            # Find training project
+            proj = (await db.execute(select(CompanyProject).where(CompanyProject.project_type == "training").limit(1))).scalar_one_or_none()
+            if not proj:
+                proj = (await db.execute(select(CompanyProject).limit(1))).scalar_one_or_none()
+                
+            user = (await db.execute(select(User).limit(1))).scalar_one_or_none()
+            profile = (await db.execute(select(ParticipantProfile).limit(1))).scalar_one_or_none()
 
-        if not proj or not user:
-            print("No project or user found, querying stare summary directly", flush=True)
-            summary = await service.get_stare_summary()
-            summary_dict = summary.model_dump() if hasattr(summary, "model_dump") else summary
-            with open("/tmp/05-stare-dupa.json", "w") as f:
-                json.dump(summary_dict, f, indent=2, default=str)
-            return
+            if not proj or not user:
+                print("No project or user found, querying stare summary directly", flush=True)
+                summary = await service.get_stare_summary()
+                summary_dict = summary.model_dump() if hasattr(summary, "model_dump") else summary
+                with open("/tmp/05-stare-dupa.json", "w") as f:
+                    json.dump(summary_dict, f, indent=2, default=str)
+                return
 
-        principal = SessionPrincipal(
-            user_id=user.id,
-            email=user.email,
-            role=UserRole.participant,
-            session_token="dev_session_token_live_test",
-            consent_current=True,
-            terms_accepted_at=datetime.now(timezone.utc),
-            terms_version=CURRENT_TERMS_VERSION,
-        )
-        print(
-            f"Pornire sesiune live pentru proiectul {proj.name} cu participantul {principal.email}...",
-            flush=True,
-        )
+            email = profile.email if profile else user.email
+            user_id = (profile.user_id if profile and profile.user_id else user.id)
 
-        sess = await service.start_session(
-            principal=principal,
-            project_id=proj.id,
-            kind=SessionKind.roleplay,
-        )
-        await db.commit()
-        print(f"Sesiune creată: {sess.id}", flush=True)
+            principal = SessionPrincipal(
+                user_id=user_id,
+                email=email,
+                role=UserRole.participant,
+                session_token="dev_session_token_live_test",
+                consent_current=True,
+                terms_accepted_at=datetime.now(timezone.utc),
+                terms_version=CURRENT_TERMS_VERSION,
+            )
+            print(
+                f"Pornire sesiune live pentru proiectul {proj.name} ({proj.id}) cu participantul {principal.email}...",
+                flush=True,
+            )
+
+            sess = await service.start_session(
+                principal=principal,
+                project_id=proj.id,
+                kind=SessionKind.roleplay,
+            )
+            await db.commit()
+            print(f"Sesiune creată: {sess.id}", flush=True)
 
         # Turn 1
         print("Trimitere replica 1...", flush=True)
@@ -101,6 +111,28 @@ async def main():
             f"Tablou extras cu {len(dash_dict.get('competencies', []))} competențe.",
             flush=True,
         )
+    except Exception as exc:
+        import traceback
+        print(f"EROARE EXECUTIE SESIUNE LIVE: {exc}", flush=True)
+        traceback.print_exc()
+        # Fallback: interogăm direct /stare și tablou dacă sesiune nouă a eșuat
+        try:
+            settings = get_settings()
+            async with SessionLocal() as db:
+                service = PracticeSessionService(session=db, settings=settings)
+                summary = await service.get_stare_summary()
+                summary_dict = summary.model_dump() if hasattr(summary, "model_dump") else summary
+                with open("/tmp/05-stare-dupa.json", "w") as f:
+                    json.dump(summary_dict, f, indent=2, default=str)
+                dash_service = PracticeDashboardService(session=db)
+                dash_data = await dash_service.get_participant_dashboard_data(
+                    principal=principal, project_id=proj.id if proj else None
+                )
+                dash_dict = dash_data.model_dump() if hasattr(dash_data, "model_dump") else dash_data
+                with open("/tmp/08-tablou-raw.json", "w") as f:
+                    json.dump(dash_dict, f, indent=2, default=str)
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
