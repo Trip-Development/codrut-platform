@@ -3,6 +3,11 @@ import { transcribeAudio } from "@/api/practice";
 
 export interface UseVoiceToTextOptions {
   onTranscript?: (text: string) => void;
+  /**
+   * Called when auto-stop fired due to silence (NOT manual stop).
+   * Use to trigger auto-send.
+   */
+  onAutoSubmit?: (text: string) => void;
   onError?: (error: string) => void;
 }
 
@@ -19,6 +24,12 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
   const streamRef = useRef<MediaStream | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const animFrameRef = useRef<number | null>(null);
+
+  /**
+   * Ține minte dacă oprirea a venit din timerul de tăcere (auto) sau manual.
+   * Doar dacă a fost auto-stop se declanșează onAutoSubmit.
+   */
+  const wasAutoStoppedRef = useRef<boolean>(false);
 
   // silenceTimeoutMs = 6000    (crescut de la 4000: în quiz omul citește și gândește,
   //                             pauzele naturale trec de 4 secunde; 6 e mai uman)
@@ -49,7 +60,8 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
     }
   }, []);
 
-  const stopListening = useCallback(() => {
+  const stopListening = useCallback((wasAuto: boolean = false) => {
+    wasAutoStoppedRef.current = wasAuto;
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
@@ -87,6 +99,9 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
         if (options?.onTranscript) {
           options.onTranscript(text);
         }
+        if (wasAutoStoppedRef.current && options?.onAutoSubmit) {
+          options.onAutoSubmit(text);
+        }
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : "Eroare la transcrierea audio";
@@ -96,11 +111,13 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
       }
     } finally {
       setIsTranscribing(false);
+      wasAutoStoppedRef.current = false;
     }
   }, [options]);
 
   const startListening = useCallback(async () => {
     setError(null);
+    wasAutoStoppedRef.current = false;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -164,7 +181,7 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
         if (rms < silenceThreshold) {
           if (!silenceTimerRef.current) {
             silenceTimerRef.current = setTimeout(() => {
-              stopListening();
+              stopListening(true); // Auto-stopped due to silence!
             }, silenceTimeoutMs);
           }
         } else {
@@ -212,7 +229,7 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
     transcript,
     error,
     startListening,
-    stopListening,
+    stopListening: () => stopListening(false),
     resetTranscript,
   };
 }

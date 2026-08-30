@@ -211,6 +211,41 @@ export function PracticeWorkspace({
     setSessionSummary(null);
   };
 
+  const handleAutoSubmitVoice = async (textToSend: string) => {
+    if (!session || !textToSend.trim() || isLoading || session.state !== "open") {
+      setInputText((prev) => (prev ? `${prev} ${textToSend}` : textToSend));
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMsg(null);
+
+    try {
+      const turnRes = await submitPracticeTurn(session.id, textToSend.trim());
+      setTurns((prev) => {
+        const next = [...prev, turnRes.participantTurn];
+        if (turnRes.actorTurn) {
+          next.push(turnRes.actorTurn);
+        }
+        return next;
+      });
+      setSession((prev) =>
+        prev
+          ? {
+              ...prev,
+              state: turnRes.sessionState,
+              turnCount: prev.turnCount + 1,
+            }
+          : null
+      );
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "Eroare la trimiterea mesajului");
+      setInputText(textToSend);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const {
     isListening,
     isTranscribing,
@@ -220,6 +255,9 @@ export function PracticeWorkspace({
   } = useVoiceToText({
     onTranscript: (transcribedText) => {
       setInputText((prev) => (prev ? `${prev} ${transcribedText}` : transcribedText));
+    },
+    onAutoSubmit: (transcribedText) => {
+      handleAutoSubmitVoice(transcribedText);
     },
     onError: (err) => {
       setErrorMsg(`Eroare voce: ${err}`);
