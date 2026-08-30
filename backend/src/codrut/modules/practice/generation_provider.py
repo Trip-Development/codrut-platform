@@ -226,7 +226,7 @@ class VertexGenerationProvider:
 
         candidate = candidates[0]
         finish_reason = candidate.get("finishReason", "")
-        if finish_reason != "STOP":
+        if finish_reason not in ("STOP", "MAX_TOKENS"):
             raise GenerationError(
                 f"Generation did not finish normally: {finish_reason}",
                 code="vertex_finish_reason_error",
