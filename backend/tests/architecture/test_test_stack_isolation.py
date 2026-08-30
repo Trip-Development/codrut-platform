@@ -110,3 +110,60 @@ def test_test_stack_frontend_configures_internal_api_base_url():
         f"INTERNAL_API_BASE_URL must target testbackend, got: {val}"
     )
 
+
+
+# Aliasul `backend` este singura exceptie de la regula "niciun nume de-al nostru nu
+# se ciocneste cu productia". Pana la plicul 27 exceptia traia doar intr-un comentariu:
+# se putea sterge, muta sau da altui serviciu fara ca nimic sa se opuna. Testele de mai
+# jos o transforma din comentariu in lacat — pica daca aliasul dispare, si pica daca
+# ajunge pe alt serviciu sau pe o retea care nu e cea interna si izolata.
+ALLOWED_NETWORK_ALIASES = {"testbackend": {"interna": {"backend"}}}
+
+
+def _declared_aliases(service_cfg: dict) -> dict[str, set[str]]:
+    networks = service_cfg.get("networks", {})
+    if not isinstance(networks, dict):
+        return {}
+    return {
+        net_name: set(net_cfg.get("aliases", []))
+        for net_name, net_cfg in networks.items()
+        if isinstance(net_cfg, dict) and net_cfg.get("aliases")
+    }
+
+
+def test_test_stack_network_aliases_are_the_declared_exception_only():
+    test_compose = load_yaml(TEST_COMPOSE_PATH)
+    services = test_compose.get("services", {})
+
+    found = {
+        service_name: aliases
+        for service_name, service_cfg in services.items()
+        if (aliases := _declared_aliases(service_cfg))
+    }
+
+    assert found == ALLOWED_NETWORK_ALIASES, (
+        f"Test compose network aliases changed: {found}. "
+        f"The only permitted alias is {ALLOWED_NETWORK_ALIASES} - testbackend answering to "
+        "'backend' on the isolated internal network, so Next.js server-side rendering resolves "
+        "it without EAI_AGAIN. Removing it breaks SSR; moving it elsewhere or adding another "
+        "production-shaped alias breaks the isolation guarantee. Change this test only "
+        "deliberately."
+    )
+
+
+def test_test_stack_alias_network_is_internal_and_not_external():
+    test_compose = load_yaml(TEST_COMPOSE_PATH)
+    networks = test_compose.get("networks", {})
+
+    for service_name, per_network in ALLOWED_NETWORK_ALIASES.items():
+        for net_name in per_network:
+            assert net_name in networks, (
+                f"Alias network '{net_name}' for '{service_name}' is not declared in the test "
+                "compose networks section, so the alias would land on an implicit network."
+            )
+            net_cfg = networks.get(net_name) or {}
+            if isinstance(net_cfg, dict):
+                assert not net_cfg.get("external", False), (
+                    f"Alias network '{net_name}' is external. The 'backend' alias is only "
+                    "acceptable while it stays inside the test stack's own isolated network."
+                )
