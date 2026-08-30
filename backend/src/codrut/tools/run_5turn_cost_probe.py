@@ -4,6 +4,7 @@ import asyncio
 import json
 import time
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -38,25 +39,54 @@ async def run_5turn_cost_probe() -> dict:
     await seed_practice_test()
 
     async with SessionLocal() as db:
-        stmt_user = select(User).where(User.email == "andrei@andreivacaru.ro")
-        user = (await db.execute(stmt_user)).scalar_one()
+        from codrut.core.security import hash_password
 
-        stmt_prof = select(ParticipantProfile).where(ParticipantProfile.user_id == user.id)
-        prof = (await db.execute(stmt_prof)).scalar_one()
+        probe_email = f"probe_{int(time.time())}@andreivacaru.ro"
+        user = User(
+            email=probe_email,
+            password_hash=hash_password("ProbeSecret123!"),
+            role=UserRole.participant,
+            account_type=UserAccountType.registered,
+        )
+        db.add(user)
+        await db.flush()
+
+        stmt_comp = select(Company).where(Company.name == "Companie Proba Cody")
+        comp = (await db.execute(stmt_comp)).scalar_one()
+
+        prof = ParticipantProfile(
+            company_id=comp.id,
+            user_id=user.id,
+            full_name="Andrei Vacaru (Probe)",
+            email=probe_email,
+        )
+        db.add(prof)
+        await db.flush()
 
         stmt_proj = select(CompanyProject).where(
-            CompanyProject.company_id == prof.company_id,
-            CompanyProject.project_type == "training",
+            CompanyProject.company_id == comp.id,
+            CompanyProject.name == "Exercitiu Raport Vineri",
         )
-        proj = (await db.execute(stmt_proj)).scalars().first()
+        proj = (await db.execute(stmt_proj)).scalar_one()
 
+        pm = ProjectMembership(
+            company_id=comp.id,
+            project_id=proj.id,
+            participant_profile_id=prof.id,
+            active=True,
+        )
+        db.add(pm)
+        await db.commit()
+
+    async with SessionLocal() as db:
         principal = SessionPrincipal(
             user_id=user.id,
             email=user.email,
             role=UserRole.participant,
             account_type=UserAccountType.registered,
-            terms_accepted_at=user.terms_accepted_at,
-            terms_version=user.terms_version or CURRENT_TERMS_VERSION,
+            terms_accepted_at=datetime.now(UTC),
+            terms_version=CURRENT_TERMS_VERSION,
+            session_token="probe-test-session-token",
         )
 
         service = PracticeSessionService(session=db, settings=settings)
@@ -65,6 +95,7 @@ async def run_5turn_cost_probe() -> dict:
             project_id=proj.id,
             kind=SessionKind.roleplay,
         )
+        await db.commit()
         session_id = session_obj.id
 
     turns_input = [
