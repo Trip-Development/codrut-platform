@@ -131,8 +131,8 @@ export function PracticeWorkspace({
             : null
         );
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || "Eroare la pornirea sesiunii");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "Eroare la pornirea sesiunii");
     } finally {
       setIsLoading(false);
     }
@@ -167,8 +167,8 @@ export function PracticeWorkspace({
             }
           : null
       );
-    } catch (err: any) {
-      setErrorMsg(err.message || "Eroare la trimiterea mesajului");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "Eroare la trimiterea mesajului");
       setInputText(textToSend); // restabilim textul pentru retrimitere
     } finally {
       setIsLoading(false);
@@ -190,8 +190,8 @@ export function PracticeWorkspace({
         note: "Încheiat manual de participant",
       });
       setSession(endedSession);
-    } catch (err: any) {
-      setErrorMsg(err.message || "Eroare la încheierea sesiunii");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "Eroare la încheierea sesiunii");
     } finally {
       setIsEnding(false);
     }
