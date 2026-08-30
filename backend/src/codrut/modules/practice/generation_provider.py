@@ -239,13 +239,15 @@ class VertexGenerationProvider:
         prompt_tokens = usage_metadata.get("promptTokenCount", 0)
         output_tokens = usage_metadata.get("candidatesTokenCount", 0)
         thought_tokens = usage_metadata.get("thoughtsTokenCount", 0)
+        cached_tokens = usage_metadata.get("cachedContentTokenCount", 0)
 
         usage = TokenUsage(
             prompt_tokens=prompt_tokens,
             output_tokens=output_tokens,
             thought_tokens=thought_tokens,
+            cached_tokens=cached_tokens,
         )
-        estimated_usd = estimate_cost(usage, self.settings)
+        estimated_usd = estimate_cost(usage, self.settings, model=model)
 
         return GenerationResult(
             text=text,

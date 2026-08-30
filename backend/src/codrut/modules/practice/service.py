@@ -423,6 +423,7 @@ class PracticeSessionService:
                 role=TurnRole.actor,
                 text=result.text,
                 prompt_tokens=result.usage.prompt_tokens,
+                cached_tokens=result.usage.cached_tokens,
                 output_tokens=result.usage.output_tokens,
                 thought_tokens=result.usage.thought_tokens,
                 expires_at=expires_at,
@@ -470,7 +471,17 @@ class PracticeSessionService:
         outcome_kind: OutcomeKind = OutcomeKind.good,
         note: str | None = None,
     ) -> tuple[PracticeSession, str | None]:
-        """Explicitly end a practice session, generate summary using SUMMARY_PROMPT, and record outcome."""
+        """Explicitly end a practice session, generate summary using SUMMARY_PROMPT, record outcome and persist evaluation data."""
+        import json
+        import logging
+        import re
+
+        from codrut.modules.practice.models import (
+            CompetencyScore,
+            InsightMoment,
+            ParticipantMemory,
+        )
+
         stmt = select(PracticeSession).where(PracticeSession.id == session_id)
         session_obj = (await self.session.execute(stmt)).scalar_one_or_none()
         profile = await self._resolve_participant_profile(principal)
@@ -514,8 +525,73 @@ class PracticeSessionService:
             try:
                 res = await self.generation_provider.generate(req)
                 summary_text = res.text
+
+                # 4-step closing flow persistence
+                json_match = re.search(r"```json\s*(\{.*?\})\s*```", summary_text, re.DOTALL)
+                if json_match:
+                    try:
+                        eval_data = json.loads(json_match.group(1))
+                        scores_dict = eval_data.get("scores", {})
+                        topic = eval_data.get("topic", "")
+                        characters = eval_data.get("characters", [])
+
+                        score_name_map = {
+                            "questionsRatio": "Abilități de Coach și Întrebări",
+                            "assertiveness": "Comunicare Asertivă",
+                            "sbiFeedback": "Feedback Structurat (SBI)",
+                            "conciseness": "Concizie și Echilibru",
+                        }
+                        for k, v in scores_dict.items():
+                            if isinstance(v, (int, float)):
+                                c_name = score_name_map.get(k, k)
+                                normalized_score = int(round(float(v) * 10))
+                                level = 1 if normalized_score < 50 else (2 if normalized_score < 80 else 3)
+                                cs = CompetencyScore(
+                                    user_id=profile.user_id or principal.user_id,
+                                    score=min(100, max(0, normalized_score)),
+                                    level=level,
+                                    justification=f"Scor evaluat automat în modul {session_obj.kind.value}: {v}/10.",
+                                    conversation_id=str(session_id),
+                                    competency_name=c_name,
+                                    source_type="session",
+                                )
+                                self.session.add(cs)
+
+                        conclusion_part = summary_text.split("##Recomandări")[0].replace("##Concluzie", "").strip()
+                        im = InsightMoment(
+                            user_id=profile.user_id or principal.user_id,
+                            conversation_id=str(session_id),
+                            summary=conclusion_part[:500] if conclusion_part else "Sesiune finalizată.",
+                        )
+                        self.session.add(im)
+
+                        numeric_scores = [float(x) for x in scores_dict.values() if isinstance(x, (int, float))]
+                        avg_score = int(round(sum(numeric_scores) / max(1, len(numeric_scores)) * 10)) if numeric_scores else 50
+                        pm = ParticipantMemory(
+                            user_id=profile.user_id or principal.user_id,
+                            session_id=str(session_id),
+                            summary=conclusion_part[:1000] if conclusion_part else summary_text[:1000],
+                            key_quotes=[],
+                            evolution_signals=scores_dict,
+                            personal_context={"topic": topic, "characters": characters},
+                            relevant_competencies=list(score_name_map.values()),
+                            source_type=session_obj.kind.value,
+                            relevance_score=min(100, max(0, avg_score)),
+                        )
+                        self.session.add(pm)
+
+                        profile.xp = (profile.xp or 0) + 10
+                        profile.streak = (profile.streak or 0) + 1
+                        stmt_u = select(User).where(User.id == (profile.user_id or principal.user_id))
+                        user_obj = (await self.session.execute(stmt_u)).scalar_one_or_none()
+                        if user_obj:
+                            user_obj.xp = (user_obj.xp or 0) + 10
+                            user_obj.streak = (user_obj.streak or 0) + 1
+
+                    except Exception as parse_err:
+                        logging.getLogger(__name__).warning(f"Failed to parse evaluation JSON in end_session: {parse_err}")
+
             except Exception as err:
-                import logging
                 logging.getLogger(__name__).warning(f"Failed to generate session summary: {err}")
 
         if session_obj.state != SessionState.closed:
@@ -533,7 +609,10 @@ class PracticeSessionService:
 
     async def get_stare_summary(self) -> dict[str, Any]:
         """Summary for the /stare dashboard."""
+        from codrut.contracts.generation import TokenUsage
+        from codrut.modules.practice.pricing import estimate_cost
         from codrut.modules.practice.prompts import CODY_PROMPT_VERSION, get_core_material
+
         _, material_bytes = get_core_material(self.settings.biblioteca_path)
         now = datetime.now(UTC)
         today_start = datetime(now.year, now.month, now.day, tzinfo=UTC)
@@ -544,17 +623,26 @@ class PracticeSessionService:
         stmt_turns = select(func.count(PracticeTurn.id)).where(PracticeTurn.created_at >= today_start)
         turns_today = (await self.session.execute(stmt_turns)).scalar_one() or 0
 
-        # Cost estimation
-        stmt_cost = select(
+        # Cost exact calculation from usageMetadata on PracticeTurn
+        stmt_turns_data = select(
             func.sum(PracticeTurn.prompt_tokens),
+            func.sum(PracticeTurn.cached_tokens),
             func.sum(PracticeTurn.output_tokens),
+            func.sum(PracticeTurn.thought_tokens),
         ).where(PracticeTurn.created_at >= today_start)
-        row = (await self.session.execute(stmt_cost)).one()
+        row = (await self.session.execute(stmt_turns_data)).one()
         prompt_t = row[0] or 0
-        output_t = row[1] or 0
-        cost_usd = (Decimal(prompt_t) * self.settings.price_input_per_million_usd / Decimal(1_000_000)) + (
-            Decimal(output_t) * self.settings.price_output_per_million_usd / Decimal(1_000_000)
+        cached_t = row[1] or 0
+        output_t = row[2] or 0
+        thought_t = row[3] or 0
+
+        usage_today = TokenUsage(
+            prompt_tokens=prompt_t,
+            cached_tokens=cached_t,
+            output_tokens=output_t,
+            thought_tokens=thought_t,
         )
+        cost_usd = estimate_cost(usage_today, self.settings, model=self.settings.vertex_actor_model)
 
         return {
             "status": "normal",
@@ -567,6 +655,7 @@ class PracticeSessionService:
             "sessions_today": sessions_today,
             "turns_today": turns_today,
             "cached_turns": 0,
-            "cost_today_usd": float(round(cost_usd, 4)),
+            "cost_today_usd": float(round(cost_usd, 6)),
             "last_error": None,
         }
+
