@@ -54,6 +54,15 @@ async def main():
                 flush=True,
             )
 
+            # Reset today's test sessions for profile to avoid daily quota limit
+            from sqlalchemy import delete
+            from codrut.modules.practice.models import PracticeTurn, PracticeSession
+            if profile:
+                subq = select(PracticeSession.id).where(PracticeSession.participant_profile_id == profile.id)
+                await db.execute(delete(PracticeTurn).where(PracticeTurn.session_id.in_(subq)))
+                await db.execute(delete(PracticeSession).where(PracticeSession.participant_profile_id == profile.id))
+                await db.commit()
+
             sess = await service.start_session(
                 principal=principal,
                 project_id=proj.id,
