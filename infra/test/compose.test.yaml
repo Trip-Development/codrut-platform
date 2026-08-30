@@ -147,7 +147,9 @@ services:
           memory: 768M
     mem_limit: 768M
     networks:
-      - interna
+      interna:
+        aliases:
+          - backend
     labels:
       traefik.enable: "true"
       traefik.docker.network: cody-test_interna
