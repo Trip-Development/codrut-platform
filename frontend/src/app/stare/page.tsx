@@ -178,7 +178,7 @@ export default function StarePage() {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Unități din cache: {data.cachedTurns}
+                  Unități din cache: <span className="font-semibold text-foreground">{data.cachedTurns}</span> ({data.cachePercent}% din volumul promptului)
                 </p>
               </CardContent>
             </Card>

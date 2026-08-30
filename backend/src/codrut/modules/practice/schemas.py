@@ -78,5 +78,54 @@ class PracticeStareSummaryResponse(BaseModel):
     sessions_today: int
     turns_today: int
     cached_turns: int = 0
+    cache_percent: float = 0.0
     cost_today_usd: float = 0.0
     last_error: str | None = None
+
+
+class PracticeTranscribeResponse(BaseModel):
+    text: str
+    estimated_usd: float = 0.0
+
+
+class CompetencyDashboardItem(BaseModel):
+    name: str
+    level: str
+    level_description: str
+    color: str
+    total_roleplays: int
+    scores_70_count: int
+    days_span_70: int
+    distinct_days_70: int
+    average_score: float
+    why_not_higher: str
+
+
+class InsightMomentItem(BaseModel):
+    id: str
+    summary: str
+    competency_name: str | None = None
+    created_at: str
+
+
+class SessionSampleItem(BaseModel):
+    id: str
+    real_weak: str | None = None
+    real_improved: str | None = None
+    invented_weak: str | None = None
+    invented_improved: str | None = None
+    created_at: str
+
+
+class PracticeDashboardResponse(BaseModel):
+    participant_name: str
+    xp_today: int
+    xp_daily_cap: int = 100
+    xp_total: int
+    streak_days: int
+    streak_bonus_pct: int
+    evidence_ceiling: int
+    competencies: list[CompetencyDashboardItem]
+    insight_moments: list[InsightMomentItem]
+    session_samples: list[SessionSampleItem]
+

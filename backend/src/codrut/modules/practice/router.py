@@ -3,20 +3,23 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
 from codrut.core.config import Settings, get_settings
 from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
+from codrut.modules.practice.dashboard_service import PracticeDashboardService
 from codrut.modules.practice.schemas import (
+    PracticeDashboardResponse,
     PracticeSessionCreateRequest,
     PracticeSessionDetailResponse,
     PracticeSessionEndRequest,
     PracticeSessionEndResponse,
     PracticeSessionResponse,
     PracticeStareSummaryResponse,
+    PracticeTranscribeResponse,
     PracticeTurnCreateRequest,
     PracticeTurnResponse,
     PracticeTurnSubmitResponse,
@@ -165,4 +168,55 @@ async def get_stare_summary(
     service = PracticeSessionService(session=session, settings=settings)
     data = await service.get_stare_summary()
     return PracticeStareSummaryResponse(**data)
+
+
+@router.post(
+    "/transcribe",
+    response_model=PracticeTranscribeResponse,
+)
+async def transcribe_practice_audio(
+    file: Annotated[UploadFile, File(...)],
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> PracticeTranscribeResponse:
+    """Transcribe an audio recording into text with Vertex AI Gemini."""
+    audio_bytes = await file.read()
+    if not audio_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Fisierul audio este gol.",
+        )
+    service = PracticeSessionService(session=session, settings=settings)
+    text, cost_usd = await service.transcribe(
+        audio_bytes=audio_bytes,
+        mime_type=file.content_type or "audio/webm",
+    )
+    return PracticeTranscribeResponse(
+        text=text,
+        estimated_usd=float(round(cost_usd, 6)),
+    )
+
+
+@router.get(
+    "/dashboard",
+    response_model=PracticeDashboardResponse,
+)
+@router.get(
+    "/participant/dashboard",
+    response_model=PracticeDashboardResponse,
+)
+async def get_participant_practice_dashboard(
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+    project_id: UUID | None = None,
+) -> PracticeDashboardResponse:
+    """Get participant practice stats, XP, streak, and competency evidence levels."""
+    dashboard_service = PracticeDashboardService(session=session)
+    data = await dashboard_service.get_participant_dashboard_data(
+        principal=principal,
+        project_id=project_id,
+    )
+    return PracticeDashboardResponse(**data)
+
 
