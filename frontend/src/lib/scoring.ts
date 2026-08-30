@@ -1,8 +1,8 @@
 export const COMPETENCY_LEVEL_DESCRIPTIONS: Record<string, string> = {
   INTEGRARE: "E reflex automat — apare și sub stres, fără efort conștient.",
-  CONSOLIDARE: "Folosit consecvent în situații variate; cere puțin efort conștient.",
-  APLICARE: "Folosit ocazional, când contextul e favorabil și există atenție.",
-  CONȘTIENTIZARE: "Înțeles ca noțiune; încă nu apare constant în practică.",
+  CONSOLIDARE: "Îl aplici consistent în majoritatea situațiilor.",
+  APLICARE: "Îl aplici uneori; sub presiune încă mai scapi.",
+  CONȘTIENTIZARE: "Cunoști principiul, dar nu-l aplici încă consistent.",
 };
 
 export const COMPETENCY_LEVEL_COLORS: Record<string, string> = {

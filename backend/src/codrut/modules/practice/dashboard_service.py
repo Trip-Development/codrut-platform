@@ -21,6 +21,7 @@ from codrut.modules.practice.models import (
     PracticeTheme,
     SessionSample,
 )
+from codrut.modules.practice.competency_aliases import CANONICAL_COMPETENCIES, match_comp
 from codrut.modules.practice.scoring import (
     CompetencyEvidence,
     ScoreEntry,
@@ -115,26 +116,22 @@ class PracticeDashboardService:
             ]
             xp_today = compute_daily_xp(recent_entries)
 
-        # 6. Group scores by competency
-        scores_by_comp: dict[str, list[ScoreEntry]] = {}
+        # 6. Group scores by canonical competency (7 canonical competencies)
+        scores_by_comp: dict[str, list[ScoreEntry]] = {c: [] for c in CANONICAL_COMPETENCIES}
         for s in all_scores:
-            comp_key = (s.competency_name or "Competență Generală").strip()
+            matched_canonical = match_comp(s.competency_name)
+            if not matched_canonical:
+                continue
             entry = ScoreEntry(
                 score=s.score,
                 created_at=s.created_at,
                 source_type=s.source_type,
             )
-            scores_by_comp.setdefault(comp_key, []).append(entry)
-
-        # Also ensure theme competencies are represented
-        stmt_all_comps = select(PracticeCompetency).order_by(PracticeCompetency.order_index.asc())
-        db_comps = list((await self.session.execute(stmt_all_comps)).scalars().all())
-        for dc in db_comps:
-            if dc.name not in scores_by_comp:
-                scores_by_comp[dc.name] = []
+            scores_by_comp[matched_canonical].append(entry)
 
         competency_results = []
-        for name, entries in scores_by_comp.items():
+        for name in CANONICAL_COMPETENCIES:
+            entries = scores_by_comp[name]
             ev = compute_competency_evidence(entries)
             competency_results.append({
                 "name": name,
@@ -148,9 +145,6 @@ class PracticeDashboardService:
                 "average_score": ev.average_score,
                 "why_not_higher": ev.why_not_higher,
             })
-
-        # Sort competencies alphabetically or by mastery
-        competency_results.sort(key=lambda x: x["name"])
 
         # 7. Insight moments
         stmt_moments = (
