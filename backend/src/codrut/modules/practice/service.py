@@ -35,7 +35,11 @@ from codrut.modules.practice.models import (
 )
 from codrut.modules.practice.policies import ensure_participant_may_practice
 from codrut.modules.practice.pricing import estimate_pessimistic_cost
-from codrut.modules.practice.prompts import CODY_PROMPT_VERSION, CODY_SYSTEM_PROMPT
+from codrut.modules.practice.prompts import (
+    CODY_PROMPT_VERSION,
+    CODY_SYSTEM_PROMPT,
+    get_system_prompt_for_kind,
+)
 from codrut.modules.practice.quotas import (
     acquire_generation_lock,
     ensure_daily_session_limit,
@@ -339,7 +343,7 @@ class PracticeSessionService:
 
             request = GenerationRequest(
                 messages=tuple(messages),
-                system_instruction=CODY_SYSTEM_PROMPT,
+                system_instruction=get_system_prompt_for_kind(session_obj.kind),
                 purpose=GenerationPurpose.actor,
                 max_output_tokens=self.settings.vertex_max_output_tokens,
                 temperature=0.7,

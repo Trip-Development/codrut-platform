@@ -197,7 +197,7 @@ async def test_practice_session_lifecycle_and_prompt_version():
     session_data = start_resp.json()
     session_id = session_data["id"]
     assert session_data["prompt_version"] == CODY_PROMPT_VERSION
-    assert session_data["prompt_version"] == "v1.1"
+    assert session_data["prompt_version"] == "v2.0"
     assert session_data["state"] == "open"
     assert session_data["turn_count"] == 0
 
@@ -219,7 +219,7 @@ async def test_practice_session_lifecycle_and_prompt_version():
     assert hist_resp.status_code == 200, hist_resp.text
     hist_data = hist_resp.json()
     assert hist_data["session"]["id"] == session_id
-    assert hist_data["session"]["prompt_version"] == "v1.1"
+    assert hist_data["session"]["prompt_version"] == "v2.0"
     assert len(hist_data["turns"]) == 2
     assert hist_data["turns"][0]["role"] == "participant"
     assert hist_data["turns"][1]["role"] == "actor"
@@ -344,7 +344,7 @@ async def test_trainer_direct_entry_succeeds_when_enabled():
     )
     assert resp.status_code == 201, resp.text
     data = resp.json()
-    assert data["prompt_version"] == "v1.1"
+    assert data["prompt_version"] == "v2.0"
     assert data["state"] == "open"
 
     # Trainer can also submit turns
@@ -358,8 +358,8 @@ async def test_trainer_direct_entry_succeeds_when_enabled():
 
 def test_cody_prompt_content_and_version():
     """Verify that CODY_SYSTEM_PROMPT contains the exact persona without meta notes."""
-    assert CODY_PROMPT_VERSION == "v1.1"
+    assert CODY_PROMPT_VERSION == "v2.0"
     assert "Ești **Cody**" in CODY_SYSTEM_PROMPT
-    assert "REGULA CEA MAI IMPORTANTĂ — ARĂȚI COMPORTAMENTUL, NU JUDECI OMUL" in CODY_SYSTEM_PROMPT
+    assert "INERȚIA STĂRII" in CODY_SYSTEM_PROMPT
     assert "CE NU INTRA AICI, SI DE CE" not in CODY_SYSTEM_PROMPT
     assert "Asamblat din pachetul" not in CODY_SYSTEM_PROMPT

@@ -29,6 +29,11 @@ def test_test_stack_service_names_do_not_collide_with_production():
         f"Test compose services collide with production services: {colliding_services}. "
         "Test services must use unique names (e.g. testbackend, testfrontend, testworker, testdb, testredis)."
     )
+    # NOTA / EXCEPTIE EXPLICITA:
+    # Serviciul `testbackend` defineste pe reteaua interna aliasul `backend` (aliases: [backend]).
+    # Acest alias este STRICT INTERN retelei izolate a casei de proba si este necesar pentru ca
+    # apelurile de proxy/SSR din testfrontend (Next.js server-side) sa rezolve `backend` fara EAI_AGAIN.
+    # Numele serviciului ramane `testbackend` (fara coliziune de container/serviciu compose).
 
 
 def test_test_stack_declares_no_external_networks():
