@@ -126,9 +126,11 @@ services:
       CODRUT_VERTEX_REGION: ${CODRUT_VERTEX_REGION:-europe-west4}
       CODRUT_VERTEX_CREDENTIALS_PATH: ${CODRUT_VERTEX_CREDENTIALS_PATH:-/etc/codrut/cody-vertex.json}
       CODRUT_PRACTICE_TRAINER_DIRECT_ENTRY: ${CODRUT_PRACTICE_TRAINER_DIRECT_ENTRY:-false}
+      CODRUT_BIBLIOTECA_PATH: /app/BIBLIOTECA
     volumes:
       - cody_test_campaign_assets:/app/var/campaign-assets
       - /etc/codrut/cody-vertex.json:/etc/codrut/cody-vertex.json:ro
+      - /opt/cody-test/BIBLIOTECA:/app/BIBLIOTECA:ro
     depends_on:
       testdb:
         condition: service_healthy

@@ -99,7 +99,18 @@ class PracticeSessionService:
         scenario_id: uuid.UUID | None = None,
     ) -> PracticeSession:
         """Start a new practice session for a participant after policy and quota checks."""
-        # 1. Load practice program settings for project
+        # 1. Load project and verify project_type is training
+        stmt_proj = select(CompanyProject).where(CompanyProject.id == project_id)
+        project = (await self.session.execute(stmt_proj)).scalar_one_or_none()
+        if project is None:
+            raise DomainError(f"Proiectul {project_id} nu a fost găsit", code="project_not_found")
+        if project.project_type != "training":
+            raise DomainError(
+                "Exersarea nu este configurată pentru acest tip de proiect.",
+                code="practice_not_configured_for_project_type",
+            )
+
+        # 2. Load practice program settings for project
         stmt_settings = select(PracticeProgramSettings).where(
             PracticeProgramSettings.project_id == project_id
         )
@@ -110,7 +121,7 @@ class PracticeSessionService:
                 code="practice_not_configured",
             )
 
-        # 2. Load participant profile and project membership
+        # 3. Load participant profile and project membership
         stmt_profile = select(ParticipantProfile).where(
             or_(
                 ParticipantProfile.user_id == principal.user_id,
@@ -341,9 +352,20 @@ class PracticeSessionService:
                 messages.append(GenerationMessage(role=role_str, text=t.text))
             messages.append(GenerationMessage(role="user", text=text))
 
+            history_length = len(existing_turns) + 1
+            is_actor_role = (session_obj.kind == SessionKind.roleplay)
+
+            system_instruction = get_system_prompt_for_kind(
+                kind=session_obj.kind,
+                name=profile.full_name,
+                history_length=history_length,
+                is_actor_role=is_actor_role,
+                biblioteca_path=self.settings.biblioteca_path,
+            )
+
             request = GenerationRequest(
                 messages=tuple(messages),
-                system_instruction=get_system_prompt_for_kind(session_obj.kind),
+                system_instruction=system_instruction,
                 purpose=GenerationPurpose.actor,
                 max_output_tokens=self.settings.vertex_max_output_tokens,
                 temperature=0.7,
@@ -445,10 +467,10 @@ class PracticeSessionService:
         self,
         principal: SessionPrincipal,
         session_id: uuid.UUID,
-        outcome_kind: OutcomeKind,
+        outcome_kind: OutcomeKind = OutcomeKind.good,
         note: str | None = None,
-    ) -> PracticeSession:
-        """Explicitly end a practice session and record outcome idempotently."""
+    ) -> tuple[PracticeSession, str | None]:
+        """Explicitly end a practice session, generate summary using SUMMARY_PROMPT, and record outcome."""
         stmt = select(PracticeSession).where(PracticeSession.id == session_id)
         session_obj = (await self.session.execute(stmt)).scalar_one_or_none()
         profile = await self._resolve_participant_profile(principal)
@@ -458,26 +480,93 @@ class PracticeSessionService:
                 code="session_not_found",
             )
 
-        if session_obj.state == SessionState.closed:
-            stmt_outcome = select(PracticeOutcome).where(PracticeOutcome.session_id == session_id)
-            existing_outcome = (await self.session.execute(stmt_outcome)).scalar_one_or_none()
-            if existing_outcome is None:
-                outcome = PracticeOutcome(
-                    session_id=session_id,
-                    kind=outcome_kind,
-                    note=note,
-                )
-                self.session.add(outcome)
-                await self.session.flush()
-            return session_obj
+        summary_text: str | None = None
 
-        session_obj.state = SessionState.closed
-        session_obj.ended_at = datetime.now(UTC)
-        outcome = PracticeOutcome(
-            session_id=session_id,
-            kind=outcome_kind,
-            note=note,
+        # Fetch turns for summary generation
+        stmt_turns = (
+            select(PracticeTurn)
+            .where(PracticeTurn.session_id == session_id)
+            .order_by(PracticeTurn.ordinal.asc())
         )
-        self.session.add(outcome)
-        await self.session.flush()
-        return session_obj
+        turns = list((await self.session.execute(stmt_turns)).scalars().all())
+
+        if turns:
+            history_lines = []
+            for t in turns:
+                speaker = profile.full_name if t.role == TurnRole.participant else "Codruț"
+                history_lines.append(f"{speaker}: {t.text}")
+            history_str = "\n\n".join(history_lines)
+            from codrut.modules.practice.prompts import get_summary_prompt
+
+            summary_content = get_summary_prompt(
+                name=profile.full_name,
+                opt_text=session_obj.kind.value,
+                history=history_str,
+            )
+            req = GenerationRequest(
+                messages=(GenerationMessage(role="user", text=summary_content),),
+                system_instruction="Ești analizator de discurs.",
+                purpose=GenerationPurpose.evaluator,
+                max_output_tokens=self.settings.vertex_max_output_tokens,
+                temperature=0.2,
+                thinking_budget=self.settings.thinking_budget_evaluator,
+            )
+            try:
+                res = await self.generation_provider.generate(req)
+                summary_text = res.text
+            except Exception as err:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to generate session summary: {err}")
+
+        if session_obj.state != SessionState.closed:
+            session_obj.state = SessionState.closed
+            session_obj.ended_at = datetime.now(UTC)
+            outcome = PracticeOutcome(
+                session_id=session_id,
+                kind=outcome_kind,
+                note=note or (summary_text[:500] if summary_text else None),
+            )
+            self.session.add(outcome)
+            await self.session.flush()
+
+        return session_obj, summary_text
+
+    async def get_stare_summary(self) -> dict[str, Any]:
+        """Summary for the /stare dashboard."""
+        from codrut.modules.practice.prompts import CODY_PROMPT_VERSION, get_core_material
+        _, material_bytes = get_core_material(self.settings.biblioteca_path)
+        now = datetime.now(UTC)
+        today_start = datetime(now.year, now.month, now.day, tzinfo=UTC)
+
+        stmt_sess = select(func.count(PracticeSession.id)).where(PracticeSession.started_at >= today_start)
+        sessions_today = (await self.session.execute(stmt_sess)).scalar_one() or 0
+
+        stmt_turns = select(func.count(PracticeTurn.id)).where(PracticeTurn.created_at >= today_start)
+        turns_today = (await self.session.execute(stmt_turns)).scalar_one() or 0
+
+        # Cost estimation
+        stmt_cost = select(
+            func.sum(PracticeTurn.prompt_tokens),
+            func.sum(PracticeTurn.output_tokens),
+        ).where(PracticeTurn.created_at >= today_start)
+        row = (await self.session.execute(stmt_cost)).one()
+        prompt_t = row[0] or 0
+        output_t = row[1] or 0
+        cost_usd = (Decimal(prompt_t) * self.settings.price_input_per_million_usd / Decimal(1_000_000)) + (
+            Decimal(output_t) * self.settings.price_output_per_million_usd / Decimal(1_000_000)
+        )
+
+        return {
+            "status": "normal",
+            "status_text": "Sistemul funcționează normal",
+            "prompt_version": CODY_PROMPT_VERSION,
+            "material_bytes": material_bytes,
+            "provider": self.settings.generation_provider,
+            "model": self.settings.vertex_actor_model,
+            "region": self.settings.vertex_region,
+            "sessions_today": sessions_today,
+            "turns_today": turns_today,
+            "cached_turns": 0,
+            "cost_today_usd": float(round(cost_usd, 4)),
+            "last_error": None,
+        }

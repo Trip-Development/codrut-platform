@@ -60,3 +60,23 @@ class PracticeTurnSubmitResponse(BaseModel):
 class PracticeSessionDetailResponse(BaseModel):
     session: PracticeSessionResponse
     turns: list[PracticeTurnResponse]
+
+
+class PracticeSessionEndResponse(BaseModel):
+    session: PracticeSessionResponse
+    summary: str | None = None
+
+
+class PracticeStareSummaryResponse(BaseModel):
+    status: str
+    status_text: str
+    prompt_version: str
+    material_bytes: int
+    provider: str
+    model: str
+    region: str
+    sessions_today: int
+    turns_today: int
+    cached_turns: int = 0
+    cost_today_usd: float = 0.0
+    last_error: str | None = None

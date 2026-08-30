@@ -8,7 +8,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 from email_validator import EmailNotValidError, validate_email
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -106,6 +106,10 @@ class Settings(BaseSettings):
     price_input_per_million_usd: Decimal = Decimal("0.30")
     price_output_per_million_usd: Decimal = Decimal("2.50")
     practice_trainer_direct_entry: bool = False
+    biblioteca_path: str = Field(
+        default="/opt/codrut-platform/BIBLIOTECA",
+        validation_alias=AliasChoices("BIBLIOTECA_PATH", "biblioteca_path"),
+    )
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -155,10 +155,25 @@ export async function getPracticeSessionHistory(
   };
 }
 
+export type PracticeStareSummary = {
+  status: string;
+  statusText: string;
+  promptVersion: string;
+  materialBytes: number;
+  provider: string;
+  model: string;
+  region: string;
+  sessionsToday: number;
+  turnsToday: number;
+  cachedTurns: number;
+  costTodayUsd: number;
+  lastError?: string | null;
+};
+
 export async function endPracticeSession(
   sessionId: string,
   payload?: { note?: string },
-): Promise<PracticeSession> {
+): Promise<{ session: PracticeSession; summary: string | null }> {
   const res = await apiFetch(`/api/practice/sessions/${sessionId}/end`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -169,17 +184,45 @@ export async function endPracticeSession(
     throw new Error(err.detail || "Nu am putut încheia sesiunea");
   }
   const data = await res.json();
+  const sessionData = data.session || data;
   return {
-    id: data.id,
-    participantProfileId: data.participant_profile_id,
-    programSettingsId: data.program_settings_id,
-    scenarioId: data.scenario_id,
-    kind: data.kind,
-    state: data.state,
-    turnCount: data.turn_count,
-    startedAt: data.started_at,
-    endedAt: data.ended_at,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at,
+    session: {
+      id: sessionData.id,
+      participantProfileId: sessionData.participant_profile_id,
+      programSettingsId: sessionData.program_settings_id,
+      scenarioId: sessionData.scenario_id,
+      kind: sessionData.kind,
+      state: sessionData.state,
+      turnCount: sessionData.turn_count,
+      startedAt: sessionData.started_at,
+      endedAt: sessionData.ended_at,
+      createdAt: sessionData.created_at,
+      updatedAt: sessionData.updated_at,
+    },
+    summary: data.summary ?? null,
   };
 }
+
+export async function getPracticeStareSummary(): Promise<PracticeStareSummary> {
+  const res = await apiFetch("/api/practice/stare-summary");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Nu am putut obține starea sistemului");
+  }
+  const data = await res.json();
+  return {
+    status: data.status,
+    statusText: data.status_text,
+    promptVersion: data.prompt_version,
+    materialBytes: data.material_bytes,
+    provider: data.provider,
+    model: data.model,
+    region: data.region,
+    sessionsToday: data.sessions_today,
+    turnsToday: data.turns_today,
+    cachedTurns: data.cached_turns,
+    costTodayUsd: data.cost_today_usd,
+    lastError: data.last_error,
+  };
+}
+
