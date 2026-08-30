@@ -291,6 +291,35 @@ export async function transcribeAudio(
   };
 }
 
+type RawCompetency = {
+  name: string;
+  level: CompetencyDashboardItem["level"];
+  level_description: string;
+  color: string;
+  total_roleplays: number;
+  scores_70_count: number;
+  days_span_70: number;
+  distinct_days_70: number;
+  average_score: number;
+  why_not_higher: string;
+};
+
+type RawInsightMoment = {
+  id: string;
+  summary: string;
+  competency_name?: string | null;
+  created_at: string;
+};
+
+type RawSessionSample = {
+  id: string;
+  real_weak?: string | null;
+  real_improved?: string | null;
+  invented_weak?: string | null;
+  invented_improved?: string | null;
+  created_at: string;
+};
+
 export async function getPracticeDashboard(
   projectId?: string,
 ): Promise<PracticeDashboardData> {
@@ -309,7 +338,7 @@ export async function getPracticeDashboard(
     streakDays: data.streak_days,
     streakBonusPct: data.streak_bonus_pct,
     evidenceCeiling: data.evidence_ceiling,
-    competencies: (data.competencies || []).map((c: any) => ({
+    competencies: (data.competencies || []).map((c: RawCompetency) => ({
       name: c.name,
       level: c.level,
       levelDescription: c.level_description,
@@ -321,13 +350,13 @@ export async function getPracticeDashboard(
       averageScore: c.average_score,
       whyNotHigher: c.why_not_higher,
     })),
-    insightMoments: (data.insight_moments || []).map((m: any) => ({
+    insightMoments: (data.insight_moments || []).map((m: RawInsightMoment) => ({
       id: m.id,
       summary: m.summary,
       competencyName: m.competency_name,
       createdAt: m.created_at,
     })),
-    sessionSamples: (data.session_samples || []).map((s: any) => ({
+    sessionSamples: (data.session_samples || []).map((s: RawSessionSample) => ({
       id: s.id,
       realWeak: s.real_weak,
       realImproved: s.real_improved,
