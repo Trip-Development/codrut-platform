@@ -103,8 +103,10 @@ class Settings(BaseSettings):
     vertex_max_output_tokens: int = Field(default=1024, ge=64, le=8192)
     thinking_budget_actor: int = Field(default=0, ge=0, le=8192)
     thinking_budget_evaluator: int = Field(default=1024, ge=0, le=8192)
-    price_input_per_million_usd: Decimal = Decimal("0.30")
-    price_output_per_million_usd: Decimal = Decimal("2.50")
+    price_input_per_million_usd: Decimal = Decimal("0.075")
+    price_cached_per_million_usd: Decimal = Decimal("0.01875")
+    price_output_per_million_usd: Decimal = Decimal("0.30")
+    price_thought_per_million_usd: Decimal = Decimal("0.30")
     practice_trainer_direct_entry: bool = False
     biblioteca_path: str = Field(
         default="/opt/codrut-platform/BIBLIOTECA",

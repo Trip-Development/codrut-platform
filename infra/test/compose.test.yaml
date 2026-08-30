@@ -131,6 +131,7 @@ services:
       - cody_test_campaign_assets:/app/var/campaign-assets
       - /etc/codrut/cody-vertex.json:/etc/codrut/cody-vertex.json:ro
       - /opt/cody-test/BIBLIOTECA:/app/BIBLIOTECA:ro
+      - /opt/cody-test/ARHIVA-SUPABASE:/app/ARHIVA-SUPABASE:ro
     depends_on:
       testdb:
         condition: service_healthy

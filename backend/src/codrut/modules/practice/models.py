@@ -298,6 +298,7 @@ class PracticeTurn(TimestampMixin, Base):
     )
     text: Mapped[str] = mapped_column(Text, nullable=False)
     prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cached_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     thought_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     expires_at: Mapped[datetime] = mapped_column(
@@ -427,3 +428,169 @@ class PracticeBudgetReservation(TimestampMixin, Base):
         nullable=False,
         default=BudgetReservationState.reserved,
     )
+
+
+class CompetencyScore(TimestampMixin, Base):
+    __tablename__ = "competency_scores"
+    __table_args__ = (
+        CheckConstraint("score >= 0 AND score <= 100", name="ck_competency_scores_score"),
+        CheckConstraint("level >= 1 AND level <= 3", name="ck_competency_scores_level"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("company_projects.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    competency_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("practice_competencies.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    level: Mapped[int] = mapped_column(Integer, nullable=False)
+    justification: Mapped[str | None] = mapped_column(Text, nullable=True)
+    conversation_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    competency_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_type: Mapped[str] = mapped_column(String(50), nullable=False, default="session")
+
+
+class InsightMoment(TimestampMixin, Base):
+    __tablename__ = "insight_moments"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    conversation_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    competency_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("practice_competencies.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    competency_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class SessionSample(TimestampMixin, Base):
+    __tablename__ = "session_samples"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    conversation_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    competency_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("practice_competencies.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    real_weak: Mapped[str | None] = mapped_column(Text, nullable=True)
+    real_improved: Mapped[str | None] = mapped_column(Text, nullable=True)
+    invented_weak: Mapped[str | None] = mapped_column(Text, nullable=True)
+    invented_improved: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ParticipantMemory(TimestampMixin, Base):
+    __tablename__ = "participant_memory"
+    __table_args__ = (
+        CheckConstraint(
+            "relevance_score >= 0 AND relevance_score <= 100",
+            name="ck_participant_memory_relevance_score",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("company_projects.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    session_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    key_quotes: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    evolution_signals: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    personal_context: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    relevant_competencies: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    source_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    relevance_score: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+
+
+class EvolutionLog(TimestampMixin, Base):
+    __tablename__ = "evolution_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    session_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    metrics: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    qualitative_analysis: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ProjectCompetency(TimestampMixin, Base):
+    __tablename__ = "project_competencies"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("company_projects.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class CompetencyTemplate(TimestampMixin, Base):
+    __tablename__ = "competencies_template"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    theme_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("practice_themes.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class TrainerNote(TimestampMixin, Base):
+    __tablename__ = "trainer_notes"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    trainer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    participant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("company_projects.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    note: Mapped[str] = mapped_column(Text, nullable=False)
+

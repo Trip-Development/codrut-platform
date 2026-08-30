@@ -12,6 +12,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     ForeignKeyConstraint,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -223,6 +224,8 @@ class ParticipantProfile(TimestampMixin, Base):
     pcm_base: Mapped[str | None] = mapped_column(String(80), nullable=True)
     pcm_phase: Mapped[str | None] = mapped_column(String(80), nullable=True)
     anonymous_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    xp: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
     company: Mapped[Company] = relationship(back_populates="participants")
     user: Mapped[User | None] = relationship(
