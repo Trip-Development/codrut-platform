@@ -518,7 +518,7 @@ class PracticeSessionService:
                 messages=(GenerationMessage(role="user", text=summary_content),),
                 system_instruction="Ești analizator de discurs.",
                 purpose=GenerationPurpose.evaluator,
-                max_output_tokens=self.settings.vertex_max_output_tokens,
+                max_output_tokens=self.settings.vertex_max_output_tokens_evaluator,
                 temperature=0.2,
                 thinking_budget=self.settings.thinking_budget_evaluator,
             )
@@ -590,6 +590,15 @@ class PracticeSessionService:
 
                     except Exception as parse_err:
                         logging.getLogger(__name__).warning(f"Failed to parse evaluation JSON in end_session: {parse_err}")
+                else:
+                    # Fara randul asta defectul e invizibil: raspunsul vine 200 OK,
+                    # sesiunea se inchide, si tabloul ramane pe zero fara ca nimic
+                    # sa se planga nicaieri. Asa a stat ascuns pana la plicul 28.
+                    logging.getLogger(__name__).warning(
+                        "end_session: evaluation JSON block missing from summary "
+                        f"(session={session_id}, summary_len={len(summary_text or '')}). "
+                        "No scores, insight moment or memory were persisted."
+                    )
 
             except Exception as err:
                 logging.getLogger(__name__).warning(f"Failed to generate session summary: {err}")

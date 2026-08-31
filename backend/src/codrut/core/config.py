@@ -101,6 +101,11 @@ class Settings(BaseSettings):
     vertex_evaluator_model: str = "gemini-2.5-flash"
     vertex_timeout_seconds: int = Field(default=60, ge=5, le=300)
     vertex_max_output_tokens: int = Field(default=1024, ge=64, le=8192)
+    # Evaluatorul are nevoie de mai mult decat actorul: pe langa concluzie si
+    # recomandari trebuie sa incapa si blocul JSON cu scorurile, iar la Gemini 2.5
+    # bugetul de gandire se scade din aceeasi alocare. Cu 1024 in total si 1024
+    # rezervati gandirii, raspunsul se taia inainte de JSON si NIMIC nu se scria.
+    vertex_max_output_tokens_evaluator: int = Field(default=3072, ge=64, le=8192)
     thinking_budget_actor: int = Field(default=0, ge=0, le=8192)
     thinking_budget_evaluator: int = Field(default=1024, ge=0, le=8192)
     price_input_per_million_usd: Decimal = Decimal("0.30")
