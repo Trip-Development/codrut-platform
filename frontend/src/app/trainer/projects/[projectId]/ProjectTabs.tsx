@@ -5,6 +5,8 @@ import { usePathname, useSearchParams } from "next/navigation";
 
 import { SectionNavigationList, sectionNavigationItemVariants } from "@/components/ui/section-navigation";
 
+// Filele raman exact cele de acum. La proiectele de `training` doar ultima
+// se schimba: „Rezultate" (ecranul de coaching) devine „Evolutie competente".
 const projectTabs = [
   { key: "", label: "Sumar" },
   { key: "/participants", label: "Participanți" },
@@ -15,12 +17,20 @@ const projectTabs = [
   { key: "/settings", label: "Setări" },
 ];
 
+const trainingProjectTabs = projectTabs.map((tab) =>
+  tab.key === "/reports"
+    ? { key: "/evolutie", label: "Evoluție competențe" }
+    : tab,
+);
+
 export function ProjectTabs({
   basePath,
   locked,
+  isTraining,
 }: {
   basePath: string;
   locked?: boolean;
+  isTraining?: boolean;
 }) {
   const activePath = normalizePathname(usePathname());
   const searchParams = useSearchParams();
@@ -32,7 +42,7 @@ export function ProjectTabs({
   return (
     <nav className="mb-6" aria-label="Navigare proiect">
       <SectionNavigationList>
-        {projectTabs.map((tab) => {
+        {(isTraining ? trainingProjectTabs : projectTabs).map((tab) => {
           const baseHref = `${normalizedBasePath}${tab.key}`;
           const targetParams = new URLSearchParams();
           if (cycleId) targetParams.set("cycle", cycleId);
