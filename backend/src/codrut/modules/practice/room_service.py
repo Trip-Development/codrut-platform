@@ -400,7 +400,7 @@ class PracticeInvitationsService:
             try:
                 async with self.session.begin_nested():
                     utilizator = await self._contul_lui(profil)
-                    link = await self._link_de_parola(utilizator, setari)
+                    link, link_id = await self._link_de_parola(utilizator, setari)
             except DomainError as exc:
                 out.append(_rand(profil_id, profil.full_name, profil.email, None, False,
                                  f"Contul nu s-a putut pregati: {exc.code}."))
@@ -418,6 +418,7 @@ class PracticeInvitationsService:
                 profil=profil,
                 proiect=proiect,
                 link=link,
+                link_id=link_id,
                 utilizator=utilizator,
                 trainer_user_id=trainer_user_id,
             )
@@ -433,7 +434,9 @@ class PracticeInvitationsService:
         sesiunile de link. Parola ramane cea de santier pana si-o pune el.
         """
         utilizator = (await self.session.execute(
-            select(User).where(User.email == profil.email.lower())
+            # Aceeasi masura ca in `statuses()`. Cu potrivire exacta, un cont scris
+            # cu majuscule nu era gasit, se incerca un rand nou si pica pe unicitate.
+            select(User).where(func.lower(User.email) == profil.email.lower())
         )).scalar_one_or_none()
         if utilizator is None:
             utilizator = User(
@@ -453,12 +456,17 @@ class PracticeInvitationsService:
             profil.user_id = utilizator.id
         return utilizator
 
-    async def _link_de_parola(self, utilizator: User, setari) -> str:
+    async def _link_de_parola(self, utilizator: User, setari) -> tuple[str, uuid.UUID]:
         """Un link prin care omul isi pune parola. Acelasi mecanism ca la resetare.
 
         Nu se pastreaza nicaieri in clar: in baza sta doar amprenta lui. De aceea
         linkul se poate arata o singura data, la trimitere; „Trimite din nou" face
         unul proaspat si il stinge pe cel vechi.
+
+        Intoarce si id-ul randului creat, pentru cheia de idempotenta a emailului:
+        la a doua apasare linkul e altul, deci si emailul e altul, si trebuie sa
+        poata intra in coada langa cel dinainte. Jetonul brut nu are voie sa ajunga
+        in cheie — cheia se pastreaza in tabela de emailuri.
         """
         import hashlib
 
@@ -476,18 +484,17 @@ class PracticeInvitationsService:
         )).scalars().all()
         for jeton in vechi:
             jeton.used_at = acum
-        self.session.add(
-            PasswordResetToken(
-                id=uuid.uuid4(),
-                user_id=utilizator.id,
-                # Aceeasi amprenta ca la resetarea obisnuita, ca sa mearga pe
-                # aceeasi ruta de confirmare.
-                token_hash=hashlib.sha256(brut.encode()).hexdigest(),
-                expires_at=acum + timedelta(days=ZILE_LINK_PAROLA),
-            )
+        rand = PasswordResetToken(
+            id=uuid.uuid4(),
+            user_id=utilizator.id,
+            # Aceeasi amprenta ca la resetarea obisnuita, ca sa mearga pe
+            # aceeasi ruta de confirmare.
+            token_hash=hashlib.sha256(brut.encode()).hexdigest(),
+            expires_at=acum + timedelta(days=ZILE_LINK_PAROLA),
         )
+        self.session.add(rand)
         await self.session.flush()
-        return f"{setari.public_app_url.rstrip('/')}/update-password?token={brut}"
+        return f"{setari.public_app_url.rstrip('/')}/update-password?token={brut}", rand.id
 
     async def _trimite_emailul(
         self,
@@ -495,6 +502,7 @@ class PracticeInvitationsService:
         profil,
         proiect,
         link: str,
+        link_id: uuid.UUID,
         utilizator: User,
         trainer_user_id: uuid.UUID,
     ) -> tuple[bool, str | None]:
@@ -537,7 +545,11 @@ class PracticeInvitationsService:
                 mesaj,
                 template_key="training_account_invitation",
                 template_version=1,
-                idempotency_key=f"training-cont:{utilizator.id}:{profil.id}",
+                # Id-ul linkului intra in cheie. Fara el cheia ramanea aceeasi la a
+                # doua apasare, dar continutul emailului nu — link nou — iar coada
+                # refuza randul cu `email_send_idempotency_payload_conflict`. Se
+                # stingea jetonul vechi si nu pleca niciun mail nou.
+                idempotency_key=f"training-cont:{utilizator.id}:{profil.id}:{link_id}",
                 delivery_kind="training_account_invitation",
             )
             return True, None
