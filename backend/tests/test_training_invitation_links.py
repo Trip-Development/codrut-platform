@@ -104,3 +104,93 @@ def test_lista_de_destinatari_lasa_doar_adresele_ei():
     assert setari.recipient_is_allowed("ANDREI@EXEMPLU.RO") is True
     assert setari.recipient_is_allowed("altul@exemplu.ro") is True
     assert setari.recipient_is_allowed("participant.real@firma-lui.ro") is False
+
+
+@pytest.mark.asyncio
+async def test_a_doua_apasare_pune_al_doilea_mail_in_coada() -> None:
+    """Apasa „Trimite invitatii" de doua ori la rand, fara sa stearga nimic.
+
+    Ce s-a stricat: cheia de idempotenta era fixa — `training-cont:{user}:{profil}`.
+    Dar fiecare apasare face un link nou, deci alt continut de email. Coada gasea
+    randul vechi dupa aceeasi cheie, vedea alt continut si refuza cu
+    `email_send_idempotency_payload_conflict`. Intre timp jetonul vechi fusese deja
+    stins. Rezultat: link vechi mort, mail nou zero.
+
+    Testul asta NU sterge nimic intre apasari — exact asta ascunsese o proba de
+    dinainte, care golea `email_sends` si de aceea arata verde.
+    """
+    from sqlalchemy import select
+
+    from codrut.core.database import SessionLocal, engine
+    from codrut.modules.communications.models import EmailSend
+    from codrut.modules.companies.models import (
+        Company,
+        CompanyProject,
+        ParticipantProfile,
+        ProjectMembership,
+    )
+    from codrut.modules.identity.models import User, UserRole
+    from codrut.modules.practice.room_service import PracticeInvitationsService
+
+    await engine.dispose()
+    try:
+        async with SessionLocal() as sesiune:
+            marca = uuid.uuid4().hex[:8]
+            companie = Company(id=uuid.uuid4(), name=f"Training {marca}")
+            trainer = User(
+                id=uuid.uuid4(),
+                email=f"trainer-{marca}@example.com",
+                password_hash="registered-password-hash",  # noqa: S106
+                role=UserRole.trainer,
+            )
+            sesiune.add_all([companie, trainer])
+            await sesiune.flush()
+
+            proiect = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=companie.id,
+                name=f"Program {marca}",
+                project_type="training",
+            )
+            profil = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=companie.id,
+                email=f"om-{marca}@example.com",
+                full_name="Om De Proba",
+            )
+            sesiune.add_all([proiect, profil])
+            await sesiune.flush()
+            sesiune.add(
+                ProjectMembership(
+                    id=uuid.uuid4(),
+                    company_id=companie.id,
+                    project_id=proiect.id,
+                    participant_profile_id=profil.id,
+                )
+            )
+            await sesiune.flush()
+
+            serviciu = PracticeInvitationsService(sesiune)
+
+            prima = await serviciu.send(proiect.id, [profil.id], trainer_user_id=trainer.id)
+            a_doua = await serviciu.send(proiect.id, [profil.id], trainer_user_id=trainer.id)
+            await sesiune.flush()
+
+            assert prima[0]["email_queued"] is True, prima[0]["error"]
+            assert a_doua[0]["email_queued"] is True, a_doua[0]["error"]
+
+            # linkuri diferite, deci doua randuri de email, nu unul refuzat
+            assert prima[0]["invite_url"] != a_doua[0]["invite_url"]
+            randuri = (await sesiune.execute(
+                select(EmailSend).where(EmailSend.recipient_email == profil.email)
+            )).scalars().all()
+            assert len(randuri) == 2, [r.idempotency_key for r in randuri]
+            assert len({r.idempotency_key for r in randuri}) == 2
+
+            # jetonul brut nu are voie sa ajunga in tabela de emailuri
+            for rand in randuri:
+                assert "update-password?token=" not in rand.idempotency_key
+
+            await sesiune.rollback()
+    finally:
+        await engine.dispose()
