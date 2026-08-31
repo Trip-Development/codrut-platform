@@ -103,17 +103,25 @@ class PracticeEvolutionService:
         activi = len([p for p, _ in randuri if p.id in profile_cu_sesiune])
 
         # --- evolutia per competenta (rd. 253-254) ---
+        # Fila arata competentele PROIECTULUI, cu numele lor. Gruparea se face si pe
+        # numele canonic, si pe numele brut: tema poate purta competente care nu au
+        # echivalent canonic (de pilda „Rezolvarea colaborativa a conflictelor"), iar
+        # scorurile lor NU au voie sa dispara doar fiindca aliasul nu le cunoaste.
         pe_competenta: dict[str, list[CompetencyScore]] = defaultdict(list)
         for s in scoruri:
+            if not s.competency_name:
+                continue
             canonic = match_comp(s.competency_name)
             if canonic:
                 pe_competenta[canonic].append(s)
+            if canonic != s.competency_name:
+                pe_competenta[s.competency_name].append(s)
 
         nume_afisate = competente or sorted(pe_competenta)
         evolutie = []
         for nume in nume_afisate:
-            canonic = match_comp(nume) or nume
-            lst = pe_competenta.get(canonic, [])
+            canonic = match_comp(nume)
+            lst = pe_competenta.get(nume) or (pe_competenta.get(canonic, []) if canonic else [])
             intrari = [
                 ScoreEntry(score=s.score, created_at=s.created_at, source_type=s.source_type)
                 for s in lst
