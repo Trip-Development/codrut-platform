@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -51,6 +52,29 @@ from codrut.modules.practice.quotas import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Blocul tehnic pe care `rezumat.md` il cere modelului la finalul sintezei.
+_BLOC_JSON = re.compile(r"```json\s*\{.*?\}\s*```", re.DOTALL)
+
+
+def doar_proza(text: str | None) -> str | None:
+    """Sinteza asa cum o citeste omul: fara blocul JSON de la final.
+
+    `rezumat.md` cere modelului proza PLUS un bloc JSON, din care se scriu scorurile in
+    baza. Pana la plicul 39 spre ecran pleca textul intreg, deci participantul vedea la
+    vedere acolade, ghilimele si nume de campuri in engleza.
+
+    Se taie aici, in backend, nu se ascunde in frontend: daca ramane in raspuns, il vede
+    oricine deschide cererea.
+
+    Atentie la ce NU face: nu hotaraste nimic despre cele patru note din bloc. Daca ele
+    ajung vreodata pe ecranul participantului, si sub ce forma, e o decizie a lui Andrei,
+    amanata pe 31 august pentru cand se ajunge la cumularea punctajelor. Aici se scoate
+    doar iesirea tehnica bruta.
+    """
+    if not text:
+        return text
+    return _BLOC_JSON.sub("", text).strip() or None
 
 # Ce i se trimite modelului ca sa deschida el sesiunea. Vezi `_prima_replica`: nu e o
 # replica pusa in gura participantului, si nu se salveaza niciodata in transcript.
@@ -886,12 +910,13 @@ class PracticeSessionService:
             outcome = PracticeOutcome(
                 session_id=session_id,
                 kind=outcome_kind,
-                note=note or (summary_text[:500] if summary_text else None),
+                # si in nota se pastreaza proza: blocul tehnic nu e de citit de nimeni
+                note=note or ((doar_proza(summary_text) or "")[:500] or None),
             )
             self.session.add(outcome)
             await self.session.flush()
 
-        return session_obj, summary_text
+        return session_obj, doar_proza(summary_text)
 
     async def transcribe(
         self,

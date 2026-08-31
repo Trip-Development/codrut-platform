@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { MicIcon, MicOffIcon, Loader2Icon } from "lucide-react";
 import { useVoiceToText } from "@/hooks/useVoiceToText";
+import { LoadingStatus } from "@/components/shell/route-loading";
 
 const PRACTICE_OPTIONS: {
   kind: SessionKind;
@@ -74,6 +75,33 @@ function mesajDeRefuz(err: unknown): string {
   }
   if (err instanceof Error) return err.message;
   return "Nu am putut porni sesiunea de practică";
+}
+
+/**
+ * Sinteza, taiata in secțiunile ei.
+ *
+ * Modelul scrie titluri de markdown — `##Concluzie`, `##Recomandări`, uneori chiar
+ * fara spatiu dupa diez — iar caseta le arata literal, cu diez cu tot. Aplicatia nu are
+ * bibliotecă de markdown, si nu merita adusa una pentru doua titluri: se taie in
+ * sectiuni adevarate, cu titlurile scrise ca titluri.
+ *
+ * Ce nu e sub niciun titlu ramane in prima sectiune, fara titlu — asa nu se pierde text
+ * daca modelul scrie altfel decat ne asteptam.
+ */
+function taieSinteza(text: string): { titlu: string | null; corp: string }[] {
+  const bucati = text.split(/^\s*#{1,6}\s*(.+?)\s*$/gm);
+  const sectiuni: { titlu: string | null; corp: string }[] = [];
+
+  const inceput = bucati[0]?.trim();
+  if (inceput) sectiuni.push({ titlu: null, corp: inceput });
+
+  for (let i = 1; i < bucati.length; i += 2) {
+    const titlu = bucati[i]?.trim();
+    const corp = bucati[i + 1]?.trim() ?? "";
+    if (titlu || corp) sectiuni.push({ titlu: titlu || null, corp });
+  }
+
+  return sectiuni.length > 0 ? sectiuni : [{ titlu: null, corp: text.trim() }];
 }
 
 const FIXED_OPENINGS = [
@@ -493,6 +521,18 @@ export function PracticeWorkspace({
         </div>
       )}
 
+      {/* Inchiderea cere doua raspunsuri de la model — evaluatorul si rezumatul — deci
+          trec cateva secunde bune. Pana la plicul 39 ecranul nu spunea nimic in timpul
+          asta. Forma de asteptare e cea folosita deja in aplicatie. */}
+      {isEnding ? (
+        <div>
+          <LoadingStatus label="Se închide sesiunea." />
+          <p className="-mt-3 mb-1 text-xs text-muted-foreground">
+            Cody se uită peste ce ai lucrat. Durează câteva secunde.
+          </p>
+        </div>
+      ) : null}
+
       {/* Container mesaje */}
       <div className="flex-1 overflow-y-auto px-1 py-2 flex flex-col gap-4">
         {turns.length === 0 && !isLoading && (
@@ -636,8 +676,17 @@ export function PracticeWorkspace({
                   Finalizat
                 </Badge>
               </div>
-              <div className="whitespace-pre-wrap leading-relaxed text-foreground font-sans text-xs bg-surface p-3 rounded border">
-                {sessionSummary}
+              <div className="space-y-3 rounded border bg-surface p-3 font-sans text-xs leading-relaxed text-foreground">
+                {taieSinteza(sessionSummary).map((sectiune, i) => (
+                  <section key={i}>
+                    {sectiune.titlu ? (
+                      <h4 className="mb-1 text-sm font-semibold text-foreground">
+                        {sectiune.titlu}
+                      </h4>
+                    ) : null}
+                    <p className="whitespace-pre-wrap">{sectiune.corp}</p>
+                  </section>
+                ))}
               </div>
             </div>
           ) : null}

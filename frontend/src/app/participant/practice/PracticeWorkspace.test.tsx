@@ -153,3 +153,64 @@ describe("PracticeWorkspace — refuzul spune de ce", () => {
     expect(await screen.findByText("Programul nu e pornit.")).toBeTruthy();
   });
 });
+
+describe("PracticeWorkspace — ecranul de final", () => {
+  it("titlurile sintezei se vad ca titluri, nu ca text cu diez", async () => {
+    // Pe ecran scria literal „##Concluzie" si „##Recomandări", cu diez cu tot, pentru
+    // ca sunt titluri de markdown pe care caseta nu le interpreta.
+    api.endPracticeSession.mockResolvedValue({
+      session: { ...SESIUNE_DESCHISA, state: "closed" },
+      summary:
+        "##Concluzie\nAi condus discuția calm.\n\n##Recomandări\nPune mai multe întrebări deschise.",
+    });
+    await porneste();
+
+    fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
+    await waitFor(() => expect(api.endPracticeSession).toHaveBeenCalled());
+
+    expect(await screen.findByRole("heading", { name: "Concluzie" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Recomandări" })).toBeTruthy();
+    expect(screen.getByText("Ai condus discuția calm.")).toBeTruthy();
+    expect(screen.getByText("Pune mai multe întrebări deschise.")).toBeTruthy();
+    // si niciun diez ramas la vedere
+    expect(screen.queryByText(/##/)).toBeNull();
+  });
+
+  it("nu pierde text cand sinteza n-are titluri", async () => {
+    api.endPracticeSession.mockResolvedValue({
+      session: { ...SESIUNE_DESCHISA, state: "closed" },
+      summary: "O sinteză scrisă fără niciun titlu.",
+    });
+    await porneste();
+
+    fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
+    await waitFor(() => expect(api.endPracticeSession).toHaveBeenCalled());
+
+    expect(await screen.findByText("O sinteză scrisă fără niciun titlu.")).toBeTruthy();
+  });
+
+  it("cât se generează sinteza, ecranul spune ce se întâmplă", async () => {
+    // Dupa „Încheie sesiunea" trec cateva secunde bune — doua cereri catre model — si
+    // ecranul nu spunea nimic.
+    let deblocheaza: (v: unknown) => void = () => {};
+    api.endPracticeSession.mockReturnValue(
+      new Promise((resolve) => {
+        deblocheaza = resolve;
+      }),
+    );
+    await porneste();
+
+    fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
+
+    expect(await screen.findByText("Se închide sesiunea.")).toBeTruthy();
+    expect(
+      screen.getByText("Cody se uită peste ce ai lucrat. Durează câteva secunde."),
+    ).toBeTruthy();
+
+    deblocheaza({
+      session: { ...SESIUNE_DESCHISA, state: "closed" },
+      summary: "Gata.",
+    });
+    await waitFor(() => expect(screen.queryByText("Se închide sesiunea.")).toBeNull());
+  });
+});
