@@ -63,8 +63,8 @@ export default async function ProjectEvolutionPage({
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
           Evoluția competențelor se adună din sesiunile cu Cody, care există doar pe
-          proiectele de training. Pentru „{data.projectName}" fila „Rezultate" e cea
-          potrivită.
+          proiectele de training. Pentru {"„"}{data.projectName}{"”"} fila
+          {" „Rezultate” "}e cea potrivită.
         </p>
         <Link
           href={`/trainer/projects/${projectId}/settings`}

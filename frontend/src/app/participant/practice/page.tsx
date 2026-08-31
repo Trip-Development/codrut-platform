@@ -7,7 +7,6 @@ import {
   participantActiveHref,
   participantScopeParams,
   participantActiveProjectType,
-  participantIsTraining,
   participantScopedNavItems,
   participantWorkspaceRequestOptions,
   type ParticipantRouteSearchParams,
