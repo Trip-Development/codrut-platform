@@ -56,7 +56,11 @@ export default async function ProjectLayout({
         </Link>
       }
     >
-      <ProjectTabs basePath={basePath} locked={participants.length === 0} />
+      <ProjectTabs
+        basePath={basePath}
+        locked={participants.length === 0}
+        isTraining={project.project_type === "training"}
+      />
       {children}
     </AppShell>
   );

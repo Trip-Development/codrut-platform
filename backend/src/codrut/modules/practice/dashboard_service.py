@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
@@ -22,6 +22,7 @@ from codrut.modules.practice.models import (
     SessionSample,
 )
 from codrut.modules.practice.competency_aliases import CANONICAL_COMPETENCIES, match_comp
+from codrut.modules.practice.evaluator import TRAINER_PREFIX
 from codrut.modules.practice.scoring import (
     CompetencyEvidence,
     ScoreEntry,
@@ -147,16 +148,28 @@ class PracticeDashboardService:
             })
 
         # 7. Insight moments
+        #
+        # DOUA REGULI, amandoua obligatorii:
+        #
+        # a) Momentele sunt de DOUA feluri. Cele cu prefixul `[TRAINER]` sunt notele
+        #    pentru trainer — numele competentei, scorul, analiza — scrise la persoana
+        #    a III-a. Ele NU ajung niciodata pe ecranul participantului. Cele fara
+        #    prefix sunt ale lui, scrise pentru el, la persoana a II-a.
+        #
+        # b) NU exista rezerva „daca omul n-are momente, arata-le pe ale altcuiva".
+        #    Pana la plicul 29 exista, ca sa se vada ceva pe datele de arhiva; cu date
+        #    adevarate si mai multi participanti, ar fi insemnat ca unul citeste
+        #    reflectiile altuia. Ecranul gol e raspunsul corect.
         stmt_moments = (
             select(InsightMoment)
-            .where(InsightMoment.user_id.in_(user_ids))
+            .where(
+                InsightMoment.user_id.in_(user_ids),
+                not_(InsightMoment.summary.startswith(TRAINER_PREFIX)),
+            )
             .order_by(InsightMoment.created_at.desc())
             .limit(10)
         )
         moments = list((await self.session.execute(stmt_moments)).scalars().all())
-        if not moments:
-            stmt_moments_fb = select(InsightMoment).order_by(InsightMoment.created_at.desc()).limit(10)
-            moments = list((await self.session.execute(stmt_moments_fb)).scalars().all())
 
         # 8. Session samples (real_weak / real_improved)
         stmt_samples = (
@@ -170,10 +183,8 @@ class PracticeDashboardService:
             .order_by(SessionSample.created_at.desc())
             .limit(10)
         )
+        # Fara rezerva de la altcineva, din acelasi motiv ca la momente.
         samples = list((await self.session.execute(stmt_samples)).scalars().all())
-        if not samples:
-            stmt_samples_fb = select(SessionSample).order_by(SessionSample.created_at.desc()).limit(10)
-            samples = list((await self.session.execute(stmt_samples_fb)).scalars().all())
 
         return {
             "participant_name": profile.full_name if profile else (principal.email.split("@")[0]),

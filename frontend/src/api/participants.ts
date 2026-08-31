@@ -154,6 +154,7 @@ type BackendParticipantWorkspaceSummary = {
 type BackendParticipantWorkspaceProject = {
   id: string;
   name: string;
+  project_type?: string | null;
   status?: "active" | "completed" | "archived";
   history_bucket?: "current" | "history";
   deadline_label: string;
@@ -336,7 +337,6 @@ function mapParticipantQuestionnaireProject(
     companyName: project.company_name,
     name: project.name,
     status: project.status,
-    projectType: project.project_type ?? null,
     historyBucket: project.history_bucket,
     deadlineLabel: project.deadline_label,
     completedCount: project.completed_count,

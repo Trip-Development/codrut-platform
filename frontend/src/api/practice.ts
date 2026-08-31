@@ -367,3 +367,131 @@ export async function getPracticeDashboard(
   };
 }
 
+
+// ---- evolutia competentelor pe proiect (plic 29, punctul 2) ----
+
+export type EvolutionCompetency = {
+  name: string;
+  testInAverage: number | null;
+  currentAverage: number | null;
+  testOutAverage: number | null;
+  growth: number | null;
+  level: string;
+  levelDescription: string;
+  color: string;
+  scoresCount: number;
+};
+
+export type EvolutionWeekPoint = {
+  weekStart: string;
+  average: number;
+  scoresCount: number;
+};
+
+export type EvolutionParticipant = {
+  participantProfileId: string;
+  userId: string | null;
+  fullName: string;
+  email: string | null;
+  active: boolean;
+  testInScore: number | null;
+  testOutScore: number | null;
+  currentAverage: number | null;
+  sessionsCount: number;
+  closedSessionsCount: number;
+  scoresCount: number;
+};
+
+export type ProjectEvolution = {
+  projectId: string;
+  projectName: string;
+  projectType: string | null;
+  participantsTotal: number;
+  participantsActive: number;
+  testInCompleted: number | null;
+  testOutEnabled: boolean;
+  testPendingNote: string;
+  competencies: EvolutionCompetency[];
+  weeklyAverage: EvolutionWeekPoint[];
+  participants: EvolutionParticipant[];
+};
+
+type RawEvolutionCompetency = {
+  name: string;
+  test_in_average: number | null;
+  current_average: number | null;
+  test_out_average: number | null;
+  growth: number | null;
+  level: string;
+  level_description: string;
+  color: string;
+  scores_count: number;
+};
+
+type RawEvolutionWeek = { week_start: string; average: number; scores_count: number };
+
+type RawEvolutionParticipant = {
+  participant_profile_id: string;
+  user_id: string | null;
+  full_name: string;
+  email: string | null;
+  active: boolean;
+  test_in_score: number | null;
+  test_out_score: number | null;
+  current_average: number | null;
+  sessions_count: number;
+  closed_sessions_count: number;
+  scores_count: number;
+};
+
+export async function getProjectEvolution(
+  projectId: string,
+  options: { headers?: HeadersInit } = {},
+): Promise<ProjectEvolution | null> {
+  const res = await apiFetch(`/api/practice/projects/${projectId}/evolution`, {
+    cache: "no-store",
+    credentials: "include",
+    ...options,
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return {
+    projectId: data.project_id,
+    projectName: data.project_name,
+    projectType: data.project_type ?? null,
+    participantsTotal: data.participants_total,
+    participantsActive: data.participants_active,
+    testInCompleted: data.test_in_completed ?? null,
+    testOutEnabled: Boolean(data.test_out_enabled),
+    testPendingNote: data.test_pending_note,
+    competencies: (data.competencies || []).map((c: RawEvolutionCompetency) => ({
+      name: c.name,
+      testInAverage: c.test_in_average,
+      currentAverage: c.current_average,
+      testOutAverage: c.test_out_average,
+      growth: c.growth,
+      level: c.level,
+      levelDescription: c.level_description,
+      color: c.color,
+      scoresCount: c.scores_count,
+    })),
+    weeklyAverage: (data.weekly_average || []).map((w: RawEvolutionWeek) => ({
+      weekStart: w.week_start,
+      average: w.average,
+      scoresCount: w.scores_count,
+    })),
+    participants: (data.participants || []).map((p: RawEvolutionParticipant) => ({
+      participantProfileId: p.participant_profile_id,
+      userId: p.user_id,
+      fullName: p.full_name,
+      email: p.email,
+      active: p.active,
+      testInScore: p.test_in_score,
+      testOutScore: p.test_out_score,
+      currentAverage: p.current_average,
+      sessionsCount: p.sessions_count,
+      closedSessionsCount: p.closed_sessions_count,
+      scoresCount: p.scores_count,
+    })),
+  };
+}
