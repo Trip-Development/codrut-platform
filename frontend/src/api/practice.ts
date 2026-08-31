@@ -952,7 +952,8 @@ export type TrainingInvitationSent = {
   fullName: string | null;
   email: string | null;
   inviteUrl: string | null;
-  emailSent: boolean;
+  /** A intrat in coada — NU ca a ajuns la om. Plecarea se intampla mai tarziu si poate esua. */
+  emailQueued: boolean;
   error: string | null;
 };
 
@@ -1021,14 +1022,14 @@ export async function sendTrainingInvitations(
     full_name: string | null;
     email: string | null;
     invite_url: string | null;
-    email_sent: boolean;
+    email_queued: boolean;
     error: string | null;
   }) => ({
     participantProfileId: r.participant_profile_id,
     fullName: r.full_name,
     email: r.email,
     inviteUrl: r.invite_url,
-    emailSent: r.email_sent,
+    emailQueued: r.email_queued,
     error: r.error,
   }));
 }

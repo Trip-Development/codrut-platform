@@ -10592,7 +10592,7 @@
         "type": "object"
       },
       "TrainingInvitationSendItem": {
-        "description": "Ce s-a intamplat cu fiecare om, pe rand.\n\n`invite_url` vine si cand `email_sent` e fals: linkul e bun oricum, iar\ntrainerul il poate copia. `error` spune de ce n-a plecat emailul.",
+        "description": "Ce s-a intamplat cu fiecare om, pe rand.\n\n`invite_url` vine si cand emailul nu a intrat la coada: linkul e bun oricum,\niar trainerul il poate copia.\n\n`email_queued` inseamna ca emailul a intrat in coada, NU ca a ajuns la om.\nPlecarea propriu-zisa se intampla mai tarziu si poate esua acolo \u2014 de exemplu\ncu o cheie invalida la furnizor. De aceea campul nu se cheama `email_sent`.",
         "properties": {
           "email": {
             "anyOf": [
@@ -10605,9 +10605,9 @@
             ],
             "title": "Email"
           },
-          "email_sent": {
+          "email_queued": {
             "default": false,
-            "title": "Email Sent",
+            "title": "Email Queued",
             "type": "boolean"
           },
           "error": {

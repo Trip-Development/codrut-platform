@@ -88,7 +88,7 @@ export function TrainingInvitations({
   }
 
   const cuLink = (rezultate ?? []).filter((r) => r.inviteUrl).length;
-  const cuEmail = (rezultate ?? []).filter((r) => r.emailSent).length;
+  const laCoada = (rezultate ?? []).filter((r) => r.emailQueued).length;
   const esuate = (rezultate ?? []).filter((r) => !r.inviteUrl);
 
   return (
@@ -99,6 +99,7 @@ export function TrainingInvitations({
           <p className="mt-1 text-xs text-muted-foreground">
             Bifează oamenii și trimite. Fiecare primește un link personal — pe email, dacă
             emailul e pornit, și oricum în tabelul de mai jos, de unde îl poți copia.
+            Linkul merge chiar dacă emailul nu pleacă.
           </p>
         </div>
         <button
@@ -117,14 +118,18 @@ export function TrainingInvitations({
             {cuLink === 0
               ? "Nicio invitație nu s-a putut face."
               : `Am făcut ${cuLink} ${cuLink === 1 ? "invitație" : "invitații"}` +
-                (cuEmail === cuLink
-                  ? cuEmail === 1
-                    ? " și am trimis emailul."
-                    : " și am trimis emailurile."
-                  : cuEmail === 0
-                    ? ". Emailul nu a plecat — copiază linkurile din tabel."
-                    : `, iar ${cuEmail} au plecat și pe email. Pentru restul, copiază linkul din tabel.`)}
+                (laCoada === 0
+                  ? ". Emailul nu a intrat la coadă — copiază linkurile din tabel."
+                  : laCoada === cuLink
+                    ? `, iar ${laCoada === 1 ? "emailul a intrat" : "emailurile au intrat"} la coadă.`
+                    : `, iar ${laCoada} ${laCoada === 1 ? "email a intrat" : "emailuri au intrat"} la coadă. Pentru restul, copiază linkul din tabel.`)}
           </p>
+          {laCoada > 0 ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              „La coadă" nu înseamnă „a ajuns". Plecarea se face după aceea și poate
+              eșua la furnizorul de email. Linkul din tabel merge oricum.
+            </p>
+          ) : null}
           {esuate.length > 0 ? (
             <ul className="mt-2 space-y-1 text-xs text-danger">
               {esuate.map((r) => (
@@ -134,9 +139,9 @@ export function TrainingInvitations({
               ))}
             </ul>
           ) : null}
-          {rezultate.some((r) => r.inviteUrl && !r.emailSent && r.error) ? (
+          {rezultate.some((r) => r.inviteUrl && !r.emailQueued && r.error) ? (
             <p className="mt-2 text-xs text-muted-foreground">
-              {rezultate.find((r) => r.inviteUrl && !r.emailSent && r.error)?.error}
+              {rezultate.find((r) => r.inviteUrl && !r.emailQueued && r.error)?.error}
             </p>
           ) : null}
           {reimprospatez ? (
