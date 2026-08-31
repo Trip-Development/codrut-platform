@@ -17,6 +17,11 @@ CODY_PROMPT_VERSION = "v2.4"
 _PROMPTS_DIR = Path(__file__).parent
 
 REGULI_GENERALE_TEMPLATE = (_PROMPTS_DIR / "reguli-generale.md").read_text(encoding="utf-8").strip()
+# Doar la coaching. Cele doua reguli de aici — contextul si regula de aur — lucreaza
+# impotriva celorlalte doua moduri: la role-play il fac sa intrebe ce situatie vrea, desi
+# `actor.md` interzice exact asta, iar la quiz ii interzic sa dea raspunsul corect, care
+# e chiar ce trebuie sa faca acolo.
+REGULI_COACHING_PROMPT = (_PROMPTS_DIR / "reguli-coaching.md").read_text(encoding="utf-8").strip()
 ACTOR_PROMPT = (_PROMPTS_DIR / "actor.md").read_text(encoding="utf-8").strip()
 EVALUARE_PROMPT = (_PROMPTS_DIR / "evaluare.md").read_text(encoding="utf-8").strip()
 COACHING_PROMPT = (_PROMPTS_DIR / "coaching.md").read_text(encoding="utf-8").strip()
@@ -110,7 +115,10 @@ def build_quiz_block(
     project_competencies: list[str] | None = None,
 ) -> str:
     is_mix = quiz_competency == "mix"
-    nr = 7 if is_mix else 5
+    # Zece, mereu — decizia lui Andrei, 31 august: „ca sa poti mereu sa numeri multiplu
+    # de zece puncte la finalul quiz-ului", deci scorul se citeste direct in procente.
+    # Erau 7 la mix si 5 altfel, copiate din aplicatia veche.
+    nr = 10
     comps = ", ".join(project_competencies) if project_competencies else "toate competentele de comunicare"
     target = f"toate competențele: {comps}" if is_mix else f'competența "{quiz_competency}"'
 
@@ -122,7 +130,9 @@ def build_quiz_block(
             f'2. FORMAT: "Întrebarea N/{nr}: [întrebare]\\nA. ...\\nB. ...\\nC. ...\\nD. ..."\n'
             f"3. DISTRIBUȚIE VARIANTE CORECTE: Distribuie răspunsurile corecte între A, B, C, D. Max 2 la aceeași literă.\n"
             f'4. DUPĂ FIECARE RĂSPUNS: corect/greșit + 1 frază explicație. Apoi IMEDIAT "Întrebarea [N+1]/{nr}:".\n'
-            f'5. PRIMUL TĂU MESAJ: scrie direct "Întrebarea 1/{nr}:" fără salut.\n'
+            f"5. DUPĂ PRIMUL SCHIMB DE REPLICI (small talk): anunți scurt și începi — "
+            f"„Hai să vedem ce-ai reținut.” Nu aștepți răspuns, nu întrebi ce vrea să "
+            f'lucreze. Treci DIRECT la "Întrebarea 1/{nr}:", în aceeași replică.\n'
             f'6. SCOR FINAL: "🏆 Scor final: X/{nr} (Y%)"\n'
             f"7. INTERZIS: coaching, întrebări deschise, ieșire din quiz.\n"
             f"Tema: {target}.\n---"
@@ -210,7 +220,9 @@ def get_system_prompt_for_kind(
     material, _ = get_core_material(biblioteca_path)
 
     kind_val = kind.value if isinstance(kind, SessionKind) else str(kind)
-    e_roleplay = kind_val == "roleplay"
+    # „coaching" si orice altceva nerecunoscut cad pe ramura de coaching mai jos, deci
+    # asta e aceeasi impartire, scrisa o singura data.
+    e_coaching = kind_val not in ("roleplay", "knowledge")
 
     # Dynamic rules for first message vs subsequent transitions
     if history_length <= 1:
@@ -222,16 +234,16 @@ def get_system_prompt_for_kind(
         dyn_rules = '- REGULA ANTI-SALUT: INTERZIS să mai folosești "Salut", "Bună".'
         # Biblioteca de tranzitii e de coaching: intreaba omul ce vrea sa discute.
         #
-        # La role-play nu are ce cauta — `actor.md` cere exact opusul: „nu ceri
-        # permisiunea, nu intrebi ce situatie vrea. Treci DIRECT la SETUP", iar
-        # `reguli-comportament.md` §6 interzice frazele de tranzitie acolo. Pana la
-        # plicul 37 nu ajungeau in role-play, fiindca `reguli_generale` nu se trimitea
-        # deloc; au venit odata cu evaluarea, si de atunci in acelasi prompt stateau
-        # doua instructiuni opuse.
+        # Nu are ce cauta in celelalte doua moduri. La role-play `actor.md` cere exact
+        # opusul — „nu ceri permisiunea, nu intrebi ce situatie vrea. Treci DIRECT la
+        # SETUP" — iar tranzitia E chiar SETUP-ul. La quiz, tranzitia e chiar prima
+        # intrebare; plicul 40 a scos-o doar din role-play, si asa Cody raspundea la
+        # quiz cu „Ce este cel mai important pentru tine sa exploram in aceasta
+        # sesiune?".
         #
-        # La role-play tranzitia E chiar SETUP-ul. La coaching si la quiz, biblioteca
-        # ramane neatinsa.
-        if not e_roleplay:
+        # Pana la plicul 37 nu ajungeau nicaieri in afara de coaching, fiindca
+        # `reguli_generale` nu se trimitea in alta parte.
+        if e_coaching:
             dyn_rules += (
                 '\n- BIBLIOTECA DE TRANZIȚII (ROTAȚIE RANDOM): Folosește OBLIGATORIU o singură dată una din: '
                 '"Ce ai zice să trecem la subiectul principal de azi?" / '
@@ -278,8 +290,11 @@ def get_system_prompt_for_kind(
         return f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n{QUIZ_PROMPT}{quiz_block}{memory_block}"
 
     else:
-        # Coaching (strategie) or default
-        return f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n{COACHING_PROMPT}{memory_block}"
+        # Coaching (strategie) or default. Singurul loc unde intra regulile de coaching.
+        return (
+            f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n"
+            f"{REGULI_COACHING_PROMPT}\n\n---\n\n{COACHING_PROMPT}{memory_block}"
+        )
 
 
 def get_summary_prompt(name: str, opt_text: str, history: str) -> str:
