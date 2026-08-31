@@ -31,12 +31,16 @@ from codrut.modules.practice.schemas import (
     PracticeTurnResponse,
     PracticeTurnSubmitResponse,
     TrainerNoteCreateRequest,
+    TrainingInvitationItem,
     TrainerNoteItem,
 )
 from codrut.modules.practice.service import PracticeSessionService
 from codrut.modules.practice.evolution_service import PracticeEvolutionService
 from codrut.modules.practice.person_service import PracticePersonService
-from codrut.modules.practice.room_service import PracticeRoomService
+from codrut.modules.practice.room_service import (
+    PracticeInvitationsService,
+    PracticeRoomService,
+)
 from codrut.modules.practice.setup_service import PracticeSetupService
 
 router = APIRouter()
@@ -340,3 +344,18 @@ async def add_trainer_note(
     )
     await session.commit()
     return TrainerNoteItem(**nota)
+
+
+@router.get(
+    "/projects/{project_id}/invitations",
+    response_model=list[TrainingInvitationItem],
+)
+async def list_training_invitations(
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> list[TrainingInvitationItem]:
+    """Cine e invitat, cine a intrat, cine a facut testul de intrare."""
+    require_trainer_principal(principal)
+    randuri = await PracticeInvitationsService(session).statuses(project_id)
+    return [TrainingInvitationItem(**r) for r in randuri]

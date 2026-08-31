@@ -346,3 +346,15 @@ class PracticePersonResponse(BaseModel):
     trainer_recommendations: list[PersonTextItem] = Field(default_factory=list)
     session_samples: list[PersonSampleItem] = Field(default_factory=list)
     trainer_notes: list[TrainerNoteItem] = Field(default_factory=list)
+
+
+# ---- invitatiile in forma de training (plic 30) ----
+
+class TrainingInvitationItem(BaseModel):
+    participant_profile_id: UUID
+    full_name: str
+    email: str | None = None
+    invited: bool = False
+    invited_at: str | None = None
+    has_account: bool = False
+    has_test_in: bool = False
