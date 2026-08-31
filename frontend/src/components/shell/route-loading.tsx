@@ -1,5 +1,9 @@
 import { AppShell } from "@/components/shell/app-shell";
-import { participantNavItems, trainerNavItems } from "@/components/shell/nav";
+import {
+  participantNavItemsForType,
+  participantTrainingNavItems,
+  trainerNavItems,
+} from "@/components/shell/nav";
 import {
   CardsWorkspaceSkeleton,
   EditorWorkspaceSkeleton,
@@ -47,11 +51,13 @@ export function ParticipantRouteLoading({
   activeHref,
   kind,
   loadingLabel,
+  projectType,
 }: {
   title: string;
   activeHref: string;
   kind: ParticipantLoadingKind;
   loadingLabel?: string;
+  projectType?: string | null;
 }) {
   return (
     <AppShell
@@ -59,7 +65,7 @@ export function ParticipantRouteLoading({
       eyebrow=""
       title={title}
       description=""
-      navItems={participantNavItems}
+      navItems={participantNavItemsForProjectType(projectType)}
       activeHref={activeHref}
       accountIdentityPending
     >
@@ -70,6 +76,24 @@ export function ParticipantRouteLoading({
       {kind === "account" ? <SettingsSkeleton compact /> : null}
     </AppShell>
   );
+}
+
+/**
+ * Meniul participantului cat timp nu se stie inca tipul proiectului.
+ *
+ * Ecranul asta („Pregatim spatiul participant / Sincronizare") apare inaintea
+ * datelor, deci de multe ori tipul lipseste. Pana acum se punea cu mana meniul de
+ * coaching, iar omul de la training vedea „Chestionare" si „Rezultate" la fiecare
+ * intrare, pana se incarca pagina.
+ *
+ * Cand tipul nu se stie, se ia lista de training: la training meniul e submultime,
+ * deci un element care apare tarziu deranjeaza mai putin decat unul care apare si
+ * apoi dispare.
+ */
+function participantNavItemsForProjectType(projectType?: string | null) {
+  return projectType == null
+    ? participantTrainingNavItems
+    : participantNavItemsForType(projectType);
 }
 
 export function LoadingStatus({ label }: { label: string }) {
