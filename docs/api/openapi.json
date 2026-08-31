@@ -10551,17 +10551,6 @@
             "title": "Has Test In",
             "type": "boolean"
           },
-          "invite_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Invite Url"
-          },
           "invited": {
             "default": false,
             "title": "Invited",
@@ -10592,7 +10581,7 @@
         "type": "object"
       },
       "TrainingInvitationSendItem": {
-        "description": "Ce s-a intamplat cu fiecare om, pe rand.\n\n`invite_url` vine si cand emailul nu a intrat la coada: linkul e bun oricum,\niar trainerul il poate copia.\n\n`email_queued` inseamna ca emailul a intrat in coada, NU ca a ajuns la om.\nPlecarea propriu-zisa se intampla mai tarziu si poate esua acolo \u2014 de exemplu\ncu o cheie invalida la furnizor. De aceea campul nu se cheama `email_sent`.",
+        "description": "Ce s-a intamplat cu fiecare om, pe rand.\n\n`invite_url` e linkul prin care omul isi pune parola. Vine si cand emailul nu\na intrat la coada: linkul e bun oricum, iar trainerul il poate copia. Se poate\narata O SINGURA DATA, acum: in baza nu se pastreaza decat amprenta lui.\n\n`email_queued` inseamna ca emailul a intrat in coada, NU ca a ajuns la om.\nPlecarea propriu-zisa se intampla mai tarziu si poate esua acolo \u2014 de exemplu\ncu o cheie invalida la furnizor. De aceea campul nu se cheama `email_sent`.",
         "properties": {
           "email": {
             "anyOf": [

@@ -459,17 +459,11 @@ class IdentityService:
         project_ids = {
             assignment.project_id for assignment in assignments if assignment.project_id is not None
         }
-        if claimed_project_id is not None and project_ids and project_ids != {claimed_project_id}:
+        if claimed_project_id is not None and project_ids != {claimed_project_id}:
             raise DomainError(
                 "Task link assignment scope does not match its project.",
                 code="task_link_scope_mismatch",
             )
-        # Un link de training nu are nicio asignare, deci proiectul lui nu poate
-        # veni din sarcini — vine din jeton. Nu e o portita: jetonul e semnat, iar
-        # randul din `assignment_invites` a fost deja potrivit pe acelasi proiect
-        # mai sus. Cand exista asignari, regula de mai sus ramane neatinsa.
-        if not project_ids and claimed_project_id is not None:
-            project_ids = {claimed_project_id}
         if len(project_ids) != 1:
             return None, company_name, token_expires_at
 
@@ -1237,7 +1231,6 @@ class IdentityService:
         expires_in_days: int = 3650,
         expires_at: datetime | None = None,
         force_rotate: bool = False,
-        allow_without_assignments: bool = False,
     ) -> AssignmentInvite:
         from sqlalchemy import select
 
@@ -1263,10 +1256,7 @@ class IdentityService:
             assignment_ids=assignment_ids,
             project_id=project_id,
         )
-        # Un proiect de training nu are chestionare, deci nu are asignari. Doar
-        # acolo se deschide poarta asta; in rest o invitatie fara sarcina activa
-        # ramane refuzata.
-        if not assignment_ids and not allow_without_assignments:
+        if not assignment_ids:
             raise DomainError(
                 "Cannot create invitation without active assignments.",
                 code="no_active_assignments",
@@ -1315,11 +1305,7 @@ class IdentityService:
             project_id=project_id,
         )
         settings = get_settings()
-        token = create_task_token(
-            claims,
-            settings,
-            allow_without_assignments=allow_without_assignments,
-        )
+        token = create_task_token(claims, settings)
 
         # 6. Save invite to DB
         invite = AssignmentInvite(

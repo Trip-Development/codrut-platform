@@ -939,10 +939,10 @@ export type TrainingInvitation = {
   participantProfileId: string;
   fullName: string;
   email: string | null;
+  /** I s-a facut contul. */
   invited: boolean;
   invitedAt: string | null;
-  /** Linkul personal, cand invitatia e inca activa. Nu se scrie nicaieri in jurnal. */
-  inviteUrl: string | null;
+  /** Si-a pus parola lui, deci poate intra. */
   hasAccount: boolean;
   hasTestIn: boolean;
 };
@@ -979,7 +979,6 @@ export async function getTrainingInvitations(
     email: string | null;
     invited: boolean;
     invited_at: string | null;
-    invite_url: string | null;
     has_account: boolean;
     has_test_in: boolean;
   }) => ({
@@ -988,7 +987,6 @@ export async function getTrainingInvitations(
     email: r.email,
     invited: r.invited,
     invitedAt: r.invited_at,
-    inviteUrl: r.invite_url ?? null,
     hasAccount: r.has_account,
     hasTestIn: r.has_test_in,
   }));
@@ -997,10 +995,13 @@ export async function getTrainingInvitations(
 /**
  * Trimite invitatiile pentru un proiect de training.
  *
- * Nu ruta obisnuita de invitatii: aceea cere ca omul sa aiba deja o asignare de
- * chestionar, iar un proiect de training n-are niciuna, deci ii sarea tacut pe
- * toti. Asta e calea trainingului si intoarce linkul chiar si cand emailul nu
- * pleaca.
+ * La training invitatia e la CONT, nu la un chestionar: se face contul omului si
+ * i se trimite un link prin care isi pune parola. Ruta obisnuita de invitatii e
+ * legata de asignari de chestionar, si asa trebuie sa ramana — la coaching
+ * legatura ESTE sarcina.
+ *
+ * Linkul se intoarce chiar si cand emailul nu pleaca, si se poate arata o singura
+ * data: in baza nu se pastreaza decat amprenta lui.
  */
 export async function sendTrainingInvitations(
   projectId: string,

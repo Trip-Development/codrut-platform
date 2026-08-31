@@ -39,9 +39,12 @@ Scopul ei este să permită testarea funcționalităților noi (de exemplu modul
      amândouă: o cheie Brevo adevărată în `.env` și
      `CODRUT_EMAIL_BREVO_SANDBOX_ENABLED=false`. Nu se schimbă una fără cealaltă,
      și niciodată fără lista de destinatari de mai sus.
-   - **Linkul de invitație nu depinde de email.** Trainerul îl vede în tabel,
-     lângă fiecare om, cu un buton „Copiază link". Drumul participantului se poate
-     parcurge în întregime și cu poșta oprită.
+   - **Linkul de invitație nu depinde de email.** La training, invitația e o
+     invitație la cont: se face contul omului și i se trimite un link prin care
+     își pune parola. Linkul apare și în tabel, cu un buton „Copiază link", ca
+     trainerul să-l poată da mai departe și cu poșta oprită. Se arată o singură
+     dată, la trimitere — în bază nu se păstrează decât amprenta lui, ca la orice
+     link de parolă.
 5. **NU deschide porturi pe server:**  
    Niciun container de test nu expune porturi publice pe server.
 6. **Prioritate Traefik scăzută:**  

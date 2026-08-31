@@ -9,18 +9,22 @@ import type { TrainingInvitation, TrainingInvitationSent } from "@/api/practice"
 import { Card } from "@/components/ui/card";
 
 /**
- * Invitațiile în formă de training.
+ * Invitațiile la training. Sunt invitații la CONT, nu la un chestionar.
  *
- * Ce s-a crezut la plicul 30 și s-a dovedit greșit la 31: că ruta obișnuită de
- * invitații merge și fără ciclu de evaluare. Nu merge. Acea rută cere ca omul să
- * aibă deja o asignare de chestionar activă; altfel îl sare tăcut și nu scrie
- * nimic — nici invitație, nici email. Un proiect de training n-are chestionare,
- * deci n-avea cum să trimită nimic, niciodată.
+ * La coaching sunt două feluri de oameni: liderul, care are cont, și colegii lui,
+ * care primesc o legătură trecătoare către un chestionar și dispar. De aceea
+ * invitația de acolo e legată de asignări — legătura ESTE sarcina.
  *
- * Acum se cheamă calea trainingului, care întoarce linkul fiecărui om chiar și
- * când emailul nu pleacă. Emailul poate cădea din motive care nu țin de noi;
- * drumul participantului trebuie să se poată parcurge oricum — trainerul copiază
- * linkul și îl dă cum vrea.
+ * La training nu sunt două feluri. Toți exersează cu Cody, toți dau testul de
+ * intrare și pe cel de ieșire, toți au tablou de competențe. Nu primesc niciun
+ * chestionar: trebuie doar să intre în cont, unde găsesc pașii următori.
+ *
+ *     bifezi oamenii → li se face contul → email cu link de pus parola
+ *     → își pun parola → cont permanent → intră la testul de intrare
+ *
+ * Linkul se poate arăta o singură dată, la trimitere: în bază nu se păstrează
+ * decât amprenta lui, ca la orice link de parolă. „Trimite din nou" face unul
+ * proaspăt și îl stinge pe cel vechi.
  */
 export function TrainingInvitations({
   projectId,
@@ -37,9 +41,7 @@ export function TrainingInvitations({
   const [eroare, setEroare] = useState<string | null>(null);
   const [copiat, setCopiat] = useState<string | null>(null);
 
-  // Linkul proaspăt trimis are prioritate față de cel adus de server.
   const linkDupaProfil = new Map<string, string>();
-  for (const r of rows) if (r.inviteUrl) linkDupaProfil.set(r.participantProfileId, r.inviteUrl);
   for (const r of rezultate ?? []) {
     if (r.inviteUrl) linkDupaProfil.set(r.participantProfileId, r.inviteUrl);
   }
@@ -78,7 +80,6 @@ export function TrainingInvitations({
       const raspuns = await sendTrainingInvitations(projectId, Array.from(bifati));
       setRezultate(raspuns);
       setBifati(new Set());
-      // Tabelul se aduce singur la zi. Andrei nu reîncarcă pagina cu mâna.
       startReimprospatare(() => router.refresh());
     } catch (e) {
       setEroare(e instanceof Error ? e.message : "Nu am putut trimite invitațiile.");
@@ -90,6 +91,7 @@ export function TrainingInvitations({
   const cuLink = (rezultate ?? []).filter((r) => r.inviteUrl).length;
   const laCoada = (rezultate ?? []).filter((r) => r.emailQueued).length;
   const esuate = (rezultate ?? []).filter((r) => !r.inviteUrl);
+  const auLinkFaraEmail = (rezultate ?? []).find((r) => r.inviteUrl && !r.emailQueued && r.error);
 
   return (
     <Card className="overflow-hidden">
@@ -97,9 +99,9 @@ export function TrainingInvitations({
         <div>
           <h3 className="text-base font-semibold text-foreground">Invitații</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Bifează oamenii și trimite. Fiecare primește un link personal — pe email, dacă
-            emailul e pornit, și oricum în tabelul de mai jos, de unde îl poți copia.
-            Linkul merge chiar dacă emailul nu pleacă.
+            Bifează oamenii și trimite. Fiecare primește pe email un link prin care își pune
+            parola. După ce intră, găsește acolo pașii următori. Linkul apare și mai jos, ca
+            să-l poți da mai departe chiar dacă emailul nu pleacă.
           </p>
         </div>
         <button
@@ -122,12 +124,21 @@ export function TrainingInvitations({
                   ? ". Emailul nu a intrat la coadă — copiază linkurile din tabel."
                   : laCoada === cuLink
                     ? `, iar ${laCoada === 1 ? "emailul a intrat" : "emailurile au intrat"} la coadă.`
-                    : `, iar ${laCoada} ${laCoada === 1 ? "email a intrat" : "emailuri au intrat"} la coadă. Pentru restul, copiază linkul din tabel.`)}
+                    : `, iar ${laCoada} au intrat la coadă. Pentru restul, copiază linkul din tabel.`)}
           </p>
           {laCoada > 0 ? (
             <p className="mt-1 text-xs text-muted-foreground">
-              {"„La coadă” nu înseamnă „a ajuns”."} Plecarea se face după aceea și poate
-              eșua la furnizorul de email. Linkul din tabel merge oricum.
+              {"„La coadă” nu înseamnă „a ajuns”."} Plecarea se face după aceea și poate eșua la
+              furnizorul de email. Linkul din tabel merge oricum.
+            </p>
+          ) : null}
+          {auLinkFaraEmail ? (
+            <p className="mt-2 text-xs text-muted-foreground">{auLinkFaraEmail.error}</p>
+          ) : null}
+          {cuLink > 0 ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Copiază linkurile acum dacă ai nevoie de ele: sunt linkuri de parolă și nu se
+              păstrează. Le poți face oricând din nou cu „Trimite invitații”.
             </p>
           ) : null}
           {esuate.length > 0 ? (
@@ -138,11 +149,6 @@ export function TrainingInvitations({
                 </li>
               ))}
             </ul>
-          ) : null}
-          {rezultate.some((r) => r.inviteUrl && !r.emailQueued && r.error) ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {rezultate.find((r) => r.inviteUrl && !r.emailQueued && r.error)?.error}
-            </p>
           ) : null}
           {reimprospatez ? (
             <p className="mt-2 text-xs text-muted-foreground">Aduc tabelul la zi…</p>
@@ -164,9 +170,9 @@ export function TrainingInvitations({
                 />
               </th>
               <th className="p-4 font-medium">Participant</th>
-              <th className="p-4 font-medium">Link de intrare</th>
+              <th className="p-4 font-medium">Link de pus parola</th>
               <th className="p-4 text-center font-medium">Invitat</th>
-              <th className="p-4 text-center font-medium">A intrat</th>
+              <th className="p-4 text-center font-medium">Și-a făcut contul</th>
               <th className="p-4 text-center font-medium">A făcut testul de intrare</th>
             </tr>
           </thead>
@@ -210,10 +216,16 @@ export function TrainingInvitations({
                           </button>
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground">încă neinvitat</span>
+                        <span className="text-xs text-muted-foreground">
+                          {r.hasAccount
+                            ? "și-a pus parola"
+                            : r.invited
+                              ? "trimis — bifează și trimite din nou pentru un link nou"
+                              : "încă neinvitat"}
+                        </span>
                       )}
                     </td>
-                    <Semn da={r.invited || link !== null} />
+                    <Semn da={r.invited} />
                     <Semn da={r.hasAccount} />
                     <Semn da={r.hasTestIn} />
                   </tr>
