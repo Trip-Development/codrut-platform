@@ -209,6 +209,9 @@ def get_system_prompt_for_kind(
 ) -> str:
     material, _ = get_core_material(biblioteca_path)
 
+    kind_val = kind.value if isinstance(kind, SessionKind) else str(kind)
+    e_roleplay = kind_val == "roleplay"
+
     # Dynamic rules for first message vs subsequent transitions
     if history_length <= 1:
         dyn_rules = (
@@ -216,24 +219,34 @@ def get_system_prompt_for_kind(
             f'"Cum îți merge ziua până acum?". INTERZIS orice frază de tranziție la subiect.'
         )
     else:
-        dyn_rules = (
-            '- REGULA ANTI-SALUT: INTERZIS să mai folosești "Salut", "Bună".\n'
-            '- BIBLIOTECA DE TRANZIȚII (ROTAȚIE RANDOM): Folosește OBLIGATORIU o singură dată una din: '
-            '"Ce ai zice să trecem la subiectul principal de azi?" / '
-            '"Spre ce provocare vrei să ne îndreptăm atenția acum?" / '
-            '"Ce este cel mai important pentru tine să explorăm în această sesiune?" / '
-            '"Hai să vedem, ce situație concretă vrei să abordăm împreună astăzi?" / '
-            '"Cu ce crezi că ar fi cel mai util să începem discuția noastră?"\n'
-            '- SENZORUL ANTI-PAPAGAL: Verifică istoricul. Dacă ai mai folosit recent o frază de tranziție, alege obligatoriu alta.'
-        )
+        dyn_rules = '- REGULA ANTI-SALUT: INTERZIS să mai folosești "Salut", "Bună".'
+        # Biblioteca de tranzitii e de coaching: intreaba omul ce vrea sa discute.
+        #
+        # La role-play nu are ce cauta — `actor.md` cere exact opusul: „nu ceri
+        # permisiunea, nu intrebi ce situatie vrea. Treci DIRECT la SETUP", iar
+        # `reguli-comportament.md` §6 interzice frazele de tranzitie acolo. Pana la
+        # plicul 37 nu ajungeau in role-play, fiindca `reguli_generale` nu se trimitea
+        # deloc; au venit odata cu evaluarea, si de atunci in acelasi prompt stateau
+        # doua instructiuni opuse.
+        #
+        # La role-play tranzitia E chiar SETUP-ul. La coaching si la quiz, biblioteca
+        # ramane neatinsa.
+        if not e_roleplay:
+            dyn_rules += (
+                '\n- BIBLIOTECA DE TRANZIȚII (ROTAȚIE RANDOM): Folosește OBLIGATORIU o singură dată una din: '
+                '"Ce ai zice să trecem la subiectul principal de azi?" / '
+                '"Spre ce provocare vrei să ne îndreptăm atenția acum?" / '
+                '"Ce este cel mai important pentru tine să explorăm în această sesiune?" / '
+                '"Hai să vedem, ce situație concretă vrei să abordăm împreună astăzi?" / '
+                '"Cu ce crezi că ar fi cel mai util să începem discuția noastră?"\n'
+                '- SENZORUL ANTI-PAPAGAL: Verifică istoricul. Dacă ai mai folosit recent o frază de tranziție, alege obligatoriu alta.'
+            )
 
     reguli_generale = REGULI_GENERALE_TEMPLATE.replace("{dynamic_rules}", dyn_rules)
 
     memory_block = ""
     if memories and history_length <= 2:
         memory_block = format_participant_memory(memories)
-
-    kind_val = kind.value if isinstance(kind, SessionKind) else str(kind)
 
     if kind_val == "roleplay":
         # Actorul si evaluarea merg impreuna, ca in aplicatia veche si ca in plicul 22:
