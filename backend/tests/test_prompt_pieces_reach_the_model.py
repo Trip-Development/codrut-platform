@@ -82,7 +82,7 @@ def test_memoria_ajunge_in_prompt_la_inceputul_sesiunii():
 
 def test_versiunea_promptului_a_urcat():
     """Compozitia s-a schimbat; fara urcare, sesiunile nu se mai pot compara."""
-    assert CODY_PROMPT_VERSION == "v2.1"
+    assert CODY_PROMPT_VERSION == "v2.2"
 
 
 def test_serviciul_chiar_trimite_cele_trei_piese():
@@ -181,3 +181,54 @@ def test_deschiderea_nu_pune_vorbe_in_gura_participantului():
     # si nu e o replica pusa in gura omului
     assert "Salut" not in DESCHIDE_SESIUNEA
     assert "sesiunea" in DESCHIDE_SESIUNEA.lower()
+
+
+# ---- plicul 39 ----
+
+
+def test_blocul_json_nu_pleaca_spre_ecran():
+    """`rezumat.md` cere modelului proza PLUS un bloc JSON, din care se scriu scorurile.
+
+    Pana la plicul 39 spre ecran pleca textul intreg, deci participantul vedea acolade,
+    ghilimele si nume de campuri in engleza.
+    """
+    from codrut.modules.practice.service import doar_proza
+
+    intreg = (
+        "##Concluzie\n"
+        "Ai condus discutia calm si ai propus un pas concret.\n\n"
+        "##Recomandari\n"
+        "Pune mai multe intrebari deschise.\n\n"
+        "```json\n"
+        '{ "topic": "Sef agresiv", "characters": ["Vali"],\n'
+        '  "scores": { "questionsRatio": 1, "assertiveness": 6 } }\n'
+        "```"
+    )
+    proza = doar_proza(intreg)
+
+    # proza ramane intreaga, si Concluzie SI Recomandari
+    assert "Ai condus discutia calm" in proza
+    assert "Pune mai multe intrebari deschise" in proza
+    # blocul tehnic nu mai pleaca
+    assert "```json" not in proza
+    assert "questionsRatio" not in proza
+    assert "{" not in proza
+
+
+def test_doar_proza_nu_strica_o_sinteza_fara_bloc():
+    from codrut.modules.practice.service import doar_proza
+
+    assert doar_proza("Doar proza, fara bloc.") == "Doar proza, fara bloc."
+    assert doar_proza(None) is None
+    assert doar_proza("") == ""
+
+
+def test_sinteza_care_iese_din_end_session_e_curata():
+    """Aici se apara legatura, nu doar functia: `end_session` trebuie sa o cheme."""
+    import inspect
+
+    from codrut.modules.practice.service import PracticeSessionService
+
+    sursa = inspect.getsource(PracticeSessionService.end_session)
+    assert "return session_obj, doar_proza(summary_text)" in sursa
+    assert "return session_obj, summary_text" not in sursa
