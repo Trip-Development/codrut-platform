@@ -354,9 +354,9 @@ class TrainingInvitationItem(BaseModel):
     participant_profile_id: UUID
     full_name: str
     email: str | None = None
+    # „Invitat" = i s-a facut contul. „A intrat" = si-a pus parola lui.
     invited: bool = False
     invited_at: str | None = None
-    invite_url: str | None = None
     has_account: bool = False
     has_test_in: bool = False
 
@@ -370,8 +370,9 @@ class TrainingInvitationSendRequest(BaseModel):
 class TrainingInvitationSendItem(BaseModel):
     """Ce s-a intamplat cu fiecare om, pe rand.
 
-    `invite_url` vine si cand emailul nu a intrat la coada: linkul e bun oricum,
-    iar trainerul il poate copia.
+    `invite_url` e linkul prin care omul isi pune parola. Vine si cand emailul nu
+    a intrat la coada: linkul e bun oricum, iar trainerul il poate copia. Se poate
+    arata O SINGURA DATA, acum: in baza nu se pastreaza decat amprenta lui.
 
     `email_queued` inseamna ca emailul a intrat in coada, NU ca a ajuns la om.
     Plecarea propriu-zisa se intampla mai tarziu si poate esua acolo — de exemplu
