@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import {
+  PracticeError,
   startPracticeSession,
   submitPracticeTurn,
   endPracticeSession,
@@ -49,6 +50,31 @@ const PRACTICE_OPTIONS: {
     disabled: true,
   },
 ];
+
+/**
+ * Ce scrie pe ecran cand serverul refuza pornirea unei sesiuni.
+ *
+ * Plafonul zilnic nu e cod stricat, e o setare — dar pana la plicul 35 omul apasa si
+ * primea acelasi text generic, deci parea ca aplicatia s-a blocat. Acum spune cate
+ * sesiuni are pe zi, cate a facut, si ca numaratoarea se reia maine.
+ */
+function mesajDeRefuz(err: unknown): string {
+  if (err instanceof PracticeError && err.code === "practice_daily_limit") {
+    const peZi = Number(err.details.max_sessions_per_day);
+    const facute = Number(err.details.sessions_today);
+    const cate = Number.isFinite(peZi)
+      ? `Ai ${peZi} ${peZi === 1 ? "sesiune" : "sesiuni"} pe zi pe acest program`
+      : "Ai atins numărul de sesiuni pe zi al acestui program";
+    const consumate = Number.isFinite(facute) ? `, iar azi ai făcut ${facute}` : "";
+    return (
+      `Ai ajuns la limita de sesiuni pe ziua de azi. ${cate}${consumate}. ` +
+      "Numărătoarea se reia mâine. Dacă ai nevoie de mai multe, cere-i trainerului " +
+      "să ridice limita din fila Setări a proiectului."
+    );
+  }
+  if (err instanceof Error) return err.message;
+  return "Nu am putut porni sesiunea de practică";
+}
 
 const FIXED_OPENINGS = [
   {
@@ -137,7 +163,7 @@ export function PracticeWorkspace({
         );
       }
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : "Eroare la pornirea sesiunii");
+      setErrorMsg(mesajDeRefuz(err));
     } finally {
       setIsLoading(false);
     }

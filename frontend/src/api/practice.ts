@@ -40,6 +40,35 @@ export type PracticeTurnSubmitResponse = {
   sessionState: SessionState;
 };
 
+/**
+ * Eroare care isi pastreaza codul si cifrele venite de la server.
+ *
+ * Pana la plicul 35 clientul citea `err.detail`, care nu exista: plicul de eroare al
+ * aplicatiei e `{error:{code,message,details}}`. Asa ca orice refuz — inclusiv
+ * plafonul zilnic — ajungea pe ecran ca acelasi text generic, iar omul apasa si nu
+ * intelegea de ce nu se intampla nimic.
+ */
+export class PracticeError extends Error {
+  readonly code: string;
+  readonly details: Record<string, unknown>;
+
+  constructor(message: string, code: string, details: Record<string, unknown>) {
+    super(message);
+    this.name = "PracticeError";
+    this.code = code;
+    this.details = details;
+  }
+}
+
+function citesteEroarea(corp: unknown, textImplicit: string): PracticeError {
+  const plic = (corp as { error?: { code?: string; message?: string; details?: unknown } })?.error;
+  const detalii =
+    plic?.details && typeof plic.details === "object" && !Array.isArray(plic.details)
+      ? (plic.details as Record<string, unknown>)
+      : {};
+  return new PracticeError(plic?.message || textImplicit, plic?.code || "unknown", detalii);
+}
+
 export async function startPracticeSession(payload: {
   projectId: string;
   kind: SessionKind;
@@ -56,7 +85,7 @@ export async function startPracticeSession(payload: {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Nu am putut porni sesiunea de practică");
+    throw citesteEroarea(err, "Nu am putut porni sesiunea de practică");
   }
   const data = await res.json();
   return {
@@ -533,6 +562,8 @@ export type PracticeSetup = {
   themeId: string | null;
   themeName: string | null;
   competencies: ThemeCompetency[];
+  /** Cate sesiuni poate porni un om intr-o zi pe proiectul asta. */
+  maxSessionsPerDay: number | null;
 };
 
 type RawThemeCompetency = { name: string; description: string | null; order_index: number };
@@ -573,6 +604,7 @@ type RawPracticeSetup = {
   theme_id: string | null;
   theme_name: string | null;
   competencies: RawThemeCompetency[];
+  max_sessions_per_day: number | null;
 };
 
 function mapSetup(data: RawPracticeSetup): PracticeSetup {
@@ -585,6 +617,7 @@ function mapSetup(data: RawPracticeSetup): PracticeSetup {
     themeId: data.theme_id,
     themeName: data.theme_name,
     competencies: (data.competencies || []).map(mapCompetency),
+    maxSessionsPerDay: data.max_sessions_per_day ?? null,
   };
 }
 
@@ -598,7 +631,7 @@ export async function getPracticeSetup(projectId: string): Promise<PracticeSetup
 
 export async function configurePracticeSetup(
   projectId: string,
-  input: { themeId: string; competencies: string[] },
+  input: { themeId: string; competencies: string[]; maxSessionsPerDay?: number | null },
 ): Promise<PracticeSetup> {
   const res = await apiFetch(`${getApiBaseUrl()}/practice/projects/${projectId}/setup`, {
     method: "PUT",
@@ -608,6 +641,8 @@ export async function configurePracticeSetup(
       theme_id: input.themeId,
       competencies: input.competencies,
       is_enabled: true,
+      // `null` lasa neatinsa valoarea de acum a proiectului.
+      max_sessions_per_day: input.maxSessionsPerDay ?? null,
     }),
   });
   if (!res.ok) {

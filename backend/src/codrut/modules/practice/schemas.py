@@ -155,6 +155,10 @@ class PracticeSetupRequest(BaseModel):
     # O lista explicita inlocuieste selectia, inclusiv una goala.
     competencies: list[str] | None = None
     is_enabled: bool = True
+    # Cate sesiuni poate porni un om intr-o zi. Pana la plicul 35 numarul era ingropat
+    # in configurare si nu se putea schimba decat in baza. `None` lasa neatinsa
+    # valoarea de acum a proiectului.
+    max_sessions_per_day: int | None = Field(default=None, ge=1, le=1000)
 
 
 class PracticeSetupResponse(BaseModel):
@@ -166,6 +170,7 @@ class PracticeSetupResponse(BaseModel):
     theme_id: UUID | None = None
     theme_name: str | None = None
     competencies: list[ThemeCompetencyItem] = Field(default_factory=list)
+    max_sessions_per_day: int | None = None
 
 
 # ---- evolutia competentelor pe proiect (plic 29, punctul 2) ----

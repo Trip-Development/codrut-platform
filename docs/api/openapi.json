@@ -8336,6 +8336,19 @@
             "title": "Is Enabled",
             "type": "boolean"
           },
+          "max_sessions_per_day": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Sessions Per Day"
+          },
           "theme_id": {
             "format": "uuid",
             "title": "Theme Id",
@@ -8364,6 +8377,17 @@
           "is_enabled": {
             "title": "Is Enabled",
             "type": "boolean"
+          },
+          "max_sessions_per_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Sessions Per Day"
           },
           "project_id": {
             "format": "uuid",

@@ -31,6 +31,10 @@ from codrut.modules.practice.models import (
 
 TRAINING_PROJECT_TYPE = "training"
 
+# Cate sesiuni pe zi primeste un proiect nou. Plafonul e o unealta de control, nu o
+# piedica: se poate ridica din fila Setari, fara sa umble nimeni in baza.
+SESIUNI_PE_ZI_IMPLICIT = 5
+
 
 class PracticeSetupService:
     def __init__(self, session) -> None:
@@ -102,6 +106,7 @@ class PracticeSetupService:
             "project_type": project.project_type,
             "configured": settings is not None,
             "is_enabled": bool(settings.is_enabled) if settings else False,
+            "max_sessions_per_day": settings.max_sessions_per_day if settings else None,
             "theme_id": settings.theme_id if settings else None,
             "theme_name": theme_name,
             "competencies": [
@@ -116,12 +121,16 @@ class PracticeSetupService:
         theme_id: uuid.UUID,
         competency_names: list[str] | None,
         is_enabled: bool = True,
+        max_sessions_per_day: int | None = None,
     ) -> dict:
         """Make a training project practisable, and record the chosen competencies.
 
         ``competency_names`` of ``None`` means "take the theme's templates" - that is
         the pre-ticked default. An explicit list replaces the selection, including an
         empty one, so a trainer can untick everything on purpose.
+
+        ``max_sessions_per_day`` of ``None`` leaves the project's current value alone;
+        a new project starts at :data:`SESIUNI_PE_ZI_IMPLICIT`.
         """
         project = await self._require_project(project_id)
         if project.project_type != TRAINING_PROJECT_TYPE:
@@ -183,7 +192,7 @@ class PracticeSetupService:
                 active_pack_id=pack.id,
                 is_enabled=is_enabled,
                 max_turns_per_session=20,
-                max_sessions_per_day=5,
+                max_sessions_per_day=max_sessions_per_day or SESIUNI_PE_ZI_IMPLICIT,
                 max_chars_per_turn=1200,
                 turn_retention_days=30,
                 usd_cap_per_participant=Decimal("3.00"),
@@ -194,6 +203,8 @@ class PracticeSetupService:
             settings.theme_id = theme_id
             settings.active_pack_id = pack.id
             settings.is_enabled = is_enabled
+            if max_sessions_per_day is not None:
+                settings.max_sessions_per_day = max_sessions_per_day
 
         await self.session.execute(
             delete(ProjectCompetency).where(ProjectCompetency.project_id == project_id)
