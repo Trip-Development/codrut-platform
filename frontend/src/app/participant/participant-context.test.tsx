@@ -364,7 +364,7 @@ describe("participant workspace context", () => {
     });
 
     // When showResults is false
-    const navItemsDisabled = participantScopedNavItems(scopeParams, false);
+    const navItemsDisabled = participantScopedNavItems(scopeParams, { showResults: false });
     expect(navItemsDisabled.some((item) => item.label === "Rezultate")).toBe(false);
     expect(navItemsDisabled.map((item) => item.label)).toEqual([
       "Acasă",
@@ -373,7 +373,7 @@ describe("participant workspace context", () => {
     ]);
 
     // When showResults is true
-    const navItemsEnabled = participantScopedNavItems(scopeParams, true);
+    const navItemsEnabled = participantScopedNavItems(scopeParams, { showResults: true });
     expect(navItemsEnabled.some((item) => item.label === "Rezultate")).toBe(true);
     expect(navItemsEnabled.map((item) => item.label)).toEqual([
       "Acasă",

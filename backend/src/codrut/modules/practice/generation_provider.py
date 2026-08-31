@@ -199,6 +199,9 @@ class VertexGenerationProvider:
             },
         }
 
+        if request.response_mime_type is not None:
+            payload["generationConfig"]["responseMimeType"] = request.response_mime_type
+
         if request.system_instruction is not None:
             payload["systemInstruction"] = {"parts": [{"text": request.system_instruction}]}
 

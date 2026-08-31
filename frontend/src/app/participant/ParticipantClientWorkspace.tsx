@@ -31,6 +31,7 @@ import {
   participantResultsHref,
   participantScopeParams,
   participantScopedHref,
+  participantActiveProjectType,
   participantScopedNavItems,
 } from "./participant-context";
 import { countAvailableParticipantResults, mergeParticipantFeedbackGroups } from "./result-state";
@@ -113,7 +114,10 @@ export function ParticipantClientWorkspace({
   const questionnairesHref = participantScopedHref("/participant/questionnaires", scopeParams);
   const resultsHref = participantResultsHref(scopeParams);
   const showResults = participantCanViewResults(summaryData);
-  const navItems = readOnly ? [] : participantScopedNavItems(scopeParams, showResults);
+  const projectType = participantActiveProjectType(summaryData);
+  const navItems = readOnly
+    ? []
+    : participantScopedNavItems(scopeParams, { projectType, showResults });
 
   return (
     <AppShell

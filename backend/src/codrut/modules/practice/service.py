@@ -603,6 +603,51 @@ class PracticeSessionService:
             except Exception as err:
                 logging.getLogger(__name__).warning(f"Failed to generate session summary: {err}")
 
+        # A DOUA chemare, portata la plicul 29 din app/api/evaluate/route.ts.
+        # Aplicatia veche facea doua chemari la oprirea sesiunii, nu una: rezumatul
+        # de mai sus (cele patru axe) SI evaluarea structurala de aici, care da
+        # scoruri pe competentele PROIECTULUI, mostrele „asa ai spus / asa ar fi
+        # sunat" si recomandarile pentru trainer. A doua nu fusese portata.
+        if turns:
+            try:
+                from codrut.modules.practice.evaluator import (
+                    PracticeEvaluator,
+                    build_transcript,
+                )
+                from codrut.modules.practice.setup_service import (
+                    competency_names_for_project,
+                )
+
+                # PracticeSession nu tine project_id direct; il are prin setarile
+                # de program ale proiectului.
+                setari = (await self.session.execute(
+                    select(PracticeProgramSettings).where(
+                        PracticeProgramSettings.id == session_obj.program_settings_id
+                    )
+                )).scalar_one_or_none()
+                proiect_id = setari.project_id if setari else None
+                competente = (
+                    await competency_names_for_project(self.session, proiect_id)
+                    if proiect_id else []
+                )
+                evaluator = PracticeEvaluator(
+                    session=self.session,
+                    generation_provider=self.generation_provider,
+                    settings=self.settings,
+                )
+                await evaluator.evaluate_session(
+                    session_id=session_id,
+                    user_id=profile.user_id or principal.user_id,
+                    project_id=proiect_id,
+                    competencies=competente,
+                    transcript=build_transcript(turns, profile.full_name),
+                    source_type=session_obj.kind.value,
+                )
+            except Exception as eval_err:
+                logging.getLogger(__name__).warning(
+                    f"Structural evaluation failed in end_session: {eval_err}"
+                )
+
         if session_obj.state != SessionState.closed:
             session_obj.state = SessionState.closed
             session_obj.ended_at = datetime.now(UTC)

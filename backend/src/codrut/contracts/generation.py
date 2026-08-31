@@ -42,6 +42,9 @@ class GenerationRequest:
     max_output_tokens: int = 1024
     temperature: float = 0.7
     thinking_budget: int = 0
+    # Evaluatorul cere JSON garantat, ca in aplicatia veche
+    # (app/api/evaluate/route.ts: responseMimeType "application/json").
+    response_mime_type: str | None = None
 
 
 @dataclass(frozen=True)

@@ -66,6 +66,9 @@ class ParticipantReceivedFeedbackSummary(BaseModel):
 class ParticipantWorkspaceProject(BaseModel):
     id: UUID
     name: str
+    # Tipul proiectului e COMUTATORUL, nu o eticheta: din el se construieste meniul
+    # participantului. Un om de la training nu are ce cauta in ecranele de coaching.
+    project_type: str | None = None
     status: str = "active"
     history_bucket: str = "current"
     deadline_label: str

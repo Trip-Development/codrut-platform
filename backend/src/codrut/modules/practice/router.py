@@ -9,22 +9,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from codrut.api.dependencies import current_principal, db_session
 from codrut.core.config import Settings, get_settings
 from codrut.modules.identity.models import UserRole
+from codrut.modules.companies.policies import require_trainer_principal
 from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.practice.dashboard_service import PracticeDashboardService
 from codrut.modules.practice.schemas import (
     PracticeDashboardResponse,
+    PracticeEvolutionResponse,
     PracticeSessionCreateRequest,
     PracticeSessionDetailResponse,
     PracticeSessionEndRequest,
     PracticeSessionEndResponse,
     PracticeSessionResponse,
+    PracticeSetupRequest,
+    PracticeSetupResponse,
     PracticeStareSummaryResponse,
+    PracticeThemeItem,
     PracticeTranscribeResponse,
     PracticeTurnCreateRequest,
     PracticeTurnResponse,
     PracticeTurnSubmitResponse,
 )
 from codrut.modules.practice.service import PracticeSessionService
+from codrut.modules.practice.evolution_service import PracticeEvolutionService
+from codrut.modules.practice.setup_service import PracticeSetupService
 
 router = APIRouter()
 
@@ -220,3 +227,62 @@ async def get_participant_practice_dashboard(
     return PracticeDashboardResponse(**data)
 
 
+
+
+# ---- configurarea exersarii pe un proiect de training (plic 29, punctele 4 si 6) ----
+# Pana acum niciun punct al aplicatiei nu crea `practice_program_settings`; randul se
+# punea de mana, cu un script. Rutele astea inchid ocolul: trainerul alege tema, bifeaza
+# competentele, si aplicatia scrie ea configurarea.
+
+
+@router.get("/themes", response_model=list[PracticeThemeItem])
+async def list_practice_themes(
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> list[PracticeThemeItem]:
+    """Temele din care poate alege trainerul, fiecare cu competentele ei."""
+    require_trainer_principal(principal)
+    themes = await PracticeSetupService(session).list_themes()
+    return [PracticeThemeItem(**t) for t in themes]
+
+
+@router.get("/projects/{project_id}/setup", response_model=PracticeSetupResponse)
+async def get_practice_setup(
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeSetupResponse:
+    """Cum e configurata exersarea pe proiect: tema si competentele bifate."""
+    require_trainer_principal(principal)
+    return PracticeSetupResponse(**await PracticeSetupService(session).get_setup(project_id))
+
+
+@router.put("/projects/{project_id}/setup", response_model=PracticeSetupResponse)
+async def configure_practice_setup(
+    project_id: UUID,
+    payload: PracticeSetupRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeSetupResponse:
+    """Configureaza exersarea si scrie competentele alese. Se poate reveni oricand."""
+    require_trainer_principal(principal)
+    result = await PracticeSetupService(session).configure(
+        project_id=project_id,
+        theme_id=payload.theme_id,
+        competency_names=payload.competencies,
+        is_enabled=payload.is_enabled,
+    )
+    await session.commit()
+    return PracticeSetupResponse(**result)
+
+
+@router.get("/projects/{project_id}/evolution", response_model=PracticeEvolutionResponse)
+async def get_project_evolution(
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeEvolutionResponse:
+    """Evolutia competentelor pe echipa — fila trainerului la proiectele de training."""
+    require_trainer_principal(principal)
+    date = await PracticeEvolutionService(session).project_evolution(project_id)
+    return PracticeEvolutionResponse(**date)

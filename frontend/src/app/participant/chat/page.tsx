@@ -11,6 +11,8 @@ import {
   participantCanViewResults,
   participantScopeParams,
   participantScopedHref,
+  participantActiveProjectType,
+  participantIsTraining,
   participantScopedNavItems,
   participantWorkspaceRequestOptions,
   type ParticipantRouteSearchParams,
@@ -31,6 +33,7 @@ export default async function ParticipantChatPage({
   ]);
   const scopeParams = participantScopeParams(summary);
   const showResults = participantCanViewResults(summary);
+  const projectType = participantActiveProjectType(summary);
   const identity = summary.participantFullName.trim() || summary.anonymousName?.trim() || "Participant";
   const openTasks = summary.tasks.filter((task) => task.status !== "completed").length;
 
@@ -40,7 +43,7 @@ export default async function ParticipantChatPage({
       eyebrow=""
       title="Suport"
       description=""
-      navItems={participantScopedNavItems(scopeParams, showResults)}
+      navItems={participantScopedNavItems(scopeParams, { projectType, showResults })}
       activeHref={participantActiveHref("/participant/chat", scopeParams)}
       userLabel={identity.split(/\s+/)[0]}
       session={participant}
