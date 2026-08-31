@@ -17,11 +17,19 @@ const projectTabs = [
   { key: "/settings", label: "Setări" },
 ];
 
-const trainingProjectTabs = projectTabs.map((tab) =>
-  tab.key === "/reports"
-    ? { key: "/evolutie", label: "Evoluție competențe" }
-    : tab,
-);
+// La `training` se intra in CAMERA aplicatiei vechi. Din filele de coaching raman
+// doar doua, pentru ca sunt ale platformei, nu ale pedagogiei:
+//   Participanti — cine e in proiect (oamenii vin din companie, ca peste tot)
+//   Invitatii    — cum intra
+// DISPAR: Asignari · Organigrama · Rezultate. N-au ce cauta la training.
+// „Sumar" ramane pentru ca ACOLO e camera, iar „Setari" pentru ca acolo se aleg
+// tema si competentele — fara ele nu se poate exersa.
+const trainingProjectTabs = [
+  { key: "", label: "Sumar" },
+  { key: "/participants", label: "Participanți" },
+  { key: "/invitations", label: "Invitații" },
+  { key: "/settings", label: "Setări" },
+];
 
 export function ProjectTabs({
   basePath,

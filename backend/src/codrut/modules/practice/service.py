@@ -493,6 +493,17 @@ class PracticeSessionService:
 
         summary_text: str | None = None
 
+        # Proiectul sesiunii. PracticeSession nu-l tine direct — il are prin setarile
+        # de program. Se afla o singura data si se foloseste peste tot mai jos:
+        # fara el, scorurile se scriau cu project_id gol si ramaneau orfane cand
+        # proiectul era sters (gasit la plicul 30, in curatenie).
+        _setari = (await self.session.execute(
+            select(PracticeProgramSettings).where(
+                PracticeProgramSettings.id == session_obj.program_settings_id
+            )
+        )).scalar_one_or_none()
+        proiect_id = _setari.project_id if _setari else None
+
         # Fetch turns for summary generation
         stmt_turns = (
             select(PracticeTurn)
@@ -548,6 +559,7 @@ class PracticeSessionService:
                                 level = 1 if normalized_score < 50 else (2 if normalized_score < 80 else 3)
                                 cs = CompetencyScore(
                                     user_id=profile.user_id or principal.user_id,
+                                    project_id=proiect_id,
                                     score=min(100, max(0, normalized_score)),
                                     level=level,
                                     justification=f"Scor evaluat automat în modul {session_obj.kind.value}: {v}/10.",
@@ -618,14 +630,6 @@ class PracticeSessionService:
                     competency_names_for_project,
                 )
 
-                # PracticeSession nu tine project_id direct; il are prin setarile
-                # de program ale proiectului.
-                setari = (await self.session.execute(
-                    select(PracticeProgramSettings).where(
-                        PracticeProgramSettings.id == session_obj.program_settings_id
-                    )
-                )).scalar_one_or_none()
-                proiect_id = setari.project_id if setari else None
                 competente = (
                     await competency_names_for_project(self.session, proiect_id)
                     if proiect_id else []

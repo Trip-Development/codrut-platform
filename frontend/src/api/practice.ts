@@ -616,3 +616,319 @@ export async function configurePracticeSetup(
   }
   return mapSetup(await res.json());
 }
+
+// ---- camera de training: ecranul proiectului (plic 30) ----
+
+export type RoomCompetency = {
+  name: string;
+  testIn: number;
+  acum: number;
+  testOut: number | null;
+  hasTestIn: boolean;
+  hasData: boolean;
+  delta: number | null;
+};
+
+export type RoomQuizWeakSpot = { name: string; average: number };
+export type RoomWeekPoint = { weekStart: string; average: number; scoresCount: number };
+
+export type RoomParticipant = {
+  participantProfileId: string;
+  userId: string | null;
+  fullName: string;
+  email: string | null;
+  hasAccount: boolean;
+  averageScore: number;
+  sessionsCount: number;
+  lastActivity: string | null;
+  inactive: boolean;
+  hasTestIn: boolean;
+  hasTestOut: boolean;
+  activeMembership: boolean;
+};
+
+export type TrainingRoom = {
+  projectId: string;
+  projectName: string;
+  projectType: string | null;
+  themeName: string | null;
+  practiceConfigured: boolean;
+  startsAt: string | null;
+  dueAt: string | null;
+  timelinePercent: number | null;
+  participantsTotal: number;
+  averageScore: number;
+  sessionsTotal: number;
+  inactiveCount: number;
+  testInCompleted: number;
+  testOutCompleted: number;
+  activeCount: number;
+  recurrentCount: number;
+  testOutActive: boolean;
+  competencies: RoomCompetency[];
+  growthRanking: RoomCompetency[];
+  quizWeakSpots: RoomQuizWeakSpot[];
+  weeklyAverage: RoomWeekPoint[];
+  participants: RoomParticipant[];
+};
+
+type RawRoomCompetency = {
+  name: string;
+  test_in: number;
+  acum: number;
+  test_out: number | null;
+  has_test_in: boolean;
+  has_data: boolean;
+  delta: number | null;
+};
+
+function mapRoomCompetency(c: RawRoomCompetency): RoomCompetency {
+  return {
+    name: c.name,
+    testIn: c.test_in,
+    acum: c.acum,
+    testOut: c.test_out,
+    hasTestIn: c.has_test_in,
+    hasData: c.has_data,
+    delta: c.delta,
+  };
+}
+
+export async function getTrainingRoom(
+  projectId: string,
+  options: { headers?: HeadersInit } = {},
+): Promise<TrainingRoom | null> {
+  // Ca la reparatia din 31 august: `fetch` poate ARUNCA, nu doar sa intoarca
+  // un raspuns ne-OK. Camera nu are voie sa crape cu „Ref:".
+  let res: Response;
+  try {
+    res = await apiFetch(`${getApiBaseUrl()}/practice/projects/${projectId}/room`, {
+      cache: "no-store",
+      credentials: "include",
+      ...options,
+    });
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  const d = await res.json().catch(() => null);
+  if (!d) return null;
+  return {
+    projectId: d.project_id,
+    projectName: d.project_name,
+    projectType: d.project_type ?? null,
+    themeName: d.theme_name ?? null,
+    practiceConfigured: Boolean(d.practice_configured),
+    startsAt: d.starts_at ?? null,
+    dueAt: d.due_at ?? null,
+    timelinePercent: d.timeline_percent ?? null,
+    participantsTotal: d.participants_total ?? 0,
+    averageScore: d.average_score ?? 0,
+    sessionsTotal: d.sessions_total ?? 0,
+    inactiveCount: d.inactive_count ?? 0,
+    testInCompleted: d.test_in_completed ?? 0,
+    testOutCompleted: d.test_out_completed ?? 0,
+    activeCount: d.active_count ?? 0,
+    recurrentCount: d.recurrent_count ?? 0,
+    testOutActive: Boolean(d.test_out_active),
+    competencies: (d.competencies || []).map(mapRoomCompetency),
+    growthRanking: (d.growth_ranking || []).map(mapRoomCompetency),
+    quizWeakSpots: (d.quiz_weak_spots || []).map(
+      (q: RoomQuizWeakSpot) => ({ name: q.name, average: q.average }),
+    ),
+    weeklyAverage: (d.weekly_average || []).map(
+      (w: { week_start: string; average: number; scores_count: number }) => ({
+        weekStart: w.week_start,
+        average: w.average,
+        scoresCount: w.scores_count,
+      }),
+    ),
+    participants: (d.participants || []).map((p: {
+      participant_profile_id: string;
+      user_id: string | null;
+      full_name: string;
+      email: string | null;
+      has_account: boolean;
+      average_score: number;
+      sessions_count: number;
+      last_activity: string | null;
+      inactive: boolean;
+      has_test_in: boolean;
+      has_test_out: boolean;
+      active_membership: boolean;
+    }) => ({
+      participantProfileId: p.participant_profile_id,
+      userId: p.user_id,
+      fullName: p.full_name,
+      email: p.email,
+      hasAccount: p.has_account,
+      averageScore: p.average_score,
+      sessionsCount: p.sessions_count,
+      lastActivity: p.last_activity,
+      inactive: p.inactive,
+      hasTestIn: p.has_test_in,
+      hasTestOut: p.has_test_out,
+      activeMembership: p.active_membership,
+    })),
+  };
+}
+
+// ---- pagina omului (plic 30, ecranul 2) ----
+
+export type PersonTheory = { name: string; testIn: number | null; testOut: number | null; delta: number | null };
+export type PersonEvidence = {
+  name: string;
+  level: string;
+  levelDescription: string;
+  color: string;
+  averageScore: number;
+  sessionsCount: number;
+  scoresCount: number;
+  whyNotHigher: string;
+};
+export type PersonText = { id: string; summary: string; createdAt: string };
+export type PersonSample = {
+  id: string;
+  realWeak: string | null;
+  realImproved: string | null;
+  inventedWeak: string | null;
+  inventedImproved: string | null;
+  createdAt: string;
+};
+export type TrainerNote = { id: string; note: string; createdAt: string };
+
+export type PracticePerson = {
+  projectId: string;
+  projectName: string;
+  participantProfileId: string;
+  userId: string | null;
+  fullName: string;
+  email: string | null;
+  hasAccount: boolean;
+  durationDays: number | null;
+  testInAverage: number | null;
+  progressAverage: number;
+  testOutAverage: number | null;
+  sessionsCount: number;
+  theory: PersonTheory[];
+  evidence: PersonEvidence[];
+  topProgress: PersonEvidence[];
+  weeklyAverage: RoomWeekPoint[];
+  quizWeakSpots: RoomQuizWeakSpot[];
+  insightMoments: PersonText[];
+  trainerRecommendations: PersonText[];
+  sessionSamples: PersonSample[];
+  trainerNotes: TrainerNote[];
+};
+
+type RawEvidence = {
+  name: string;
+  level: string;
+  level_description: string;
+  color: string;
+  average_score: number;
+  sessions_count: number;
+  scores_count: number;
+  why_not_higher: string;
+};
+
+function mapEvidence(e: RawEvidence): PersonEvidence {
+  return {
+    name: e.name,
+    level: e.level,
+    levelDescription: e.level_description,
+    color: e.color,
+    averageScore: e.average_score,
+    sessionsCount: e.sessions_count,
+    scoresCount: e.scores_count,
+    whyNotHigher: e.why_not_higher,
+  };
+}
+
+function mapText(t: { id: string; summary: string; created_at: string }): PersonText {
+  return { id: t.id, summary: t.summary, createdAt: t.created_at };
+}
+
+export async function getPracticePerson(
+  projectId: string,
+  profileId: string,
+  options: { headers?: HeadersInit } = {},
+): Promise<PracticePerson | null> {
+  let res: Response;
+  try {
+    res = await apiFetch(
+      `${getApiBaseUrl()}/practice/projects/${projectId}/participants/${profileId}`,
+      { cache: "no-store", credentials: "include", ...options },
+    );
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  const d = await res.json().catch(() => null);
+  if (!d) return null;
+  return {
+    projectId: d.project_id,
+    projectName: d.project_name,
+    participantProfileId: d.participant_profile_id,
+    userId: d.user_id ?? null,
+    fullName: d.full_name,
+    email: d.email ?? null,
+    hasAccount: Boolean(d.has_account),
+    durationDays: d.duration_days ?? null,
+    testInAverage: d.test_in_average ?? null,
+    progressAverage: d.progress_average ?? 0,
+    testOutAverage: d.test_out_average ?? null,
+    sessionsCount: d.sessions_count ?? 0,
+    theory: (d.theory || []).map((t: { name: string; test_in: number | null; test_out: number | null; delta: number | null }) => ({
+      name: t.name, testIn: t.test_in, testOut: t.test_out, delta: t.delta,
+    })),
+    evidence: (d.evidence || []).map(mapEvidence),
+    topProgress: (d.top_progress || []).map(mapEvidence),
+    weeklyAverage: (d.weekly_average || []).map(
+      (w: { week_start: string; average: number; scores_count: number }) => ({
+        weekStart: w.week_start, average: w.average, scoresCount: w.scores_count,
+      }),
+    ),
+    quizWeakSpots: (d.quiz_weak_spots || []).map((q: RoomQuizWeakSpot) => ({ name: q.name, average: q.average })),
+    insightMoments: (d.insight_moments || []).map(mapText),
+    trainerRecommendations: (d.trainer_recommendations || []).map(mapText),
+    sessionSamples: (d.session_samples || []).map((s: {
+      id: string; real_weak: string | null; real_improved: string | null;
+      invented_weak: string | null; invented_improved: string | null; created_at: string;
+    }) => ({
+      id: s.id,
+      realWeak: s.real_weak,
+      realImproved: s.real_improved,
+      inventedWeak: s.invented_weak,
+      inventedImproved: s.invented_improved,
+      createdAt: s.created_at,
+    })),
+    trainerNotes: (d.trainer_notes || []).map(
+      (n: { id: string; note: string; created_at: string }) => ({
+        id: n.id, note: n.note, createdAt: n.created_at,
+      }),
+    ),
+  };
+}
+
+export async function addTrainerNote(
+  projectId: string,
+  profileId: string,
+  note: string,
+): Promise<TrainerNote> {
+  const res = await apiFetch(
+    `${getApiBaseUrl()}/practice/projects/${projectId}/participants/${profileId}/notes`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note }),
+    },
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || err.detail || "Nu am putut salva nota.");
+  }
+  const n = await res.json();
+  return { id: n.id, note: n.note, createdAt: n.created_at };
+}

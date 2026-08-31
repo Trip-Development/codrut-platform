@@ -15,6 +15,8 @@ from codrut.modules.practice.dashboard_service import PracticeDashboardService
 from codrut.modules.practice.schemas import (
     PracticeDashboardResponse,
     PracticeEvolutionResponse,
+    PracticePersonResponse,
+    PracticeRoomResponse,
     PracticeSessionCreateRequest,
     PracticeSessionDetailResponse,
     PracticeSessionEndRequest,
@@ -28,9 +30,13 @@ from codrut.modules.practice.schemas import (
     PracticeTurnCreateRequest,
     PracticeTurnResponse,
     PracticeTurnSubmitResponse,
+    TrainerNoteCreateRequest,
+    TrainerNoteItem,
 )
 from codrut.modules.practice.service import PracticeSessionService
 from codrut.modules.practice.evolution_service import PracticeEvolutionService
+from codrut.modules.practice.person_service import PracticePersonService
+from codrut.modules.practice.room_service import PracticeRoomService
 from codrut.modules.practice.setup_service import PracticeSetupService
 
 router = APIRouter()
@@ -286,3 +292,51 @@ async def get_project_evolution(
     require_trainer_principal(principal)
     date = await PracticeEvolutionService(session).project_evolution(project_id)
     return PracticeEvolutionResponse(**date)
+
+
+@router.get("/projects/{project_id}/room", response_model=PracticeRoomResponse)
+async def get_project_room(
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeRoomResponse:
+    """Camera de training — ecranul proiectului, cu toate sectiunile lui."""
+    require_trainer_principal(principal)
+    return PracticeRoomResponse(**await PracticeRoomService(session).project_room(project_id))
+
+
+@router.get(
+    "/projects/{project_id}/participants/{profile_id}",
+    response_model=PracticePersonResponse,
+)
+async def get_project_person(
+    project_id: UUID,
+    profile_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticePersonResponse:
+    """Pagina omului — al doilea ecran al camerei de training."""
+    require_trainer_principal(principal)
+    date = await PracticePersonService(session).person(project_id, profile_id)
+    return PracticePersonResponse(**date)
+
+
+@router.post(
+    "/projects/{project_id}/participants/{profile_id}/notes",
+    response_model=TrainerNoteItem,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_trainer_note(
+    project_id: UUID,
+    profile_id: UUID,
+    payload: TrainerNoteCreateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> TrainerNoteItem:
+    """Nota trainerului despre un participant. Andrei scrie, se salveaza."""
+    require_trainer_principal(principal)
+    nota = await PracticePersonService(session).add_note(
+        project_id, profile_id, principal.user_id, payload.note,
+    )
+    await session.commit()
+    return TrainerNoteItem(**nota)

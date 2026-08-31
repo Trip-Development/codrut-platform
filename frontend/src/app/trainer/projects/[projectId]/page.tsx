@@ -16,7 +16,9 @@ import {
   getCompanyProjectById,
   getProjectParticipants,
 } from "@/api/companies";
+import { getTrainingRoom } from "@/api/practice";
 import { getServerApiRequestOptions } from "@/api/server-request";
+import { TrainingRoom } from "./TrainingRoom";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { ProjectStatusBadge, projectTypeLabel } from "@/components/projects/project-display";
 import { cn } from "@/utils/cn";
@@ -65,6 +67,27 @@ export default async function ProjectOverviewPage({
   const pendingInvites = Math.max(0, participants.length - invited);
   const basePath = `/trainer/projects/${project.id}`;
   const isTrainingProject = project.project_type === "training";
+
+  // La un proiect de training se intra in CAMERA aplicatiei vechi: structura ei,
+  // ecranele ei, sectiunile ei. Filele de coaching nu se mai arata.
+  // Andrei: „E ca si cum ai intra in alta camera."
+  if (isTrainingProject) {
+    const room = await getTrainingRoom(projectId, requestOptions);
+    if (!room) {
+      return (
+        <div className="flex flex-col gap-5">
+          {loadErrors.map((error) => (
+            <InlineFeedback key={error} tone="danger">{error}</InlineFeedback>
+          ))}
+          <InlineFeedback tone="danger">
+            Nu am putut încărca camera de training. Proiectul și participanții sunt
+            neatinși — e doar afișarea.
+          </InlineFeedback>
+        </div>
+      );
+    }
+    return <TrainingRoom room={room} basePath={basePath} />;
+  }
   const workflows: WorkflowStep[] = [
     {
       href: `${basePath}/participants`,
