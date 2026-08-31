@@ -39,6 +39,8 @@ export type ParticipantWorkspaceSummary = {
 export type ParticipantWorkspaceProject = {
   id: string;
   name: string;
+  /** Tipul proiectului e comutatorul meniului, nu o etichetă. */
+  projectType?: string | null;
   status?: "active" | "completed" | "archived";
   historyBucket?: "current" | "history";
   deadlineLabel: string;
@@ -334,6 +336,7 @@ function mapParticipantQuestionnaireProject(
     companyName: project.company_name,
     name: project.name,
     status: project.status,
+    projectType: project.project_type ?? null,
     historyBucket: project.history_bucket,
     deadlineLabel: project.deadline_label,
     completedCount: project.completed_count,
@@ -349,6 +352,7 @@ function mapParticipantWorkspaceProject(
     id: project.id,
     name: project.name,
     status: project.status ?? "active",
+    projectType: project.project_type ?? null,
     historyBucket: project.history_bucket ?? "current",
     deadlineLabel: project.deadline_label,
     deadlineAt: project.deadline_at,

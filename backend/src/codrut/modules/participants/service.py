@@ -927,6 +927,7 @@ class ParticipantWorkspaceService:
                     ParticipantWorkspaceProject(
                         id=project.id,
                         name=project.name,
+                        project_type=project.project_type,
                         status=project.status.value,
                         history_bucket=(
                             "current"
@@ -1554,6 +1555,7 @@ class ParticipantWorkspaceService:
                 ParticipantWorkspaceProject(
                     id=project.id,
                     name=project.name,
+                    project_type=project.project_type,
                     status=project.status.value,
                     history_bucket=(
                         "current" if project.status == CompanyProjectStatus.active else "history"

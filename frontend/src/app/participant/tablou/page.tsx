@@ -5,6 +5,7 @@ import {
   participantActiveHref,
   participantScopedNavItems,
 } from "../participant-context";
+import { TRAINING_PROJECT_TYPE } from "@/components/shell/nav";
 
 export default async function TablouParticipantPage() {
   const participant = await getParticipantSession();
@@ -18,7 +19,7 @@ export default async function TablouParticipantPage() {
       eyebrow="Antrenament & Competențe"
       title={`Tabloul tău, ${participantFirstName}`}
       description="Evoluția deprinderilor dobândite în simulările de conversație cu Cody."
-      navItems={participantScopedNavItems(scopeParams)}
+      navItems={participantScopedNavItems(scopeParams, TRAINING_PROJECT_TYPE)}
       activeHref={participantActiveHref("/participant/tablou", scopeParams)}
       userLabel={participantFirstName}
       session={participant}

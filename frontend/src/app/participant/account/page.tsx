@@ -6,6 +6,8 @@ import { ParticipantContextSelector } from "../ParticipantContextSelector";
 import {
   participantActiveHref,
   participantScopeParams,
+  participantActiveProjectType,
+  participantIsTraining,
   participantScopedNavItems,
   participantWorkspaceRequestOptions,
   type ParticipantRouteSearchParams,
@@ -26,6 +28,7 @@ export default async function ParticipantAccountPage({
 
   const name = summary.participantFullName || participant.user.name || participant.user.id;
   const scopeParams = participantScopeParams(summary);
+  const projectType = participantActiveProjectType(summary);
 
   return (
     <AppShell
@@ -33,7 +36,7 @@ export default async function ParticipantAccountPage({
       eyebrow=""
       title="Contul tău"
       description=""
-      navItems={participantScopedNavItems(scopeParams)}
+      navItems={participantScopedNavItems(scopeParams, projectType)}
       activeHref={participantActiveHref("/participant/account", scopeParams)}
       userLabel={name.split(" ")[0]}
       session={participant}

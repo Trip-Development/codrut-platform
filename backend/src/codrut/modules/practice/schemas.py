@@ -129,3 +129,88 @@ class PracticeDashboardResponse(BaseModel):
     insight_moments: list[InsightMomentItem]
     session_samples: list[SessionSampleItem]
 
+
+
+# ---- configurarea exersarii pe un proiect de training (plic 29, punctele 4 si 6) ----
+
+class ThemeCompetencyItem(BaseModel):
+    name: str
+    description: str | None = None
+    order_index: int = 0
+
+
+class PracticeThemeItem(BaseModel):
+    id: UUID
+    name: str
+    slug: str | None = None
+    competencies: list[ThemeCompetencyItem] = Field(default_factory=list)
+    has_knowledge_pack: bool = False
+    scenario_count: int = 0
+    usable: bool = False
+
+
+class PracticeSetupRequest(BaseModel):
+    theme_id: UUID
+    # None inseamna „ia competentele temei" — adica bifate toate, cum sunt implicit.
+    # O lista explicita inlocuieste selectia, inclusiv una goala.
+    competencies: list[str] | None = None
+    is_enabled: bool = True
+
+
+class PracticeSetupResponse(BaseModel):
+    project_id: UUID
+    project_name: str
+    project_type: str | None = None
+    configured: bool
+    is_enabled: bool
+    theme_id: UUID | None = None
+    theme_name: str | None = None
+    competencies: list[ThemeCompetencyItem] = Field(default_factory=list)
+
+
+# ---- evolutia competentelor pe proiect (plic 29, punctul 2) ----
+
+class EvolutionCompetencyItem(BaseModel):
+    name: str
+    test_in_average: float | None = None
+    current_average: float | None = None
+    test_out_average: float | None = None
+    growth: float | None = None
+    level: str
+    level_description: str = ""
+    color: str = ""
+    scores_count: int = 0
+
+
+class EvolutionWeekPoint(BaseModel):
+    week_start: str
+    average: float
+    scores_count: int
+
+
+class EvolutionParticipantItem(BaseModel):
+    participant_profile_id: UUID
+    user_id: UUID | None = None
+    full_name: str
+    email: str | None = None
+    active: bool = True
+    test_in_score: float | None = None
+    test_out_score: float | None = None
+    current_average: float | None = None
+    sessions_count: int = 0
+    closed_sessions_count: int = 0
+    scores_count: int = 0
+
+
+class PracticeEvolutionResponse(BaseModel):
+    project_id: UUID
+    project_name: str
+    project_type: str | None = None
+    participants_total: int
+    participants_active: int
+    test_in_completed: int | None = None
+    test_out_enabled: bool = False
+    test_pending_note: str
+    competencies: list[EvolutionCompetencyItem] = Field(default_factory=list)
+    weekly_average: list[EvolutionWeekPoint] = Field(default_factory=list)
+    participants: list[EvolutionParticipantItem] = Field(default_factory=list)

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getParticipantSession } from "@/api/auth-server";
 import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
@@ -8,6 +9,8 @@ import {
   participantActiveHref,
   participantScopeParams,
   participantScopedHref,
+  participantActiveProjectType,
+  participantIsTraining,
   participantScopedNavItems,
   participantWorkspaceRequestOptions,
   type ParticipantRouteSearchParams,
@@ -32,6 +35,10 @@ export default async function ParticipantQuestionnairesPage({
     ),
   ]);
   const scopeParams = participantScopeParams(summary);
+  const projectType = participantActiveProjectType(summary);
+  // Un meniu ascuns nu e o regulă, e o sugestie: un om de la training
+  // care scrie adresa direct în bară e trimis înapoi, nu i se arată ecranul.
+  if (participantIsTraining(projectType)) redirect("/participant");
   const questionnairesHref = participantScopedHref("/participant/questionnaires", scopeParams);
   const resultsHref = participantScopedHref("/participant/results", scopeParams);
   const questionnaireProjects =
@@ -53,7 +60,7 @@ export default async function ParticipantQuestionnairesPage({
       eyebrow=""
       title="Chestionare"
       description=""
-      navItems={participantScopedNavItems(scopeParams)}
+      navItems={participantScopedNavItems(scopeParams, projectType)}
       activeHref={participantActiveHref("/participant/questionnaires", scopeParams)}
       userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
       session={participant}

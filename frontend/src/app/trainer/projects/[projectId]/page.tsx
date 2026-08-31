@@ -64,6 +64,7 @@ export default async function ProjectOverviewPage({
   ).length;
   const pendingInvites = Math.max(0, participants.length - invited);
   const basePath = `/trainer/projects/${project.id}`;
+  const isTrainingProject = project.project_type === "training";
   const workflows: WorkflowStep[] = [
     {
       href: `${basePath}/participants`,
@@ -99,15 +100,28 @@ export default async function ProjectOverviewPage({
       locked: participants.length === 0,
       attention: deliveryFailures > 0 || pendingInvites > 0,
     },
-    {
-      href: `${basePath}/reports`,
-      title: "Rezultate",
-      metric: `${completionRate}% completare`,
-      state: completionRate >= 80 ? "Raportabil" : "În colectare",
-      icon: BarChart3Icon,
-      locked: participants.length === 0,
-      attention: completionRate < 80,
-    },
+    // Filele raman exact cele de acum. Doar ultima se schimba, si NUMAI la
+    // `training`: acolo „Rezultate" (ecranul de coaching) devine „Evolutie
+    // competente". La orice alt tip de proiect ramane cum e azi.
+    isTrainingProject
+      ? {
+          href: `${basePath}/evolutie`,
+          title: "Evoluție competențe",
+          metric: `${participants.length} participanți`,
+          state: "Din sesiunile cu Cody",
+          icon: BarChart3Icon,
+          locked: participants.length === 0,
+          attention: false,
+        }
+      : {
+          href: `${basePath}/reports`,
+          title: "Rezultate",
+          metric: `${completionRate}% completare`,
+          state: completionRate >= 80 ? "Raportabil" : "În colectare",
+          icon: BarChart3Icon,
+          locked: participants.length === 0,
+          attention: completionRate < 80,
+        },
   ];
 
   return (

@@ -6,6 +6,8 @@ import { ParticipantContextSelector } from "../ParticipantContextSelector";
 import {
   participantActiveHref,
   participantScopeParams,
+  participantActiveProjectType,
+  participantIsTraining,
   participantScopedNavItems,
   participantWorkspaceRequestOptions,
   type ParticipantRouteSearchParams,
@@ -28,6 +30,7 @@ export default async function ParticipantPracticePage({
 
   const name = summary.participantFullName || participant.user.name || participant.user.id;
   const scopeParams = participantScopeParams(summary);
+  const projectType = participantActiveProjectType(summary);
 
   return (
     <AppShell
@@ -35,7 +38,7 @@ export default async function ParticipantPracticePage({
       eyebrow="Antrenament cu Cody"
       title="Conversație de practică"
       description="Exersează comunicarea asertivă și feedbackul în scenarii simulate cu inteligență artificială"
-      navItems={participantScopedNavItems(scopeParams)}
+      navItems={participantScopedNavItems(scopeParams, projectType)}
       activeHref={participantActiveHref("/participant/practice", scopeParams)}
       userLabel={name.split(" ")[0]}
       session={participant}

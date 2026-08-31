@@ -15,6 +15,8 @@ import {
   participantActiveHref,
   participantDefaultContext,
   participantScopeParams,
+  participantActiveProjectType,
+  participantIsTraining,
   participantScopedNavItems,
   participantWorkspaceRequestOptions,
   firstValue,
@@ -74,6 +76,10 @@ export default async function ParticipantResultsPage({
     ? await Promise.all(displayedCycles.map((cycle) => loadCycleSummary(selectedSummary, requestOptions.headers, cycle.id)))
     : [selectedSummary];
   const scopeParams = participantScopeParams(selectedSummary);
+  const projectType = participantActiveProjectType(selectedSummary);
+  // Un meniu ascuns nu e o regulă, e o sugestie: un om de la training
+  // care scrie adresa direct în bară e trimis înapoi, nu i se arată ecranul.
+  if (participantIsTraining(projectType)) redirect("/participant");
 
   return (
     <AppShell
@@ -81,7 +87,7 @@ export default async function ParticipantResultsPage({
       eyebrow=""
       title="Rezultate"
       description=""
-      navItems={participantScopedNavItems(scopeParams)}
+      navItems={participantScopedNavItems(scopeParams, projectType)}
       activeHref={participantActiveHref("/participant/results", scopeParams)}
       userLabel={selectedSummary.participantFullName.split(/\s+/)[0] || "Participant"}
       session={participant}
