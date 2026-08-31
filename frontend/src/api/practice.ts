@@ -495,3 +495,114 @@ export async function getProjectEvolution(
     })),
   };
 }
+
+// ---- configurarea exersarii pe proiect (plic 29, punctele 4 si 6) ----
+
+export type ThemeCompetency = {
+  name: string;
+  description: string | null;
+  orderIndex: number;
+};
+
+export type PracticeTheme = {
+  id: string;
+  name: string;
+  slug: string | null;
+  competencies: ThemeCompetency[];
+  hasKnowledgePack: boolean;
+  scenarioCount: number;
+  usable: boolean;
+};
+
+export type PracticeSetup = {
+  projectId: string;
+  projectName: string;
+  projectType: string | null;
+  configured: boolean;
+  isEnabled: boolean;
+  themeId: string | null;
+  themeName: string | null;
+  competencies: ThemeCompetency[];
+};
+
+type RawThemeCompetency = { name: string; description: string | null; order_index: number };
+
+function mapCompetency(c: RawThemeCompetency): ThemeCompetency {
+  return { name: c.name, description: c.description, orderIndex: c.order_index };
+}
+
+export async function getPracticeThemes(): Promise<PracticeTheme[]> {
+  const res = await apiFetch("/api/practice/themes", { credentials: "include" });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data || []).map((t: {
+    id: string;
+    name: string;
+    slug: string | null;
+    competencies: RawThemeCompetency[];
+    has_knowledge_pack: boolean;
+    scenario_count: number;
+    usable: boolean;
+  }) => ({
+    id: t.id,
+    name: t.name,
+    slug: t.slug,
+    competencies: (t.competencies || []).map(mapCompetency),
+    hasKnowledgePack: t.has_knowledge_pack,
+    scenarioCount: t.scenario_count,
+    usable: t.usable,
+  }));
+}
+
+type RawPracticeSetup = {
+  project_id: string;
+  project_name: string;
+  project_type: string | null;
+  configured: boolean;
+  is_enabled: boolean;
+  theme_id: string | null;
+  theme_name: string | null;
+  competencies: RawThemeCompetency[];
+};
+
+function mapSetup(data: RawPracticeSetup): PracticeSetup {
+  return {
+    projectId: data.project_id,
+    projectName: data.project_name,
+    projectType: data.project_type,
+    configured: data.configured,
+    isEnabled: data.is_enabled,
+    themeId: data.theme_id,
+    themeName: data.theme_name,
+    competencies: (data.competencies || []).map(mapCompetency),
+  };
+}
+
+export async function getPracticeSetup(projectId: string): Promise<PracticeSetup | null> {
+  const res = await apiFetch(`/api/practice/projects/${projectId}/setup`, {
+    credentials: "include",
+  });
+  if (!res.ok) return null;
+  return mapSetup(await res.json());
+}
+
+export async function configurePracticeSetup(
+  projectId: string,
+  input: { themeId: string; competencies: string[] },
+): Promise<PracticeSetup> {
+  const res = await apiFetch(`/api/practice/projects/${projectId}/setup`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      theme_id: input.themeId,
+      competencies: input.competencies,
+      is_enabled: true,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || err.detail || "Nu am putut salva configurarea.");
+  }
+  return mapSetup(await res.json());
+}
