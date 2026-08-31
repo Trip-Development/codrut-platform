@@ -108,7 +108,12 @@ services:
       CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER:-brevo}
       CODRUT_EMAIL_BREVO_SANDBOX_ENABLED: ${CODRUT_EMAIL_BREVO_SANDBOX_ENABLED:-true}
       CODRUT_EMAIL_BREVO_API_KEY: ${CODRUT_EMAIL_BREVO_API_KEY:-CHEIE-INVALIDA-INTENTIONAT}
-      CODRUT_EMAIL_DAILY_SEND_CAP: ${CODRUT_EMAIL_DAILY_SEND_CAP:-0}
+      # Plafonul zilnic: 20 pe proba. Zero insemna "niciun email", si asa a stat.
+      CODRUT_EMAIL_DAILY_SEND_CAP: ${CODRUT_EMAIL_DAILY_SEND_CAP:-20}
+      # Al doilea gard, mai important decat sandbox-ul: cand lista asta nu e goala,
+      # pleaca email DOAR catre adresele din ea. Un participant de proba adaugat
+      # din greseala cu adresa lui adevarata NU primeste nimic.
+      CODRUT_EMAIL_ALLOWED_RECIPIENTS: ${CODRUT_EMAIL_ALLOWED_RECIPIENTS:-["andrei.vacaru@tripdevelopment.ro","andreyvacaru@gmail.com","andrei@andreivacaru.ro"]}
       CODRUT_EMAIL_FROM_ADDRESS: ${CODRUT_EMAIL_FROM_ADDRESS:-test@andreivacaru.ro}
       CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME:-Cody Test}
       CODRUT_EMAIL_WEBHOOK_TOKEN: ${CODRUT_EMAIL_WEBHOOK_TOKEN:?Set CODRUT_EMAIL_WEBHOOK_TOKEN in .env}
@@ -187,7 +192,12 @@ services:
       CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER:-brevo}
       CODRUT_EMAIL_BREVO_SANDBOX_ENABLED: ${CODRUT_EMAIL_BREVO_SANDBOX_ENABLED:-true}
       CODRUT_EMAIL_BREVO_API_KEY: ${CODRUT_EMAIL_BREVO_API_KEY:-CHEIE-INVALIDA-INTENTIONAT}
-      CODRUT_EMAIL_DAILY_SEND_CAP: ${CODRUT_EMAIL_DAILY_SEND_CAP:-0}
+      # Plafonul zilnic: 20 pe proba. Zero insemna "niciun email", si asa a stat.
+      CODRUT_EMAIL_DAILY_SEND_CAP: ${CODRUT_EMAIL_DAILY_SEND_CAP:-20}
+      # Al doilea gard, mai important decat sandbox-ul: cand lista asta nu e goala,
+      # pleaca email DOAR catre adresele din ea. Un participant de proba adaugat
+      # din greseala cu adresa lui adevarata NU primeste nimic.
+      CODRUT_EMAIL_ALLOWED_RECIPIENTS: ${CODRUT_EMAIL_ALLOWED_RECIPIENTS:-["andrei.vacaru@tripdevelopment.ro","andreyvacaru@gmail.com","andrei@andreivacaru.ro"]}
       CODRUT_EMAIL_FROM_ADDRESS: ${CODRUT_EMAIL_FROM_ADDRESS:-test@andreivacaru.ro}
       CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME:-Cody Test}
       CODRUT_EMAIL_WEBHOOK_TOKEN: ${CODRUT_EMAIL_WEBHOOK_TOKEN:?Set CODRUT_EMAIL_WEBHOOK_TOKEN in .env}

@@ -3325,6 +3325,31 @@ class EmailOutboxProcessor:
             await self.session.commit()
             return "cancelled"
 
+        # Gardul mediului de proba. Cand lista de destinatari permisi nu e goala,
+        # tot ce nu e pe ea se opreste AICI, cu motivul scris — in randul lui si
+        # in jurnal. Nu dispare tacut, asa cum s-a intamplat pana acum.
+        if not self.settings.recipient_is_allowed(send.recipient_email):
+            current = await self.repository.get_claimed_email_send(send.id, lease_token)
+            if current is None:
+                await self.session.rollback()
+                return "cancelled"
+            motiv = (
+                "Recipient is not in email_allowed_recipients; skipped by the "
+                "test-environment allow list."
+            )
+            current.error_details = motiv
+            await self.repository.mark_email_send_cancelled(current, now=datetime.now(UTC))
+            await self.session.commit()
+            logger.info(
+                "Email skipped by allow list.",
+                extra={
+                    "email_event": "allow_list_skip",
+                    "email_send_id": str(send.id),
+                    "recipient_domain": send.recipient_email.rsplit("@", 1)[-1],
+                },
+            )
+            return "cancelled"
+
         try:
             message = _email_message_from_outbox_payload(send.message_payload)
         except (DomainError, TypeError, ValueError) as exc:

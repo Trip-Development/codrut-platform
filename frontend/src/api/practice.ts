@@ -941,8 +941,19 @@ export type TrainingInvitation = {
   email: string | null;
   invited: boolean;
   invitedAt: string | null;
+  /** Linkul personal, cand invitatia e inca activa. Nu se scrie nicaieri in jurnal. */
+  inviteUrl: string | null;
   hasAccount: boolean;
   hasTestIn: boolean;
+};
+
+export type TrainingInvitationSent = {
+  participantProfileId: string;
+  fullName: string | null;
+  email: string | null;
+  inviteUrl: string | null;
+  emailSent: boolean;
+  error: string | null;
 };
 
 export async function getTrainingInvitations(
@@ -967,6 +978,7 @@ export async function getTrainingInvitations(
     email: string | null;
     invited: boolean;
     invited_at: string | null;
+    invite_url: string | null;
     has_account: boolean;
     has_test_in: boolean;
   }) => ({
@@ -975,7 +987,48 @@ export async function getTrainingInvitations(
     email: r.email,
     invited: r.invited,
     invitedAt: r.invited_at,
+    inviteUrl: r.invite_url ?? null,
     hasAccount: r.has_account,
     hasTestIn: r.has_test_in,
+  }));
+}
+
+/**
+ * Trimite invitatiile pentru un proiect de training.
+ *
+ * Nu ruta obisnuita de invitatii: aceea cere ca omul sa aiba deja o asignare de
+ * chestionar, iar un proiect de training n-are niciuna, deci ii sarea tacut pe
+ * toti. Asta e calea trainingului si intoarce linkul chiar si cand emailul nu
+ * pleaca.
+ */
+export async function sendTrainingInvitations(
+  projectId: string,
+  participantProfileIds: string[],
+): Promise<TrainingInvitationSent[]> {
+  const res = await apiFetch(`${getApiBaseUrl()}/practice/projects/${projectId}/invitations`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ participant_profile_ids: participantProfileIds }),
+  });
+  if (!res.ok) {
+    const detaliu = await res.json().catch(() => null);
+    throw new Error(detaliu?.detail ?? "Nu am putut trimite invitatiile.");
+  }
+  const data = await res.json();
+  return (data || []).map((r: {
+    participant_profile_id: string;
+    full_name: string | null;
+    email: string | null;
+    invite_url: string | null;
+    email_sent: boolean;
+    error: string | null;
+  }) => ({
+    participantProfileId: r.participant_profile_id,
+    fullName: r.full_name,
+    email: r.email,
+    inviteUrl: r.invite_url,
+    emailSent: r.email_sent,
+    error: r.error,
   }));
 }

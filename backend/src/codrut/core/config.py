@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     email_smtp_starttls: bool = False
     email_test_mode: bool = True
     email_brevo_sandbox_enabled: bool = False
+    # Gard pentru mediul de proba: cand lista NU e goala, pleaca email DOAR catre
+    # adresele din ea. Restul se opresc, fiecare cu motivul scris in jurnal si in
+    # randul lui din email_sends — nu dispar tacut. Goala = fara restrictie, adica
+    # exact purtarea de pana acum, deci productia nu se schimba.
+    email_allowed_recipients: list[str] = Field(default_factory=list)
     email_daily_send_cap: int = Field(default=2000, ge=0)
     email_outbox_batch_size: int = Field(default=100, ge=1, le=1000)
     email_outbox_concurrency: int = Field(default=8, ge=1, le=32)
@@ -129,6 +134,14 @@ class Settings(BaseSettings):
                     return [str(origin).strip() for origin in parsed if str(origin).strip()]
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
+
+    def recipient_is_allowed(self, email: str) -> bool:
+        """Lista goala inseamna fara restrictie."""
+        if not self.email_allowed_recipients:
+            return True
+        return email.strip().lower() in {
+            adresa.strip().lower() for adresa in self.email_allowed_recipients if adresa.strip()
+        }
 
     @field_validator("email_from_address", "email_from_name", "email_legal_address")
     @classmethod
