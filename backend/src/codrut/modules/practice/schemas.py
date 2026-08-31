@@ -214,3 +214,135 @@ class PracticeEvolutionResponse(BaseModel):
     competencies: list[EvolutionCompetencyItem] = Field(default_factory=list)
     weekly_average: list[EvolutionWeekPoint] = Field(default_factory=list)
     participants: list[EvolutionParticipantItem] = Field(default_factory=list)
+
+
+# ---- camera de training: ecranul proiectului (plic 30) ----
+
+class RoomCompetencyItem(BaseModel):
+    name: str
+    test_in: int = 0
+    acum: int = 0
+    test_out: int | None = None
+    has_test_in: bool = False
+    has_data: bool = False
+    delta: int | None = None
+
+
+class RoomQuizWeakSpot(BaseModel):
+    name: str
+    average: int
+
+
+class RoomWeekPoint(BaseModel):
+    week_start: str
+    average: int
+    scores_count: int
+
+
+class RoomParticipantItem(BaseModel):
+    participant_profile_id: UUID
+    user_id: UUID | None = None
+    full_name: str
+    email: str | None = None
+    has_account: bool = False
+    average_score: int = 0
+    sessions_count: int = 0
+    last_activity: str | None = None
+    inactive: bool = True
+    has_test_in: bool = False
+    has_test_out: bool = False
+    active_membership: bool = True
+
+
+class PracticeRoomResponse(BaseModel):
+    project_id: UUID
+    project_name: str
+    project_type: str | None = None
+    theme_name: str | None = None
+    practice_configured: bool = False
+    starts_at: str | None = None
+    due_at: str | None = None
+    timeline_percent: float | None = None
+    participants_total: int = 0
+    average_score: int = 0
+    sessions_total: int = 0
+    inactive_count: int = 0
+    test_in_completed: int = 0
+    test_out_completed: int = 0
+    active_count: int = 0
+    recurrent_count: int = 0
+    test_out_active: bool = False
+    competencies: list[RoomCompetencyItem] = Field(default_factory=list)
+    growth_ranking: list[RoomCompetencyItem] = Field(default_factory=list)
+    quiz_weak_spots: list[RoomQuizWeakSpot] = Field(default_factory=list)
+    weekly_average: list[RoomWeekPoint] = Field(default_factory=list)
+    participants: list[RoomParticipantItem] = Field(default_factory=list)
+
+
+# ---- pagina omului (plic 30, ecranul 2) ----
+
+class PersonTheoryItem(BaseModel):
+    name: str
+    test_in: int | None = None
+    test_out: int | None = None
+    delta: int | None = None
+
+
+class PersonEvidenceItem(BaseModel):
+    name: str
+    level: str
+    level_description: str = ""
+    color: str = ""
+    average_score: float = 0
+    sessions_count: int = 0
+    scores_count: int = 0
+    why_not_higher: str = ""
+
+
+class PersonTextItem(BaseModel):
+    id: UUID
+    summary: str
+    created_at: str
+
+
+class PersonSampleItem(BaseModel):
+    id: UUID
+    real_weak: str | None = None
+    real_improved: str | None = None
+    invented_weak: str | None = None
+    invented_improved: str | None = None
+    created_at: str
+
+
+class TrainerNoteItem(BaseModel):
+    id: UUID
+    note: str
+    created_at: str
+
+
+class TrainerNoteCreateRequest(BaseModel):
+    note: str = Field(min_length=1, max_length=4000)
+
+
+class PracticePersonResponse(BaseModel):
+    project_id: UUID
+    project_name: str
+    participant_profile_id: UUID
+    user_id: UUID | None = None
+    full_name: str
+    email: str | None = None
+    has_account: bool = False
+    duration_days: int | None = None
+    test_in_average: int | None = None
+    progress_average: int = 0
+    test_out_average: int | None = None
+    sessions_count: int = 0
+    theory: list[PersonTheoryItem] = Field(default_factory=list)
+    evidence: list[PersonEvidenceItem] = Field(default_factory=list)
+    top_progress: list[PersonEvidenceItem] = Field(default_factory=list)
+    weekly_average: list[RoomWeekPoint] = Field(default_factory=list)
+    quiz_weak_spots: list[RoomQuizWeakSpot] = Field(default_factory=list)
+    insight_moments: list[PersonTextItem] = Field(default_factory=list)
+    trainer_recommendations: list[PersonTextItem] = Field(default_factory=list)
+    session_samples: list[PersonSampleItem] = Field(default_factory=list)
+    trainer_notes: list[TrainerNoteItem] = Field(default_factory=list)
