@@ -30,15 +30,56 @@ export default async function ProjectEvolutionPage({
   ]);
   const data = await getProjectEvolution(projectId, requestOptions);
 
+  // Fila nu are voie sa crape, orice ar fi. `getProjectEvolution` prinde si
+  // exceptiile, nu doar raspunsurile ne-OK, si intoarce `null`; aici se arata un
+  // ecran care EXPLICA, nu unul cu „Ref:".
   if (!data) {
     return (
       <Card className="p-6">
-        <p className="text-sm text-muted-foreground">
-          Nu am putut încărca evoluția competențelor pentru acest proiect.
+        <h2 className="text-base font-semibold text-foreground">
+          Nu am putut încărca evoluția competențelor
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Datele nu au venit de la server. Proiectul și participanții sunt neatinși —
+          e doar afișarea. Încearcă din nou peste un minut; dacă ține, spune-mi și mă uit
+          în jurnalul serverului.
         </p>
+        <Link
+          href={`/trainer/projects/${projectId}/settings`}
+          className="mt-4 inline-block text-sm font-medium underline underline-offset-2"
+        >
+          Mergi la Setările proiectului
+        </Link>
       </Card>
     );
   }
+
+  // Proiect care nu e de training: fila n-are ce arata, si se spune de ce.
+  if (data.projectType !== "training") {
+    return (
+      <Card className="p-6">
+        <h2 className="text-base font-semibold text-foreground">
+          Proiectul acesta nu e de tip training
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Evoluția competențelor se adună din sesiunile cu Cody, care există doar pe
+          proiectele de training. Pentru „{data.projectName}" fila „Rezultate" e cea
+          potrivită.
+        </p>
+        <Link
+          href={`/trainer/projects/${projectId}/settings`}
+          className="mt-4 inline-block text-sm font-medium underline underline-offset-2"
+        >
+          Mergi la Setările proiectului
+        </Link>
+      </Card>
+    );
+  }
+
+  // Proiect de training fara nicio sesiune: tot gol, nu eroare.
+  const faraSesiuni =
+    data.weeklyAverage.length === 0 &&
+    data.competencies.every((c) => c.scoresCount === 0);
 
   const maxWeekly = Math.max(100, ...data.weeklyAverage.map((w) => w.average));
 
@@ -61,6 +102,16 @@ export default async function ProjectEvolutionPage({
           {data.testOutEnabled ? "Test OUT: Activ" : "Activează Test OUT"}
         </button>
       </div>
+
+      {faraSesiuni ? (
+        <Card className="p-5">
+          <p className="text-sm text-muted-foreground">
+            Încă nicio sesiune de exersare pe proiectul ăsta. Cifrele apar aici după ce
+            un participant termină prima conversație cu Cody. Coloanele Test IN și
+            Test OUT {data.testPendingNote}.
+          </p>
+        </Card>
+      ) : null}
 
       {/* ── contoarele ── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

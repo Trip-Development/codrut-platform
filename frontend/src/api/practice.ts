@@ -1,4 +1,5 @@
 import { apiFetch } from "./http";
+import { getApiBaseUrl } from "./runtime";
 
 export type SessionKind = "roleplay" | "coaching" | "knowledge" | "research";
 export type SessionState = "open" | "closed";
@@ -44,7 +45,7 @@ export async function startPracticeSession(payload: {
   kind: SessionKind;
   scenarioId?: string;
 }): Promise<PracticeSession> {
-  const res = await apiFetch("/api/practice/sessions", {
+  const res = await apiFetch(`${getApiBaseUrl()}/practice/sessions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -77,7 +78,7 @@ export async function submitPracticeTurn(
   sessionId: string,
   text: string,
 ): Promise<PracticeTurnSubmitResponse> {
-  const res = await apiFetch(`/api/practice/sessions/${sessionId}/turns`, {
+  const res = await apiFetch(`${getApiBaseUrl()}/practice/sessions/${sessionId}/turns`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
@@ -115,7 +116,7 @@ export async function submitPracticeTurn(
 export async function getPracticeSessionHistory(
   sessionId: string,
 ): Promise<PracticeSessionDetail> {
-  const res = await apiFetch(`/api/practice/sessions/${sessionId}`);
+  const res = await apiFetch(`${getApiBaseUrl()}/practice/sessions/${sessionId}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || "Nu am putut încărca istoricul sesiunii");
@@ -217,7 +218,7 @@ export async function endPracticeSession(
   sessionId: string,
   payload?: { note?: string },
 ): Promise<{ session: PracticeSession; summary: string | null }> {
-  const res = await apiFetch(`/api/practice/sessions/${sessionId}/end`, {
+  const res = await apiFetch(`${getApiBaseUrl()}/practice/sessions/${sessionId}/end`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload || {}),
@@ -247,7 +248,7 @@ export async function endPracticeSession(
 }
 
 export async function getPracticeStareSummary(): Promise<PracticeStareSummary> {
-  const res = await apiFetch("/api/practice/stare-summary");
+  const res = await apiFetch(`${getApiBaseUrl()}/practice/stare-summary`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || "Nu am putut obține starea sistemului");
@@ -276,7 +277,7 @@ export async function transcribeAudio(
   const formData = new FormData();
   formData.append("file", audioBlob, "recording.webm");
 
-  const res = await apiFetch("/api/practice/transcribe", {
+  const res = await apiFetch(`${getApiBaseUrl()}/practice/transcribe`, {
     method: "POST",
     body: formData,
   });
@@ -324,7 +325,7 @@ export async function getPracticeDashboard(
   projectId?: string,
 ): Promise<PracticeDashboardData> {
   const query = projectId ? `?project_id=${projectId}` : "";
-  const res = await apiFetch(`/api/practice/dashboard${query}`);
+  const res = await apiFetch(`${getApiBaseUrl()}/practice/dashboard${query}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || "Nu am putut încărca tabloul participantului");
@@ -448,13 +449,22 @@ export async function getProjectEvolution(
   projectId: string,
   options: { headers?: HeadersInit } = {},
 ): Promise<ProjectEvolution | null> {
-  const res = await apiFetch(`/api/practice/projects/${projectId}/evolution`, {
-    cache: "no-store",
-    credentials: "include",
-    ...options,
-  });
+  // `fetch` poate ARUNCA (adresă nevalidă, rețea, backend căzut) — nu doar să
+  // întoarcă un răspuns ne-OK. Excepția trecea pe lângă `!res.ok` și pe lângă
+  // tratarea lui `null` din pagină, și fila crăpa cu „Ref:". Se prinde aici.
+  let res: Response;
+  try {
+    res = await apiFetch(`${getApiBaseUrl()}/practice/projects/${projectId}/evolution`, {
+      cache: "no-store",
+      credentials: "include",
+      ...options,
+    });
+  } catch {
+    return null;
+  }
   if (!res.ok) return null;
-  const data = await res.json();
+  const data = await res.json().catch(() => null);
+  if (!data) return null;
   return {
     projectId: data.project_id,
     projectName: data.project_name,
@@ -532,7 +542,7 @@ function mapCompetency(c: RawThemeCompetency): ThemeCompetency {
 }
 
 export async function getPracticeThemes(): Promise<PracticeTheme[]> {
-  const res = await apiFetch("/api/practice/themes", { credentials: "include" });
+  const res = await apiFetch(`${getApiBaseUrl()}/practice/themes`, { credentials: "include" });
   if (!res.ok) return [];
   const data = await res.json();
   return (data || []).map((t: {
@@ -579,7 +589,7 @@ function mapSetup(data: RawPracticeSetup): PracticeSetup {
 }
 
 export async function getPracticeSetup(projectId: string): Promise<PracticeSetup | null> {
-  const res = await apiFetch(`/api/practice/projects/${projectId}/setup`, {
+  const res = await apiFetch(`${getApiBaseUrl()}/practice/projects/${projectId}/setup`, {
     credentials: "include",
   });
   if (!res.ok) return null;
@@ -590,7 +600,7 @@ export async function configurePracticeSetup(
   projectId: string,
   input: { themeId: string; competencies: string[] },
 ): Promise<PracticeSetup> {
-  const res = await apiFetch(`/api/practice/projects/${projectId}/setup`, {
+  const res = await apiFetch(`${getApiBaseUrl()}/practice/projects/${projectId}/setup`, {
     method: "PUT",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
