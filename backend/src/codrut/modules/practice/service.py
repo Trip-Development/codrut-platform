@@ -25,10 +25,12 @@ from codrut.modules.practice.generation_provider import (
 )
 from codrut.modules.practice.models import (
     OutcomeKind,
+    ParticipantMemory,
     PracticeOutcome,
     PracticeProgramSettings,
     PracticeSession,
     PracticeTurn,
+    ProjectCompetency,
     SessionKind,
     SessionState,
     TurnRole,
@@ -46,6 +48,12 @@ from codrut.modules.practice.quotas import (
     ensure_turn_length,
     is_session_turn_limit_reached,
 )
+
+# Regulile memoriei, pastrate din aplicatia veche.
+MEMORIE_CATE_INSEMNARI = 5
+MEMORIE_RELEVANTA_MINIMA = 40
+# Promptul foloseste memoria doar la inceputul sesiunii; peste asta nici nu se citeste.
+MEMORIE_PANA_LA_REPLICA = 2
 
 
 class PracticeSessionService:
@@ -286,6 +294,62 @@ class PracticeSessionService:
         turns = list((await self.session.execute(stmt_turns)).scalars().all())
         return session_obj, turns
 
+    async def _competentele_proiectului(self, project_id: uuid.UUID) -> list[str]:
+        """Competentele alese de trainer, in ordinea lor.
+
+        Blocul de quiz le foloseste ca sa spuna limpede pe ce se da testul. Fara ele
+        scria „toate competentele de comunicare", adica nimic anume.
+        """
+        randuri = (await self.session.execute(
+            select(ProjectCompetency)
+            .where(ProjectCompetency.project_id == project_id)
+            .order_by(ProjectCompetency.order_index, ProjectCompetency.name)
+        )).scalars().all()
+        return [c.name for c in randuri]
+
+    async def _memoria_participantului(
+        self,
+        user_id: uuid.UUID | None,
+        *,
+        history_length: int,
+    ) -> list[dict]:
+        """Ce stie Codrut despre omul asta din sesiunile dinainte.
+
+        Se scria la finalul fiecarei sesiuni si nu se citea niciodata inapoi, deci
+        fiecare sesiune incepea cu Codrut care nu stie nimic despre om.
+
+        Regula pastrata din aplicatia veche: cele mai recente 5 insemnari cu relevanta
+        cel putin 40, date in ordine cronologica, si numai la inceputul sesiunii —
+        promptul le foloseste oricum doar la `history_length <= 2`, deci mai tarziu nici
+        nu se citesc din baza.
+        """
+        if user_id is None or history_length > MEMORIE_PANA_LA_REPLICA:
+            return []
+
+        recente = (await self.session.execute(
+            select(ParticipantMemory)
+            .where(
+                ParticipantMemory.user_id == user_id,
+                ParticipantMemory.relevance_score >= MEMORIE_RELEVANTA_MINIMA,
+            )
+            .order_by(ParticipantMemory.created_at.desc())
+            .limit(MEMORIE_CATE_INSEMNARI)
+        )).scalars().all()
+
+        return [
+            {
+                "created_at": m.created_at.isoformat() if m.created_at else "",
+                "summary": m.summary,
+                "key_quotes": m.key_quotes or [],
+                "evolution_signals": m.evolution_signals or {},
+                "personal_context": m.personal_context or {},
+                "relevant_competencies": m.relevant_competencies or [],
+                "relevance_score": m.relevance_score,
+            }
+            # din baza vin de la cea mai noua; in prompt merg cronologic
+            for m in reversed(recente)
+        ]
+
     async def add_participant_turn(
         self,
         principal: SessionPrincipal,
@@ -369,13 +433,26 @@ class PracticeSessionService:
             messages.append(GenerationMessage(role="user", text=text))
 
             history_length = len(existing_turns) + 1
-            is_actor_role = (session_obj.kind == SessionKind.roleplay)
+
+            # Cele trei piese care existau pe disc dar nu ajungeau niciodata la model.
+            competente = await self._competentele_proiectului(program_settings.project_id)
+            memorii = await self._memoria_participantului(
+                profile.user_id or principal.user_id,
+                history_length=history_length,
+            )
 
             system_instruction = get_system_prompt_for_kind(
                 kind=session_obj.kind,
                 name=profile.full_name,
                 history_length=history_length,
-                is_actor_role=is_actor_role,
+                # `quiz.md` ii spune modelului sa urmeze EXCLUSIV blocul „MOD QUIZ
+                # ACTIV". Blocul se construia doar daca primea o competenta, si nu
+                # primea niciodata — deci i se cerea sa urmeze ceva ce nu era acolo.
+                # Nu exista inca nicio cale prin care omul sa aleaga o singura
+                # competenta, deci quizul e pe toate: „mix".
+                quiz_competency="mix" if session_obj.kind == SessionKind.knowledge else None,
+                project_competencies=competente,
+                memories=memorii,
                 biblioteca_path=self.settings.biblioteca_path,
             )
 
