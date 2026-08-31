@@ -349,3 +349,35 @@ def test_quizul_anunta_si_incepe_in_loc_sa_ceara_voie():
     assert "Nu aștepți răspuns" in bloc
     assert "Întrebarea 1/10" in bloc
     assert "fără salut" not in bloc
+
+
+def test_quizul_primeste_pornirea_cand_trebuie_sa_porneasca():
+    """Eroare de o unitate, aparuta odata cu salutul de la plicul 38.
+
+    Blocul de pornire se trimitea doar la `history_length <= 1`, adica exact la replica
+    de salut. La a doua replica — momentul in care quizul trebuie sa inceapa — pleca deja
+    blocul de continuare, care nu spune nicaieri sa inceapa.
+    """
+    # replica de salut: inca nu incepe
+    salut = get_system_prompt_for_kind(
+        "knowledge", name="Andrei", history_length=0,
+        quiz_competency="mix", project_competencies=["A"],
+    )
+    assert "Întrebarea 1/10" in salut
+
+    # a doua replica: AICI trebuie sa porneasca
+    pornire = get_system_prompt_for_kind(
+        "knowledge", name="Andrei", history_length=2,
+        quiz_competency="mix", project_competencies=["A"],
+    )
+    assert "DUPĂ PRIMUL SCHIMB DE REPLICI" in pornire
+    assert "Întrebarea 1/10" in pornire
+    assert "NUMĂR FIX" in pornire
+
+    # mai tarziu: blocul scurt, de continuare
+    mai_tarziu = get_system_prompt_for_kind(
+        "knowledge", name="Andrei", history_length=6,
+        quiz_competency="mix", project_competencies=["A"],
+    )
+    assert "NUMĂR FIX" not in mai_tarziu
+    assert "MOD QUIZ ACTIV" in mai_tarziu
