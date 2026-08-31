@@ -465,14 +465,18 @@ export function PracticeWorkspace({
               </Button>
             </>
           ) : (
-            <Button
-              variant="default"
-              size="sm"
-              className="text-xs h-8"
-              onClick={handleReset}
-            >
-              Sesiune nouă
-            </Button>
+            <>
+              {/* Drumul inapoi, sus, unde se vede fara sa derulezi. Pana la plicul 36
+                  statea doar in caseta de jos, dupa toata zona de conversatie. */}
+              <Button
+                variant="default"
+                size="sm"
+                className="text-xs h-8"
+                onClick={handleReset}
+              >
+                ← Înapoi la alegerea modului
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -487,10 +491,26 @@ export function PracticeWorkspace({
       <div className="flex-1 overflow-y-auto px-1 py-2 flex flex-col gap-4">
         {turns.length === 0 && !isLoading && (
           <div className="text-center text-muted-foreground my-auto p-6 text-sm">
-            <p className="font-medium text-foreground">Sesiunea este deschisă.</p>
-            <p className="text-xs mt-1">
-              Scrie un prim mesaj sau alege o situație concretă pentru a începe dialogul cu Cody.
-            </p>
+            {/* Textul asta se arata si cand sesiunea era inchisa, deci ecranul se
+                contrazicea singur: sus scria „Sesiune încheiată", iar aici „Sesiunea
+                este deschisă". */}
+            {session.state === "open" ? (
+              <>
+                <p className="font-medium text-foreground">Sesiunea este deschisă.</p>
+                <p className="text-xs mt-1">
+                  Scrie un prim mesaj sau alege o situație concretă pentru a începe dialogul cu Cody.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-medium text-foreground">
+                  Sesiunea s-a încheiat fără nicio replică.
+                </p>
+                <p className="text-xs mt-1">
+                  Nu s-a schimbat nimic. Începe alta când vrei, din butonul de sus.
+                </p>
+              </>
+            )}
           </div>
         )}
 
