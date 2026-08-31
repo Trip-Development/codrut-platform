@@ -58,6 +58,31 @@ describe("route loading", () => {
     },
   );
 
+  it("nu arata ecranele de coaching cat timp nu se stie tipul proiectului", () => {
+    // Ecranul „Pregatim spatiul participant" apare inaintea datelor. Pana la plicul
+    // 33 punea cu mana meniul de coaching, iar omul de la training vedea
+    // „Chestionare" si „Rezultate" la fiecare intrare.
+    render(<ParticipantRouteLoading title="Acasă" activeHref="/participant" kind="home" />);
+
+    expect(screen.queryByRole("link", { name: "Chestionare" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Rezultate" })).toBeNull();
+    expect(screen.getAllByRole("link", { name: "Exersează (Cody)" }).length).toBeGreaterThan(0);
+  });
+
+  it("pastreaza meniul de coaching la un proiect care nu e de training", () => {
+    render(
+      <ParticipantRouteLoading
+        title="Rezultate"
+        activeHref="/participant/results"
+        kind="results"
+        projectType="coaching_echipa"
+      />,
+    );
+
+    expect(screen.getAllByRole("link", { name: "Chestionare" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Rezultate" }).length).toBeGreaterThan(0);
+  });
+
   it("renders reusable company, project, and tab skeleton frames", () => {
     const { container, rerender } = render(<TabBarSkeleton count={3} />);
     expect(screen.getByRole("navigation", { name: "Pregătim navigarea" }).children[0].children).toHaveLength(3);

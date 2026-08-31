@@ -10,7 +10,11 @@ import {
 
 import { BrandMark } from "@/components/brand/brand-mark";
 import { AppShell } from "@/components/shell/app-shell";
-import { participantNavItems, trainerNavItems } from "@/components/shell/nav";
+import {
+  participantNavItemsForType,
+  participantTrainingNavItems,
+  trainerNavItems,
+} from "@/components/shell/nav";
 import { Button } from "@/components/ui/button";
 
 type RouteError = Error & { digest?: string };
@@ -98,9 +102,11 @@ export function TrainerRouteError({
 export function ParticipantRouteError({
   error,
   reset,
+  projectType,
 }: {
   error: RouteError;
   reset: () => void;
+  projectType?: string | null;
 }) {
   return (
     <AppShell
@@ -108,7 +114,14 @@ export function ParticipantRouteError({
       eyebrow=""
       title="Pagina nu s-a încărcat"
       description=""
-      navItems={participantNavItems}
+      navItems={
+        // Acelasi motiv ca la ecranul de incarcare: cand tipul nu se stie, meniul
+        // de training. La training e submultime, deci nu arata ecrane de coaching
+        // unui om care n-are ce cauta in ele.
+        projectType == null
+          ? participantTrainingNavItems
+          : participantNavItemsForType(projectType)
+      }
       activeHref="/participant"
       accountIdentityPending
       showHeader={false}
