@@ -11,7 +11,6 @@ import {
   participantScopeParams,
   participantScopedHref,
   participantActiveProjectType,
-  participantIsTraining,
   participantScopedNavItems,
   participantWorkspaceRequestOptions,
   type ParticipantRouteSearchParams,
