@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # v2.1 (plicul 37): la role-play perechea actor+evaluare a fost pusa la loc, blocul de
 # quiz si memoria chiar ajung la model. Compozitia promptului s-a schimbat, deci
 # sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
-CODY_PROMPT_VERSION = "v2.2"
+CODY_PROMPT_VERSION = "v2.3"
 
 _PROMPTS_DIR = Path(__file__).parent
 
