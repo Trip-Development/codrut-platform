@@ -284,7 +284,14 @@ def get_system_prompt_for_kind(
         if quiz_competency:
             quiz_block = build_quiz_block(
                 quiz_competency=quiz_competency,
-                is_first=(history_length <= 1),
+                # Blocul de pornire tine pana cand quizul chiar incepe.
+                #
+                # Era `<= 1`, corect in aplicatia veche unde la quiz nu exista salut: a
+                # doua replica ERA prima intrebare. De la plicul 38 exista salut, deci la
+                # `history_length == 2` — momentul in care quizul trebuie sa porneasca —
+                # se trimitea deja blocul de continuare, care nu spune nicaieri sa
+                # inceapa. Asa Cody raspundea cu „Ce vrei sa gandim impreuna?".
+                is_first=(history_length <= 2),
                 project_competencies=project_competencies,
             )
         return f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n{QUIZ_PROMPT}{quiz_block}{memory_block}"
