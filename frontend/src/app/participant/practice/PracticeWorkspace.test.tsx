@@ -84,16 +84,42 @@ describe("PracticeWorkspace — drumul înapoi", () => {
     fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
     await waitFor(() => expect(api.endPracticeSession).toHaveBeenCalled());
 
-    const inapoi = await screen.findByRole("button", { name: /Înapoi la alegerea modului/ });
+    const toate = await screen.findAllByRole("button", { name: /Înapoi la alegerea modului/ });
     const sinteza = screen.getByText("Ai condus discuția calm și ai propus un pas concret.");
+    const stareaSesiunii = screen.getByText("Sesiune încheiată");
 
     // sinteza ramane vizibila
     expect(sinteza).toBeTruthy();
-    // dar drumul inapoi vine INAINTEA ei pe ecran
-    expect(inapoi.compareDocumentPosition(sinteza) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // drumul inapoi vine INAINTEA ei pe ecran
+    const primul = toate[0];
+    expect(primul.compareDocumentPosition(sinteza) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // si sta sus, in bara de stare, langa eticheta sesiunii — nu doar in caseta de jos,
+    // unde plicul 36 spune ca omul a derulat si tot nu l-a gasit
+    expect(
+      primul.compareDocumentPosition(stareaSesiunii) & Node.DOCUMENT_POSITION_PRECEDING,
+    ).toBeTruthy();
 
-    fireEvent.click(inapoi);
+    fireEvent.click(primul);
     expect(screen.getByText("Alege modul de antrenament")).toBeTruthy();
+  });
+
+  it("cand sesiunea e inchisa, corpul nu mai spune ca e deschisa", async () => {
+    // Ecranul se contrazicea singur: sus „Sesiune încheiată", in corp „Sesiunea este
+    // deschisă". Textul din corp era cel de stare goala si se arata in ambele cazuri.
+    api.endPracticeSession.mockResolvedValue({
+      session: { ...SESIUNE_DESCHISA, state: "closed" },
+      summary: null,
+    });
+    await porneste();
+
+    expect(screen.getByText("Sesiunea este deschisă.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
+    await waitFor(() => expect(api.endPracticeSession).toHaveBeenCalled());
+
+    expect(await screen.findByText("Sesiune încheiată")).toBeTruthy();
+    expect(screen.queryByText("Sesiunea este deschisă.")).toBeNull();
+    expect(screen.getByText("Sesiunea s-a încheiat fără nicio replică.")).toBeTruthy();
   });
 });
 

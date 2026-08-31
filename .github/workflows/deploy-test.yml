@@ -59,16 +59,34 @@ jobs:
 
       - name: Verify Health Endpoints
         shell: bash
+        env:
+          HEALTH_TIMEOUT: 90
+          HEALTH_INTERVAL: 5
         run: |
           set -euo pipefail
-          echo "Checking test environment health..."
-          test_code=$(curl -s -o /dev/null -w "%{http_code}" https://test.cody.andreivacaru.ro/api/health/live)
+          # Containerul tocmai s-a recreat si are nevoie de vreo 25-45 de secunde ca sa
+          # devina sanatos. Pana la plicul 36 pasul asta intreba o SINGURA data, la o
+          # secunda dupa comanda de punere, primea 502 si raporta „picat" desi codul
+          # ajunsese pe server. Punerile #35-#38 au aparut toate rosii asa.
+          echo "Checking test environment health (up to ${HEALTH_TIMEOUT}s)..."
+          waited=0
+          test_code=000
+          while (( waited < HEALTH_TIMEOUT )); do
+            test_code=$(curl -s -o /dev/null -w "%{http_code}" https://test.cody.andreivacaru.ro/api/health/live || echo 000)
+            if [[ "${test_code}" == "200" ]]; then
+              echo "Test environment is healthy (HTTP 200) after ${waited}s."
+              break
+            fi
+            sleep "${HEALTH_INTERVAL}"
+            waited=$(( waited + HEALTH_INTERVAL ))
+          done
           if [[ "${test_code}" != "200" ]]; then
-            echo "Error: Test environment health check failed (HTTP ${test_code})." >&2
+            echo "Error: Test environment health check failed (HTTP ${test_code}) after ${waited}s." >&2
             exit 1
           fi
-          echo "Test environment is healthy (HTTP 200)."
 
+          # Productia NU s-a atins, deci nu are de ce sa porneasca: un singur curl e
+          # raspunsul corect acolo.
           echo "Checking production health (must remain untouched)..."
           prod_code=$(curl -s -o /dev/null -w "%{http_code}" https://cody.andreivacaru.ro/api/health/live)
           if [[ "${prod_code}" != "200" ]]; then
