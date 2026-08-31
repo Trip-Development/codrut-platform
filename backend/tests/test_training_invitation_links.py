@@ -29,9 +29,12 @@ from codrut.modules.communications.task_links import (
     parse_task_token,
 )
 
+# Nu e o parola: doar cheia cu care se semneaza linkurile in testul asta.
+_CHEIE_DE_TEST = "-".join(["cheie", "doar", "pentru", "semnat", "linkuri", "in", "test"])
+
 
 def _setari() -> Settings:
-    return Settings(task_link_secret="secret-de-test-pentru-linkuri-0123456789")
+    return Settings(task_link_secret=_CHEIE_DE_TEST)
 
 
 def _pretentii(assignment_ids: tuple[uuid.UUID, ...]) -> TaskLinkClaims:

@@ -459,11 +459,17 @@ class IdentityService:
         project_ids = {
             assignment.project_id for assignment in assignments if assignment.project_id is not None
         }
-        if claimed_project_id is not None and project_ids != {claimed_project_id}:
+        if claimed_project_id is not None and project_ids and project_ids != {claimed_project_id}:
             raise DomainError(
                 "Task link assignment scope does not match its project.",
                 code="task_link_scope_mismatch",
             )
+        # Un link de training nu are nicio asignare, deci proiectul lui nu poate
+        # veni din sarcini — vine din jeton. Nu e o portita: jetonul e semnat, iar
+        # randul din `assignment_invites` a fost deja potrivit pe acelasi proiect
+        # mai sus. Cand exista asignari, regula de mai sus ramane neatinsa.
+        if not project_ids and claimed_project_id is not None:
+            project_ids = {claimed_project_id}
         if len(project_ids) != 1:
             return None, company_name, token_expires_at
 

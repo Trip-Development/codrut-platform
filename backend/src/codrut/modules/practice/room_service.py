@@ -441,7 +441,7 @@ class PracticeInvitationsService:
 
             # Linkul exista de acum. Emailul e o incercare separata: daca pica,
             # randul ramane bun si omul primeste linkul copiat de trainer.
-            plecat, motiv = await self._incearca_emailul(
+            la_coada, motiv = await self._incearca_emailul(
                 posta,
                 profil=profil,
                 proiect=proiect,
@@ -449,7 +449,7 @@ class PracticeInvitationsService:
                 invitatie_id=invitatie.id,
             )
             out.append(_rand_invitatie(
-                profil_id, profil.full_name, profil.email, link, plecat, motiv,
+                profil_id, profil.full_name, profil.email, link, la_coada, motiv,
             ))
 
         return out
@@ -463,7 +463,13 @@ class PracticeInvitationsService:
         link: str,
         invitatie_id: uuid.UUID,
     ) -> tuple[bool, str | None]:
-        """Incearca sa puna emailul la coada. Nu arunca: intoarce de ce n-a mers."""
+        """Pune emailul la coada. Nu arunca: intoarce de ce n-a mers.
+
+        Atentie la ce inseamna „da": emailul a intrat in coada, NU ca a ajuns la
+        om. Plecarea propriu-zisa se intampla mai tarziu, in `EmailOutboxProcessor`,
+        si poate esua acolo — de exemplu cu o cheie Brevo invalida. De aceea
+        campul se cheama `email_queued`, nu `email_sent`.
+        """
         from codrut.contracts.emails import EmailAddress, EmailMessage
 
         nume = (profil.full_name or "").split(" ")[0] or "Salut"
@@ -496,16 +502,16 @@ class PracticeInvitationsService:
         except DomainError as exc:
             if exc.code == "daily_send_cap_reached":
                 return False, (
-                    "Emailul nu a plecat: s-a atins plafonul zilnic de trimiteri. "
-                    "Linkul de mai jos merge oricum."
+                    "Emailul nu a intrat la coada: s-a atins plafonul zilnic de "
+                    "trimiteri. Linkul de mai jos merge oricum."
                 )
-            return False, f"Emailul nu a plecat ({exc.code}). Linkul de mai jos merge oricum."
+            return False, f"Emailul nu a intrat la coada ({exc.code}). Linkul merge oricum."
         except Exception:
             logger.exception(
                 "Emailul de invitatie la training nu s-a putut pune la coada.",
                 extra={"invitation_id": str(invitatie_id)},
             )
-            return False, "Emailul nu a plecat. Linkul de mai jos merge oricum."
+            return False, "Emailul nu a intrat la coada. Linkul de mai jos merge oricum."
 
 
 def _rand_invitatie(
@@ -513,7 +519,7 @@ def _rand_invitatie(
     nume: str | None,
     email: str | None,
     link: str | None,
-    email_trimis: bool,
+    email_la_coada: bool,
     motiv: str | None = None,
 ) -> dict:
     return {
@@ -521,6 +527,6 @@ def _rand_invitatie(
         "full_name": nume,
         "email": email,
         "invite_url": link,
-        "email_sent": email_trimis,
+        "email_queued": email_la_coada,
         "error": motiv,
     }

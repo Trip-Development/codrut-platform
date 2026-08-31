@@ -370,13 +370,17 @@ class TrainingInvitationSendRequest(BaseModel):
 class TrainingInvitationSendItem(BaseModel):
     """Ce s-a intamplat cu fiecare om, pe rand.
 
-    `invite_url` vine si cand `email_sent` e fals: linkul e bun oricum, iar
-    trainerul il poate copia. `error` spune de ce n-a plecat emailul.
+    `invite_url` vine si cand emailul nu a intrat la coada: linkul e bun oricum,
+    iar trainerul il poate copia.
+
+    `email_queued` inseamna ca emailul a intrat in coada, NU ca a ajuns la om.
+    Plecarea propriu-zisa se intampla mai tarziu si poate esua acolo — de exemplu
+    cu o cheie invalida la furnizor. De aceea campul nu se cheama `email_sent`.
     """
 
     participant_profile_id: UUID
     full_name: str | None = None
     email: str | None = None
     invite_url: str | None = None
-    email_sent: bool = False
+    email_queued: bool = False
     error: str | None = None
