@@ -21,11 +21,18 @@ import { Card } from "@/components/ui/card";
  * Până la plicul 29, rândul de configurare se punea de mână, cu un script — nicio
  * rută a aplicației nu îl crea. De aici încolo îl scrie aplicația.
  */
+// Aceeasi valoare ca `SESIUNI_PE_ZI_IMPLICIT` din backend
+// (`modules/practice/setup_service.py`): cifra cu care porneste un proiect nou.
+const SESIUNI_PE_ZI_IMPLICIT = 5;
+
 export function PracticeSetupSection({ projectId }: { projectId: string }) {
   const [themes, setThemes] = useState<PracticeTheme[]>([]);
   const [setup, setSetup] = useState<PracticeSetup | null>(null);
   const [themeId, setThemeId] = useState<string>("");
   const [ticked, setTicked] = useState<Set<string>>(new Set());
+  // Plafonul zilnic de sesiuni. Pana la plicul 35 numarul era ingropat in configurare
+  // si nu se putea schimba decat direct in baza.
+  const [sesiuniPeZi, setSesiuniPeZi] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +47,7 @@ export function PracticeSetupSection({ projectId }: { projectId: string }) {
       if (!alive) return;
       setThemes(t);
       setSetup(s);
+      setSesiuniPeZi(String(s?.maxSessionsPerDay ?? SESIUNI_PE_ZI_IMPLICIT));
       const initialTheme = s?.themeId ?? t.find((x) => x.usable)?.id ?? t[0]?.id ?? "";
       setThemeId(initialTheme);
       if (s && s.competencies.length > 0) {
@@ -80,11 +88,18 @@ export function PracticeSetupSection({ projectId }: { projectId: string }) {
     setError(null);
     setMessage(null);
     try {
+      const numar = Number.parseInt(sesiuniPeZi, 10);
+      if (!Number.isFinite(numar) || numar < 1 || numar > 1000) {
+        setError("Numărul de sesiuni pe zi trebuie să fie între 1 și 1000.");
+        return;
+      }
       const result = await configurePracticeSetup(projectId, {
         themeId,
         competencies: Array.from(ticked),
+        maxSessionsPerDay: numar,
       });
       setSetup(result);
+      setSesiuniPeZi(String(result.maxSessionsPerDay ?? numar));
       setMessage("Salvat. Participanții pot exersa pe proiectul ăsta.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Nu am putut salva.");
@@ -149,6 +164,32 @@ export function PracticeSetupSection({ projectId }: { projectId: string }) {
         </ul>
       </fieldset>
 
+      <div className="mt-5">
+        <label
+          htmlFor="sesiuni-pe-zi"
+          className="text-sm font-medium text-foreground"
+        >
+          Sesiuni pe zi, pentru fiecare participant
+        </label>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Câte sesiuni de exersare poate porni un om într-o zi. Când ajunge la număr,
+          i se spune limpede pe ecran și poate continua a doua zi. Ridică-l dacă
+          oamenii au nevoie de mai multe.
+        </p>
+        <input
+          id="sesiuni-pe-zi"
+          type="number"
+          min={1}
+          max={1000}
+          value={sesiuniPeZi}
+          onChange={(e) => {
+            setSesiuniPeZi(e.target.value);
+            setMessage(null);
+          }}
+          className="mt-2 w-28 rounded-md border px-3 py-2 text-sm"
+        />
+      </div>
+
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -156,7 +197,7 @@ export function PracticeSetupSection({ projectId }: { projectId: string }) {
           disabled={saving || !themeId || !theme?.usable}
           className="rounded-md bg-burgundy px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
-          {saving ? "Salvez…" : "Salvează competențele"}
+          {saving ? "Salvez…" : "Salvează setările"}
         </button>
         {message ? <span className="text-sm text-muted-foreground">{message}</span> : null}
         {error ? <span className="text-sm text-danger">{error}</span> : null}

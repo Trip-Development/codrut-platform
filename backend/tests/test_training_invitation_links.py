@@ -194,3 +194,100 @@ async def test_a_doua_apasare_pune_al_doilea_mail_in_coada() -> None:
             await sesiune.rollback()
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_plafonul_de_sesiuni_pe_zi_se_poate_ridica_din_setari() -> None:
+    """Trainerul trebuie sa poata schimba numarul fara sa umble nimeni in baza.
+
+    Pana la plicul 35 `PracticeSetupRequest` avea doar tema, competentele si comutatorul
+    de pornire; numarul era ingropat in configurare, scris cu 5, si se putea schimba
+    doar direct in tabela.
+    """
+    from sqlalchemy import select
+
+    from codrut.core.database import SessionLocal, engine
+    from codrut.modules.companies.models import Company, CompanyProject
+    from codrut.modules.practice.models import (
+        CompetencyTemplate,
+        PracticeKnowledgePack,
+        PracticeProgramSettings,
+        PracticeTheme,
+    )
+    from codrut.modules.practice.setup_service import (
+        SESIUNI_PE_ZI_IMPLICIT,
+        PracticeSetupService,
+    )
+
+    await engine.dispose()
+    try:
+        async with SessionLocal() as sesiune:
+            marca = uuid.uuid4().hex[:8]
+            companie = Company(id=uuid.uuid4(), name=f"Plafon {marca}")
+            tema = PracticeTheme(id=uuid.uuid4(), name=f"Tema {marca}", slug=f"tema-{marca}")
+            sesiune.add_all([companie, tema])
+            await sesiune.flush()
+
+            proiect = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=companie.id,
+                name=f"Program {marca}",
+                project_type="training",
+            )
+            sesiune.add_all([
+                proiect,
+                CompetencyTemplate(
+                    id=uuid.uuid4(),
+                    theme_id=tema.id,
+                    name="Ascultare activă",
+                    description="",
+                    order_index=1,
+                ),
+                PracticeKnowledgePack(
+                    id=uuid.uuid4(),
+                    theme_id=tema.id,
+                    version=1,
+                    checksum=marca,
+                    manifest={},
+                    content_uri=f"proba://{marca}",
+                    word_count=1,
+                ),
+            ])
+            await sesiune.flush()
+
+            serviciu = PracticeSetupService(sesiune)
+
+            # fara numar: proiectul nou porneste de la cifra implicita
+            raspuns = await serviciu.configure(
+                project_id=proiect.id,
+                theme_id=tema.id,
+                competency_names=None,
+            )
+            assert raspuns["max_sessions_per_day"] == SESIUNI_PE_ZI_IMPLICIT
+
+            # cu numar: se ridica
+            raspuns = await serviciu.configure(
+                project_id=proiect.id,
+                theme_id=tema.id,
+                competency_names=None,
+                max_sessions_per_day=500,
+            )
+            assert raspuns["max_sessions_per_day"] == 500
+
+            # None nu sterge ce a pus trainerul
+            raspuns = await serviciu.configure(
+                project_id=proiect.id,
+                theme_id=tema.id,
+                competency_names=None,
+            )
+            assert raspuns["max_sessions_per_day"] == 500
+
+            setari = (await sesiune.execute(
+                select(PracticeProgramSettings)
+                .where(PracticeProgramSettings.project_id == proiect.id)
+            )).scalar_one()
+            assert setari.max_sessions_per_day == 500
+
+            await sesiune.rollback()
+    finally:
+        await engine.dispose()

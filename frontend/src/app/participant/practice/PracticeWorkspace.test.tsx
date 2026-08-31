@@ -19,7 +19,19 @@ const api = vi.hoisted(() => ({
   endPracticeSession: vi.fn(),
 }));
 
-vi.mock("@/api/practice", () => api);
+const { PracticeError } = vi.hoisted(() => ({
+  PracticeError: class extends Error {
+    code: string;
+    details: Record<string, unknown>;
+    constructor(message: string, code: string, details: Record<string, unknown>) {
+      super(message);
+      this.code = code;
+      this.details = details;
+    }
+  },
+}));
+
+vi.mock("@/api/practice", () => ({ ...api, PracticeError }));
 
 const SESIUNE_DESCHISA = {
   id: "sesiune-1",
@@ -82,5 +94,36 @@ describe("PracticeWorkspace — drumul înapoi", () => {
 
     fireEvent.click(inapoi);
     expect(screen.getByText("Alege modul de antrenament")).toBeTruthy();
+  });
+});
+
+describe("PracticeWorkspace — refuzul spune de ce", () => {
+  it("la plafonul zilnic scrie in romana cate sesiuni are si cate a facut", async () => {
+    // Pana la plicul 35 clientul citea `err.detail`, camp care nu exista in plicul de
+    // eroare al aplicatiei. Asa ca orice refuz ajungea pe ecran ca acelasi text
+    // generic: omul apasa si parea ca nu se intampla nimic.
+    api.startPracticeSession.mockRejectedValue(
+      new PracticeError("Daily practice session limit of 5 reached", "practice_daily_limit", {
+        max_sessions_per_day: 5,
+        sessions_today: 5,
+      }),
+    );
+    render(<PracticeWorkspace projectId="proiect-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
+
+    const text = await screen.findByText(/limita de sesiuni pe ziua de azi/i);
+    expect(text.textContent).toContain("5 sesiuni pe zi");
+    expect(text.textContent).toContain("azi ai făcut 5");
+    expect(text.textContent).toContain("Numărătoarea se reia mâine");
+    // si NU textul tehnic in engleza
+    expect(text.textContent).not.toContain("Daily practice session limit");
+  });
+
+  it("la orice alta eroare arata mesajul venit de la server", async () => {
+    api.startPracticeSession.mockRejectedValue(new Error("Programul nu e pornit."));
+    render(<PracticeWorkspace projectId="proiect-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
+
+    expect(await screen.findByText("Programul nu e pornit.")).toBeTruthy();
   });
 });

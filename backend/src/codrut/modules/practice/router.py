@@ -283,6 +283,7 @@ async def configure_practice_setup(
         theme_id=payload.theme_id,
         competency_names=payload.competencies,
         is_enabled=payload.is_enabled,
+        max_sessions_per_day=payload.max_sessions_per_day,
     )
     await session.commit()
     return PracticeSetupResponse(**result)

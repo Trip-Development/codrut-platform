@@ -22,11 +22,19 @@ def ensure_turn_length(text: str, max_chars_per_turn: int) -> None:
 
 
 def ensure_daily_session_limit(sessions_today_count: int, max_sessions_per_day: int) -> None:
-    """Verify participant has not exceeded daily session quota."""
+    """Verify participant has not exceeded daily session quota.
+
+    Cifrele pleaca in `details` pentru ca ecranul sa poata spune omului, in romana,
+    cate sesiuni are pe zi si cate a facut. Un refuz mut e mai rau decat o limita.
+    """
     if sessions_today_count >= max_sessions_per_day:
         raise DomainError(
             f"Daily practice session limit of {max_sessions_per_day} reached",
             code="practice_daily_limit",
+            details={
+                "max_sessions_per_day": max_sessions_per_day,
+                "sessions_today": sessions_today_count,
+            },
         )
 
 
