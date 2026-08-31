@@ -356,5 +356,27 @@ class TrainingInvitationItem(BaseModel):
     email: str | None = None
     invited: bool = False
     invited_at: str | None = None
+    invite_url: str | None = None
     has_account: bool = False
     has_test_in: bool = False
+
+
+class TrainingInvitationSendRequest(BaseModel):
+    """Pe cine invita trainerul. Bifele din tabel."""
+
+    participant_profile_ids: list[UUID]
+
+
+class TrainingInvitationSendItem(BaseModel):
+    """Ce s-a intamplat cu fiecare om, pe rand.
+
+    `invite_url` vine si cand `email_sent` e fals: linkul e bun oricum, iar
+    trainerul il poate copia. `error` spune de ce n-a plecat emailul.
+    """
+
+    participant_profile_id: UUID
+    full_name: str | None = None
+    email: str | None = None
+    invite_url: str | None = None
+    email_sent: bool = False
+    error: str | None = None

@@ -21,11 +21,27 @@ Scopul ei este să permită testarea funcționalităților noi (de exemplu modul
    Serviciile se numesc `testbackend`, `testfrontend`, `testworker`, `testdb`, `testredis`. Chiar și în cazul unei erori de rețea, nu există niciun nume comun care să se poată ciocni cu producția. La randarea paginilor pe server, `testfrontend` folosește `INTERNAL_API_BASE_URL=http://testbackend:8000/api`.
 3. **NU atinge baza de date vie:**  
    Casa de probă folosește propriul container PostgreSQL (`testdb`) și propriul volum de stocare (`cody_test_postgres_data`). Nu are acces la baza de date sau volumul producției.
-4. **NU trimite emailuri reale:**  
-   Este configurată cu triplă protecție:
-   - Modul Brevo Sandbox este forțat (`X-Sib-Sandbox: drop`).
-   - Cheia Brevo API este setată intenționat ca invalidă (`CHEIE-INVALIDA-INTENTIONAT`).
-   - Limita zilnică de trimitere este setată pe 0 (`CODRUT_EMAIL_DAILY_SEND_CAP=0`).
+4. **Emailurile pleacă doar către o listă scurtă, numită pe nume:**  
+   Până la 31 august 2026 casa de probă nu trimitea absolut niciun email, iar
+   plafonul zilnic de `0` oprea trimiterile **înainte** să se scrie ceva în baza
+   de date — fără niciun rând în `email_sends` și fără nimic în jurnal. Asta a
+   făcut ca o pană să pară „linişte". Acum:
+   - **Lista de destinatari permiși** (`CODRUT_EMAIL_ALLOWED_RECIPIENTS`) e gardul
+     principal. Când nu e goală, pleacă email **doar** către adresele din ea;
+     restul se opresc, fiecare cu motivul scris în rândul lui din `email_sends`
+     și în jurnal. Un participant de probă adăugat din greșeală cu adresa lui
+     adevărată **nu** primește nimic. Implicit sunt doar adresele lui Andrei.
+   - **Plafonul zilnic** e `20` (`CODRUT_EMAIL_DAILY_SEND_CAP`), nu `0`. E o plasă
+     de siguranță împotriva unei bucle, nu un zăvor.
+   - **Modul Brevo Sandbox** rămâne pornit (`X-Sib-Sandbox: drop`) și **cheia Brevo
+     este în continuare invalidă** (`CHEIE-INVALIDA-INTENTIONAT`), deci în
+     momentul de față **tot nu ajunge niciun email**. Ca să ajungă, trebuie puse
+     amândouă: o cheie Brevo adevărată în `.env` și
+     `CODRUT_EMAIL_BREVO_SANDBOX_ENABLED=false`. Nu se schimbă una fără cealaltă,
+     și niciodată fără lista de destinatari de mai sus.
+   - **Linkul de invitație nu depinde de email.** Trainerul îl vede în tabel,
+     lângă fiecare om, cu un buton „Copiază link". Drumul participantului se poate
+     parcurge în întregime și cu poșta oprită.
 5. **NU deschide porturi pe server:**  
    Niciun container de test nu expune porturi publice pe server.
 6. **Prioritate Traefik scăzută:**  

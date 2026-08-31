@@ -21,8 +21,20 @@ class TaskLinkClaims:
     project_id: UUID | None = None
 
 
-def create_task_token(claims: TaskLinkClaims, settings: Settings) -> str:
-    if not claims.assignment_ids:
+def create_task_token(
+    claims: TaskLinkClaims,
+    settings: Settings,
+    *,
+    allow_without_assignments: bool = False,
+) -> str:
+    """Semneaza un link de sarcina.
+
+    `allow_without_assignments` exista pentru un singur caz: proiectele de
+    training, unde nu se raspunde la niciun chestionar, deci nu are de unde sa
+    apara o asignare. Ramane implicit inchis, ca linkurile de chestionar sa
+    poarte mai departe cel putin o sarcina.
+    """
+    if not claims.assignment_ids and not allow_without_assignments:
         raise DomainError(
             "Task link must include at least one assignment.",
             code="task_link_invalid",
@@ -69,8 +81,9 @@ def parse_task_token(
         )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise DomainError("Invalid task link.", code="task_link_invalid") from exc
-    if not claims.assignment_ids:
-        raise DomainError("Invalid task link.", code="task_link_invalid")
+    # Un token fara nicio sarcina e legitim doar pentru training. Nu se poate
+    # falsifica: semnatura de mai sus e verificata inainte sa ajungem aici, iar
+    # cine il deschide trebuie sa aiba si un rand viu in `assignment_invites`.
     if claims.expires_at <= (now or datetime.now(UTC)):
         raise DomainError("Task link has expired.", code="task_link_expired")
     return claims

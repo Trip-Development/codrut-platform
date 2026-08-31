@@ -8,10 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
 from codrut.core.config import Settings, get_settings
-from codrut.modules.identity.models import UserRole
 from codrut.modules.companies.policies import require_trainer_principal
+from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.practice.dashboard_service import PracticeDashboardService
+from codrut.modules.practice.evolution_service import PracticeEvolutionService
+from codrut.modules.practice.person_service import PracticePersonService
+from codrut.modules.practice.room_service import (
+    PracticeInvitationsService,
+    PracticeRoomService,
+)
 from codrut.modules.practice.schemas import (
     PracticeDashboardResponse,
     PracticeEvolutionResponse,
@@ -31,16 +37,12 @@ from codrut.modules.practice.schemas import (
     PracticeTurnResponse,
     PracticeTurnSubmitResponse,
     TrainerNoteCreateRequest,
-    TrainingInvitationItem,
     TrainerNoteItem,
+    TrainingInvitationItem,
+    TrainingInvitationSendItem,
+    TrainingInvitationSendRequest,
 )
 from codrut.modules.practice.service import PracticeSessionService
-from codrut.modules.practice.evolution_service import PracticeEvolutionService
-from codrut.modules.practice.person_service import PracticePersonService
-from codrut.modules.practice.room_service import (
-    PracticeInvitationsService,
-    PracticeRoomService,
-)
 from codrut.modules.practice.setup_service import PracticeSetupService
 
 router = APIRouter()
@@ -359,3 +361,29 @@ async def list_training_invitations(
     require_trainer_principal(principal)
     randuri = await PracticeInvitationsService(session).statuses(project_id)
     return [TrainingInvitationItem(**r) for r in randuri]
+
+
+@router.post(
+    "/projects/{project_id}/invitations",
+    response_model=list[TrainingInvitationSendItem],
+)
+async def send_training_invitations(
+    project_id: UUID,
+    payload: TrainingInvitationSendRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> list[TrainingInvitationSendItem]:
+    """Face invitatiile pentru oamenii bifati si incearca emailul.
+
+    Calea obisnuita de invitatii cere o asignare de chestionar, pe care un
+    proiect de training n-o are — de aceea trainingul are calea lui. Linkul se
+    intoarce si cand emailul nu pleaca.
+    """
+    require_trainer_principal(principal)
+    randuri = await PracticeInvitationsService(session).send(
+        project_id,
+        payload.participant_profile_ids,
+        trainer_user_id=principal.user_id,
+    )
+    await session.commit()
+    return [TrainingInvitationSendItem(**r) for r in randuri]

@@ -19,17 +19,12 @@ export default async function ProjectInvitationsPage({
   ]);
   // La un proiect de training nu exista niciun ciclu de evaluare, iar formularul
   // de coaching e construit in jurul lor — de aceea cere ceva ce n-are de unde lua.
-  // Forma de training foloseste ACELASI mecanism de invitatie, fara ciclu.
+  // Trainingul are calea lui si de trimitere, nu doar de afisare: ruta obisnuita
+  // cere o asignare de chestionar, pe care un proiect de training n-o are.
   const project = await getCompanyProjectById(projectId, requestOptions);
   if (project?.project_type === "training") {
     const rows = await getTrainingInvitations(projectId, requestOptions);
-    return (
-      <TrainingInvitations
-        companyId={project.company_id}
-        projectId={projectId}
-        rows={rows}
-      />
-    );
+    return <TrainingInvitations projectId={projectId} rows={rows} />;
   }
 
   const data = await getProjectInvitationWorkspaceData(projectId, requestOptions, {

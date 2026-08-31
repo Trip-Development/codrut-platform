@@ -20,13 +20,16 @@ And how it counts people:
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select
 
+from codrut.core.config import get_settings
 from codrut.core.errors import DomainError
+from codrut.modules.communications.task_links import build_task_url
 from codrut.modules.companies.models import (
     CompanyProject,
     ParticipantProfile,
@@ -36,9 +39,7 @@ from codrut.modules.identity.models import User
 from codrut.modules.practice.models import (
     CompetencyScore,
     PracticeProgramSettings,
-    PracticeSession,
     PracticeTheme,
-    SessionState,
 )
 from codrut.modules.practice.setup_service import competency_names_for_project
 
@@ -46,7 +47,11 @@ TEST_IN_ID = "TEST_IN_01"
 TEST_OUT_ID = "TEST_OUT_01"
 QUIZ_SOURCE = "cunostinte"
 
+logger = logging.getLogger(__name__)
+
 ZILE_ACTIV = 7
+# Cat tine linkul de invitatie la training. Programul dureaza saptamani, nu ore.
+ZILE_INVITATIE = 90
 SESIUNI_RECURENT = 3
 
 
@@ -104,18 +109,9 @@ class PracticeRoomService:
                 return user_dupa_email[profil.email.lower()].id
             return None
 
-        user_ids = [u for u in (contul(p) for p, _ in randuri) if u]
-
         scoruri = (await self.session.execute(
             select(CompetencyScore).where(CompetencyScore.project_id == project_id)
         )).scalars().all()
-
-        sesiuni = []
-        if setari is not None:
-            sesiuni = (await self.session.execute(
-                select(PracticeSession)
-                .where(PracticeSession.program_settings_id == setari.id)
-            )).scalars().all()
 
         # ---- cele patru feluri de scor, ca in aplicatia veche ----
         test_in = [s for s in scoruri if s.conversation_id == TEST_IN_ID]
@@ -264,9 +260,19 @@ class PracticeRoomService:
 class PracticeInvitationsService:
     """Invitatiile in forma de training.
 
-    Mecanismul de invitatie si de facut cont exista si e bun
-    (`create_company_invitation`, `/invite/verify`, `/invite/exchange`) — nu se
-    construieste altul. Aici doar se aduna starea, in forma cerută:
+    Ce s-a crezut la plicul 30 si s-a dovedit gresit la 31: ca ruta obisnuita de
+    invitatii (`POST /companies/{id}/participants/invitations`) merge si fara
+    ciclu de evaluare. Nu merge. Acea ruta cere ca omul sa aiba deja o asignare
+    de chestionar activa; altfel il sare tacut, cu `no_assignments`, si nu scrie
+    nimic — nici invitatie, nici email. Un proiect de training nu are chestionare,
+    deci nu are nici asignari, deci nu putea trimite niciodata nimic.
+
+    Aici e calea proprie a trainingului: se face invitatia direct, fara asignare
+    (`allow_without_assignments`, deschisa doar pentru `project_type` = training),
+    se refoloseste acelasi token si acelasi drum de intrare
+    (`/invite/verify`, `/invite/exchange`) si se incearca emailul. Linkul se
+    intoarce mereu, chiar daca emailul nu pleaca: drumul trebuie sa se poata
+    parcurge si fara posta.
 
         invitat · a intrat · a facut testul de intrare
     """
@@ -323,8 +329,198 @@ class PracticeInvitationsService:
                 "email": profil.email,
                 "invited": inv is not None,
                 "invited_at": inv.created_at.isoformat() if inv and inv.created_at else None,
+                "invite_url": (
+                    build_task_url(inv.token, get_settings())
+                    if inv is not None and inv.status == "active"
+                    else None
+                ),
                 "has_account": cont is not None,
                 "has_test_in": cont in cu_test_in if cont else False,
             })
         out.sort(key=lambda o: (o["full_name"] or "").lower())
         return out
+
+    async def send(
+        self,
+        project_id: uuid.UUID,
+        participant_profile_ids: list[uuid.UUID],
+        *,
+        trainer_user_id: uuid.UUID,
+    ) -> list[dict]:
+        """Face invitatiile si incearca emailul. Intoarce un rand pentru fiecare om.
+
+        Linkul se intoarce chiar si cand emailul nu pleaca. Asta e regula:
+        emailul poate sa cada din motive care nu tin de noi (cheie, plafon,
+        furnizor), dar drumul participantului trebuie sa se poata parcurge —
+        trainerul copiaza linkul si il da cum vrea.
+        """
+        from codrut.modules.communications.email_provider import build_email_provider
+        from codrut.modules.communications.service import TransactionalEmailService
+        from codrut.modules.identity.service import IdentityService
+
+        if not participant_profile_ids:
+            return []
+
+        proiect = (await self.session.execute(
+            select(CompanyProject).where(CompanyProject.id == project_id)
+        )).scalars().first()
+        if proiect is None:
+            raise DomainError("Proiectul nu exista.", code="project_not_found")
+        if (proiect.project_type or "") != "training":
+            raise DomainError(
+                "Calea asta e doar pentru proiectele de training.",
+                code="not_a_training_project",
+            )
+
+        ceruti = set(participant_profile_ids)
+        randuri = (await self.session.execute(
+            select(ParticipantProfile)
+            .join(
+                ProjectMembership,
+                ProjectMembership.participant_profile_id == ParticipantProfile.id,
+            )
+            .where(
+                ProjectMembership.project_id == project_id,
+                ParticipantProfile.id.in_(ceruti),
+            )
+        )).scalars().all()
+        gasiti = {p.id: p for p in randuri}
+
+        setari = get_settings()
+        identitate = IdentityService(self.session)
+        posta = TransactionalEmailService(
+            build_email_provider(setari),
+            self.session,
+            owner_id=trainer_user_id,
+        )
+        expira = datetime.now(UTC) + timedelta(days=ZILE_INVITATIE)
+
+        out: list[dict] = []
+        for profil_id in participant_profile_ids:
+            profil = gasiti.get(profil_id)
+            if profil is None:
+                out.append(_rand_invitatie(
+                    profil_id, None, None, None, False,
+                    "Omul nu e inscris in acest proiect.",
+                ))
+                continue
+            if not profil.email:
+                out.append(_rand_invitatie(
+                    profil_id, profil.full_name, None, None, False,
+                    "Omul nu are email.",
+                ))
+                continue
+
+            try:
+                async with self.session.begin_nested():
+                    invitatie = await identitate.create_invite(
+                        company_id=profil.company_id,
+                        respondent_profile_id=profil.id,
+                        assignment_ids=None,
+                        project_id=project_id,
+                        expires_at=expira,
+                        allow_without_assignments=True,
+                    )
+                link = build_task_url(invitatie.token, setari)
+            except DomainError as exc:
+                out.append(_rand_invitatie(
+                    profil_id, profil.full_name, profil.email, None, False,
+                    f"Invitatia nu s-a putut face: {exc.code}.",
+                ))
+                continue
+            except Exception:
+                logger.exception(
+                    "Invitatia de training nu s-a putut face.",
+                    extra={"participant_profile_id": str(profil_id)},
+                )
+                out.append(_rand_invitatie(
+                    profil_id, profil.full_name, profil.email, None, False,
+                    "Invitatia nu s-a putut face.",
+                ))
+                continue
+
+            # Linkul exista de acum. Emailul e o incercare separata: daca pica,
+            # randul ramane bun si omul primeste linkul copiat de trainer.
+            plecat, motiv = await self._incearca_emailul(
+                posta,
+                profil=profil,
+                proiect=proiect,
+                link=link,
+                invitatie_id=invitatie.id,
+            )
+            out.append(_rand_invitatie(
+                profil_id, profil.full_name, profil.email, link, plecat, motiv,
+            ))
+
+        return out
+
+    async def _incearca_emailul(
+        self,
+        posta,
+        *,
+        profil,
+        proiect,
+        link: str,
+        invitatie_id: uuid.UUID,
+    ) -> tuple[bool, str | None]:
+        """Incearca sa puna emailul la coada. Nu arunca: intoarce de ce n-a mers."""
+        from codrut.contracts.emails import EmailAddress, EmailMessage
+
+        nume = (profil.full_name or "").split(" ")[0] or "Salut"
+        subiect = f"Ai fost invitat la {proiect.name}"
+        mesaj = EmailMessage(
+            to=EmailAddress(profil.email),
+            subject=subiect,
+            html_body=(
+                f"<p>{nume},</p>"
+                f"<p>Ai fost invitat la programul <strong>{proiect.name}</strong>.</p>"
+                f'<p><a href="{link}">Intra aici ca sa incepi</a></p>'
+                "<p>Linkul e doar al tau. Nu il da mai departe.</p>"
+            ),
+            text_body=(
+                f"{nume},\n\n"
+                f"Ai fost invitat la programul {proiect.name}.\n\n"
+                f"Intra aici ca sa incepi: {link}\n\n"
+                "Linkul e doar al tau. Nu il da mai departe."
+            ),
+        )
+        try:
+            await posta.enqueue_transactional_message(
+                mesaj,
+                template_key="training_invitation",
+                template_version=1,
+                idempotency_key=f"training-invite:{invitatie_id}",
+                delivery_kind="training_invitation",
+            )
+            return True, None
+        except DomainError as exc:
+            if exc.code == "daily_send_cap_reached":
+                return False, (
+                    "Emailul nu a plecat: s-a atins plafonul zilnic de trimiteri. "
+                    "Linkul de mai jos merge oricum."
+                )
+            return False, f"Emailul nu a plecat ({exc.code}). Linkul de mai jos merge oricum."
+        except Exception:
+            logger.exception(
+                "Emailul de invitatie la training nu s-a putut pune la coada.",
+                extra={"invitation_id": str(invitatie_id)},
+            )
+            return False, "Emailul nu a plecat. Linkul de mai jos merge oricum."
+
+
+def _rand_invitatie(
+    profil_id: uuid.UUID,
+    nume: str | None,
+    email: str | None,
+    link: str | None,
+    email_trimis: bool,
+    motiv: str | None = None,
+) -> dict:
+    return {
+        "participant_profile_id": profil_id,
+        "full_name": nume,
+        "email": email,
+        "invite_url": link,
+        "email_sent": email_trimis,
+        "error": motiv,
+    }

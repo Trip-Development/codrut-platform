@@ -1231,6 +1231,7 @@ class IdentityService:
         expires_in_days: int = 3650,
         expires_at: datetime | None = None,
         force_rotate: bool = False,
+        allow_without_assignments: bool = False,
     ) -> AssignmentInvite:
         from sqlalchemy import select
 
@@ -1256,7 +1257,10 @@ class IdentityService:
             assignment_ids=assignment_ids,
             project_id=project_id,
         )
-        if not assignment_ids:
+        # Un proiect de training nu are chestionare, deci nu are asignari. Doar
+        # acolo se deschide poarta asta; in rest o invitatie fara sarcina activa
+        # ramane refuzata.
+        if not assignment_ids and not allow_without_assignments:
             raise DomainError(
                 "Cannot create invitation without active assignments.",
                 code="no_active_assignments",
@@ -1305,7 +1309,11 @@ class IdentityService:
             project_id=project_id,
         )
         settings = get_settings()
-        token = create_task_token(claims, settings)
+        token = create_task_token(
+            claims,
+            settings,
+            allow_without_assignments=allow_without_assignments,
+        )
 
         # 6. Save invite to DB
         invite = AssignmentInvite(

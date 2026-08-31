@@ -1188,6 +1188,20 @@
         "title": "AuthResponse",
         "type": "object"
       },
+      "Body_transcribe_practice_audio_api_practice_transcribe_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_transcribe_practice_audio_api_practice_transcribe_post",
+        "type": "object"
+      },
       "BrevoWebhookEvent": {
         "properties": {
           "email": {
@@ -3637,6 +3651,64 @@
         "title": "CompanySummaryResponse",
         "type": "object"
       },
+      "CompetencyDashboardItem": {
+        "properties": {
+          "average_score": {
+            "title": "Average Score",
+            "type": "number"
+          },
+          "color": {
+            "title": "Color",
+            "type": "string"
+          },
+          "days_span_70": {
+            "title": "Days Span 70",
+            "type": "integer"
+          },
+          "distinct_days_70": {
+            "title": "Distinct Days 70",
+            "type": "integer"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "level_description": {
+            "title": "Level Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scores_70_count": {
+            "title": "Scores 70 Count",
+            "type": "integer"
+          },
+          "total_roleplays": {
+            "title": "Total Roleplays",
+            "type": "integer"
+          },
+          "why_not_higher": {
+            "title": "Why Not Higher",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "level",
+          "level_description",
+          "color",
+          "total_roleplays",
+          "scores_70_count",
+          "days_span_70",
+          "distinct_days_70",
+          "average_score",
+          "why_not_higher"
+        ],
+        "title": "CompetencyDashboardItem",
+        "type": "object"
+      },
       "ConsentRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4261,6 +4333,201 @@
         "title": "ErrorResponse",
         "type": "object"
       },
+      "EvolutionCompetencyItem": {
+        "properties": {
+          "color": {
+            "default": "",
+            "title": "Color",
+            "type": "string"
+          },
+          "current_average": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Average"
+          },
+          "growth": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Growth"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "level_description": {
+            "default": "",
+            "title": "Level Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scores_count": {
+            "default": 0,
+            "title": "Scores Count",
+            "type": "integer"
+          },
+          "test_in_average": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test In Average"
+          },
+          "test_out_average": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Out Average"
+          }
+        },
+        "required": [
+          "name",
+          "level"
+        ],
+        "title": "EvolutionCompetencyItem",
+        "type": "object"
+      },
+      "EvolutionParticipantItem": {
+        "properties": {
+          "active": {
+            "default": true,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "closed_sessions_count": {
+            "default": 0,
+            "title": "Closed Sessions Count",
+            "type": "integer"
+          },
+          "current_average": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Average"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "participant_profile_id": {
+            "format": "uuid",
+            "title": "Participant Profile Id",
+            "type": "string"
+          },
+          "scores_count": {
+            "default": 0,
+            "title": "Scores Count",
+            "type": "integer"
+          },
+          "sessions_count": {
+            "default": 0,
+            "title": "Sessions Count",
+            "type": "integer"
+          },
+          "test_in_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test In Score"
+          },
+          "test_out_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Out Score"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "participant_profile_id",
+          "full_name"
+        ],
+        "title": "EvolutionParticipantItem",
+        "type": "object"
+      },
+      "EvolutionWeekPoint": {
+        "properties": {
+          "average": {
+            "title": "Average",
+            "type": "number"
+          },
+          "scores_count": {
+            "title": "Scores Count",
+            "type": "integer"
+          },
+          "week_start": {
+            "title": "Week Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "week_start",
+          "average",
+          "scores_count"
+        ],
+        "title": "EvolutionWeekPoint",
+        "type": "object"
+      },
       "IcareAnswerReviewResponse": {
         "properties": {
           "row_count": {
@@ -4574,6 +4841,40 @@
           "self_averages"
         ],
         "title": "IcareTargetSummaryResponse",
+        "type": "object"
+      },
+      "InsightMomentItem": {
+        "properties": {
+          "competency_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Competency Name"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "summary",
+          "created_at"
+        ],
+        "title": "InsightMomentItem",
         "type": "object"
       },
       "InvitationCreateRequest": {
@@ -6721,6 +7022,17 @@
             "title": "Name",
             "type": "string"
           },
+          "project_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Type"
+          },
           "status": {
             "default": "active",
             "title": "Status",
@@ -7160,6 +7472,659 @@
         "title": "PasswordResetResponse",
         "type": "object"
       },
+      "PersonEvidenceItem": {
+        "properties": {
+          "average_score": {
+            "default": 0,
+            "title": "Average Score",
+            "type": "number"
+          },
+          "color": {
+            "default": "",
+            "title": "Color",
+            "type": "string"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "level_description": {
+            "default": "",
+            "title": "Level Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scores_count": {
+            "default": 0,
+            "title": "Scores Count",
+            "type": "integer"
+          },
+          "sessions_count": {
+            "default": 0,
+            "title": "Sessions Count",
+            "type": "integer"
+          },
+          "why_not_higher": {
+            "default": "",
+            "title": "Why Not Higher",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "level"
+        ],
+        "title": "PersonEvidenceItem",
+        "type": "object"
+      },
+      "PersonSampleItem": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invented_improved": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invented Improved"
+          },
+          "invented_weak": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invented Weak"
+          },
+          "real_improved": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Real Improved"
+          },
+          "real_weak": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Real Weak"
+          }
+        },
+        "required": [
+          "id",
+          "created_at"
+        ],
+        "title": "PersonSampleItem",
+        "type": "object"
+      },
+      "PersonTextItem": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "summary",
+          "created_at"
+        ],
+        "title": "PersonTextItem",
+        "type": "object"
+      },
+      "PersonTheoryItem": {
+        "properties": {
+          "delta": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "test_in": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test In"
+          },
+          "test_out": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Out"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PersonTheoryItem",
+        "type": "object"
+      },
+      "PracticeDashboardResponse": {
+        "properties": {
+          "competencies": {
+            "items": {
+              "$ref": "#/components/schemas/CompetencyDashboardItem"
+            },
+            "title": "Competencies",
+            "type": "array"
+          },
+          "evidence_ceiling": {
+            "title": "Evidence Ceiling",
+            "type": "integer"
+          },
+          "insight_moments": {
+            "items": {
+              "$ref": "#/components/schemas/InsightMomentItem"
+            },
+            "title": "Insight Moments",
+            "type": "array"
+          },
+          "participant_name": {
+            "title": "Participant Name",
+            "type": "string"
+          },
+          "session_samples": {
+            "items": {
+              "$ref": "#/components/schemas/SessionSampleItem"
+            },
+            "title": "Session Samples",
+            "type": "array"
+          },
+          "streak_bonus_pct": {
+            "title": "Streak Bonus Pct",
+            "type": "integer"
+          },
+          "streak_days": {
+            "title": "Streak Days",
+            "type": "integer"
+          },
+          "xp_daily_cap": {
+            "default": 100,
+            "title": "Xp Daily Cap",
+            "type": "integer"
+          },
+          "xp_today": {
+            "title": "Xp Today",
+            "type": "integer"
+          },
+          "xp_total": {
+            "title": "Xp Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "participant_name",
+          "xp_today",
+          "xp_total",
+          "streak_days",
+          "streak_bonus_pct",
+          "evidence_ceiling",
+          "competencies",
+          "insight_moments",
+          "session_samples"
+        ],
+        "title": "PracticeDashboardResponse",
+        "type": "object"
+      },
+      "PracticeEvolutionResponse": {
+        "properties": {
+          "competencies": {
+            "items": {
+              "$ref": "#/components/schemas/EvolutionCompetencyItem"
+            },
+            "title": "Competencies",
+            "type": "array"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/EvolutionParticipantItem"
+            },
+            "title": "Participants",
+            "type": "array"
+          },
+          "participants_active": {
+            "title": "Participants Active",
+            "type": "integer"
+          },
+          "participants_total": {
+            "title": "Participants Total",
+            "type": "integer"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "project_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Type"
+          },
+          "test_in_completed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test In Completed"
+          },
+          "test_out_enabled": {
+            "default": false,
+            "title": "Test Out Enabled",
+            "type": "boolean"
+          },
+          "test_pending_note": {
+            "title": "Test Pending Note",
+            "type": "string"
+          },
+          "weekly_average": {
+            "items": {
+              "$ref": "#/components/schemas/EvolutionWeekPoint"
+            },
+            "title": "Weekly Average",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id",
+          "project_name",
+          "participants_total",
+          "participants_active",
+          "test_pending_note"
+        ],
+        "title": "PracticeEvolutionResponse",
+        "type": "object"
+      },
+      "PracticePersonResponse": {
+        "properties": {
+          "duration_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Days"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/PersonEvidenceItem"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "has_account": {
+            "default": false,
+            "title": "Has Account",
+            "type": "boolean"
+          },
+          "insight_moments": {
+            "items": {
+              "$ref": "#/components/schemas/PersonTextItem"
+            },
+            "title": "Insight Moments",
+            "type": "array"
+          },
+          "participant_profile_id": {
+            "format": "uuid",
+            "title": "Participant Profile Id",
+            "type": "string"
+          },
+          "progress_average": {
+            "default": 0,
+            "title": "Progress Average",
+            "type": "integer"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "quiz_weak_spots": {
+            "items": {
+              "$ref": "#/components/schemas/RoomQuizWeakSpot"
+            },
+            "title": "Quiz Weak Spots",
+            "type": "array"
+          },
+          "session_samples": {
+            "items": {
+              "$ref": "#/components/schemas/PersonSampleItem"
+            },
+            "title": "Session Samples",
+            "type": "array"
+          },
+          "sessions_count": {
+            "default": 0,
+            "title": "Sessions Count",
+            "type": "integer"
+          },
+          "test_in_average": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test In Average"
+          },
+          "test_out_average": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Out Average"
+          },
+          "theory": {
+            "items": {
+              "$ref": "#/components/schemas/PersonTheoryItem"
+            },
+            "title": "Theory",
+            "type": "array"
+          },
+          "top_progress": {
+            "items": {
+              "$ref": "#/components/schemas/PersonEvidenceItem"
+            },
+            "title": "Top Progress",
+            "type": "array"
+          },
+          "trainer_notes": {
+            "items": {
+              "$ref": "#/components/schemas/TrainerNoteItem"
+            },
+            "title": "Trainer Notes",
+            "type": "array"
+          },
+          "trainer_recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/PersonTextItem"
+            },
+            "title": "Trainer Recommendations",
+            "type": "array"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "weekly_average": {
+            "items": {
+              "$ref": "#/components/schemas/RoomWeekPoint"
+            },
+            "title": "Weekly Average",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id",
+          "project_name",
+          "participant_profile_id",
+          "full_name"
+        ],
+        "title": "PracticePersonResponse",
+        "type": "object"
+      },
+      "PracticeRoomResponse": {
+        "properties": {
+          "active_count": {
+            "default": 0,
+            "title": "Active Count",
+            "type": "integer"
+          },
+          "average_score": {
+            "default": 0,
+            "title": "Average Score",
+            "type": "integer"
+          },
+          "competencies": {
+            "items": {
+              "$ref": "#/components/schemas/RoomCompetencyItem"
+            },
+            "title": "Competencies",
+            "type": "array"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "growth_ranking": {
+            "items": {
+              "$ref": "#/components/schemas/RoomCompetencyItem"
+            },
+            "title": "Growth Ranking",
+            "type": "array"
+          },
+          "inactive_count": {
+            "default": 0,
+            "title": "Inactive Count",
+            "type": "integer"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/RoomParticipantItem"
+            },
+            "title": "Participants",
+            "type": "array"
+          },
+          "participants_total": {
+            "default": 0,
+            "title": "Participants Total",
+            "type": "integer"
+          },
+          "practice_configured": {
+            "default": false,
+            "title": "Practice Configured",
+            "type": "boolean"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "project_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Type"
+          },
+          "quiz_weak_spots": {
+            "items": {
+              "$ref": "#/components/schemas/RoomQuizWeakSpot"
+            },
+            "title": "Quiz Weak Spots",
+            "type": "array"
+          },
+          "recurrent_count": {
+            "default": 0,
+            "title": "Recurrent Count",
+            "type": "integer"
+          },
+          "sessions_total": {
+            "default": 0,
+            "title": "Sessions Total",
+            "type": "integer"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "test_in_completed": {
+            "default": 0,
+            "title": "Test In Completed",
+            "type": "integer"
+          },
+          "test_out_active": {
+            "default": false,
+            "title": "Test Out Active",
+            "type": "boolean"
+          },
+          "test_out_completed": {
+            "default": 0,
+            "title": "Test Out Completed",
+            "type": "integer"
+          },
+          "theme_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Name"
+          },
+          "timeline_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeline Percent"
+          },
+          "weekly_average": {
+            "items": {
+              "$ref": "#/components/schemas/RoomWeekPoint"
+            },
+            "title": "Weekly Average",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id",
+          "project_name"
+        ],
+        "title": "PracticeRoomResponse",
+        "type": "object"
+      },
       "PracticeSessionCreateRequest": {
         "properties": {
           "kind": {
@@ -7229,6 +8194,29 @@
           }
         },
         "title": "PracticeSessionEndRequest",
+        "type": "object"
+      },
+      "PracticeSessionEndResponse": {
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/PracticeSessionResponse"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          }
+        },
+        "required": [
+          "session"
+        ],
+        "title": "PracticeSessionEndResponse",
         "type": "object"
       },
       "PracticeSessionResponse": {
@@ -7325,6 +8313,258 @@
           "started_at"
         ],
         "title": "PracticeSessionResponse",
+        "type": "object"
+      },
+      "PracticeSetupRequest": {
+        "properties": {
+          "competencies": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Competencies"
+          },
+          "is_enabled": {
+            "default": true,
+            "title": "Is Enabled",
+            "type": "boolean"
+          },
+          "theme_id": {
+            "format": "uuid",
+            "title": "Theme Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "theme_id"
+        ],
+        "title": "PracticeSetupRequest",
+        "type": "object"
+      },
+      "PracticeSetupResponse": {
+        "properties": {
+          "competencies": {
+            "items": {
+              "$ref": "#/components/schemas/ThemeCompetencyItem"
+            },
+            "title": "Competencies",
+            "type": "array"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "is_enabled": {
+            "title": "Is Enabled",
+            "type": "boolean"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "project_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Type"
+          },
+          "theme_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Id"
+          },
+          "theme_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Name"
+          }
+        },
+        "required": [
+          "project_id",
+          "project_name",
+          "configured",
+          "is_enabled"
+        ],
+        "title": "PracticeSetupResponse",
+        "type": "object"
+      },
+      "PracticeStareSummaryResponse": {
+        "properties": {
+          "cache_percent": {
+            "default": 0.0,
+            "title": "Cache Percent",
+            "type": "number"
+          },
+          "cached_turns": {
+            "default": 0,
+            "title": "Cached Turns",
+            "type": "integer"
+          },
+          "cost_today_usd": {
+            "default": 0.0,
+            "title": "Cost Today Usd",
+            "type": "number"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "material_bytes": {
+            "title": "Material Bytes",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "region": {
+            "title": "Region",
+            "type": "string"
+          },
+          "sessions_today": {
+            "title": "Sessions Today",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "status_text": {
+            "title": "Status Text",
+            "type": "string"
+          },
+          "turns_today": {
+            "title": "Turns Today",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "status_text",
+          "prompt_version",
+          "material_bytes",
+          "provider",
+          "model",
+          "region",
+          "sessions_today",
+          "turns_today"
+        ],
+        "title": "PracticeStareSummaryResponse",
+        "type": "object"
+      },
+      "PracticeThemeItem": {
+        "properties": {
+          "competencies": {
+            "items": {
+              "$ref": "#/components/schemas/ThemeCompetencyItem"
+            },
+            "title": "Competencies",
+            "type": "array"
+          },
+          "has_knowledge_pack": {
+            "default": false,
+            "title": "Has Knowledge Pack",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scenario_count": {
+            "default": 0,
+            "title": "Scenario Count",
+            "type": "integer"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "usable": {
+            "default": false,
+            "title": "Usable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "PracticeThemeItem",
+        "type": "object"
+      },
+      "PracticeTranscribeResponse": {
+        "properties": {
+          "estimated_usd": {
+            "default": 0.0,
+            "title": "Estimated Usd",
+            "type": "number"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "PracticeTranscribeResponse",
         "type": "object"
       },
       "PracticeTurnCreateRequest": {
@@ -8431,6 +9671,190 @@
         "title": "ResponseVisibilityPolicy",
         "type": "string"
       },
+      "RoomCompetencyItem": {
+        "properties": {
+          "acum": {
+            "default": 0,
+            "title": "Acum",
+            "type": "integer"
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          },
+          "has_data": {
+            "default": false,
+            "title": "Has Data",
+            "type": "boolean"
+          },
+          "has_test_in": {
+            "default": false,
+            "title": "Has Test In",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "test_in": {
+            "default": 0,
+            "title": "Test In",
+            "type": "integer"
+          },
+          "test_out": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Out"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "RoomCompetencyItem",
+        "type": "object"
+      },
+      "RoomParticipantItem": {
+        "properties": {
+          "active_membership": {
+            "default": true,
+            "title": "Active Membership",
+            "type": "boolean"
+          },
+          "average_score": {
+            "default": 0,
+            "title": "Average Score",
+            "type": "integer"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "has_account": {
+            "default": false,
+            "title": "Has Account",
+            "type": "boolean"
+          },
+          "has_test_in": {
+            "default": false,
+            "title": "Has Test In",
+            "type": "boolean"
+          },
+          "has_test_out": {
+            "default": false,
+            "title": "Has Test Out",
+            "type": "boolean"
+          },
+          "inactive": {
+            "default": true,
+            "title": "Inactive",
+            "type": "boolean"
+          },
+          "last_activity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity"
+          },
+          "participant_profile_id": {
+            "format": "uuid",
+            "title": "Participant Profile Id",
+            "type": "string"
+          },
+          "sessions_count": {
+            "default": 0,
+            "title": "Sessions Count",
+            "type": "integer"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "participant_profile_id",
+          "full_name"
+        ],
+        "title": "RoomParticipantItem",
+        "type": "object"
+      },
+      "RoomQuizWeakSpot": {
+        "properties": {
+          "average": {
+            "title": "Average",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "average"
+        ],
+        "title": "RoomQuizWeakSpot",
+        "type": "object"
+      },
+      "RoomWeekPoint": {
+        "properties": {
+          "average": {
+            "title": "Average",
+            "type": "integer"
+          },
+          "scores_count": {
+            "title": "Scores Count",
+            "type": "integer"
+          },
+          "week_start": {
+            "title": "Week Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "week_start",
+          "average",
+          "scores_count"
+        ],
+        "title": "RoomWeekPoint",
+        "type": "object"
+      },
       "RosterImportEmailResult": {
         "properties": {
           "delivery_mode": {
@@ -8848,6 +10272,68 @@
         "title": "SessionPrincipal",
         "type": "object"
       },
+      "SessionSampleItem": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "invented_improved": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invented Improved"
+          },
+          "invented_weak": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invented Weak"
+          },
+          "real_improved": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Real Improved"
+          },
+          "real_weak": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Real Weak"
+          }
+        },
+        "required": [
+          "id",
+          "created_at"
+        ],
+        "title": "SessionSampleItem",
+        "type": "object"
+      },
       "SessionState": {
         "enum": [
           "open",
@@ -8969,6 +10455,223 @@
         ],
         "title": "TeamType",
         "type": "string"
+      },
+      "ThemeCompetencyItem": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "order_index": {
+            "default": 0,
+            "title": "Order Index",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ThemeCompetencyItem",
+        "type": "object"
+      },
+      "TrainerNoteCreateRequest": {
+        "properties": {
+          "note": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "TrainerNoteCreateRequest",
+        "type": "object"
+      },
+      "TrainerNoteItem": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "note",
+          "created_at"
+        ],
+        "title": "TrainerNoteItem",
+        "type": "object"
+      },
+      "TrainingInvitationItem": {
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "has_account": {
+            "default": false,
+            "title": "Has Account",
+            "type": "boolean"
+          },
+          "has_test_in": {
+            "default": false,
+            "title": "Has Test In",
+            "type": "boolean"
+          },
+          "invite_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invite Url"
+          },
+          "invited": {
+            "default": false,
+            "title": "Invited",
+            "type": "boolean"
+          },
+          "invited_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invited At"
+          },
+          "participant_profile_id": {
+            "format": "uuid",
+            "title": "Participant Profile Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "participant_profile_id",
+          "full_name"
+        ],
+        "title": "TrainingInvitationItem",
+        "type": "object"
+      },
+      "TrainingInvitationSendItem": {
+        "description": "Ce s-a intamplat cu fiecare om, pe rand.\n\n`invite_url` vine si cand `email_sent` e fals: linkul e bun oricum, iar\ntrainerul il poate copia. `error` spune de ce n-a plecat emailul.",
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "email_sent": {
+            "default": false,
+            "title": "Email Sent",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "invite_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invite Url"
+          },
+          "participant_profile_id": {
+            "format": "uuid",
+            "title": "Participant Profile Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "participant_profile_id"
+        ],
+        "title": "TrainingInvitationSendItem",
+        "type": "object"
+      },
+      "TrainingInvitationSendRequest": {
+        "description": "Pe cine invita trainerul. Bifele din tabel.",
+        "properties": {
+          "participant_profile_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Participant Profile Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "participant_profile_ids"
+        ],
+        "title": "TrainingInvitationSendRequest",
+        "type": "object"
       },
       "TurnRole": {
         "enum": [
@@ -20773,6 +22476,1014 @@
         ]
       }
     },
+    "/api/practice/dashboard": {
+      "get": {
+        "description": "Get participant practice stats, XP, streak, and competency evidence levels.",
+        "operationId": "get_participant_practice_dashboard_api_practice_dashboard_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeDashboardResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Participant Practice Dashboard",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/participant/dashboard": {
+      "get": {
+        "description": "Get participant practice stats, XP, streak, and competency evidence levels.",
+        "operationId": "get_participant_practice_dashboard_api_practice_participant_dashboard_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeDashboardResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Participant Practice Dashboard",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/projects/{project_id}/evolution": {
+      "get": {
+        "description": "Evolutia competentelor pe echipa \u2014 fila trainerului la proiectele de training.",
+        "operationId": "get_project_evolution_api_practice_projects__project_id__evolution_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeEvolutionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Project Evolution",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/projects/{project_id}/invitations": {
+      "get": {
+        "description": "Cine e invitat, cine a intrat, cine a facut testul de intrare.",
+        "operationId": "list_training_invitations_api_practice_projects__project_id__invitations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TrainingInvitationItem"
+                  },
+                  "title": "Response List Training Invitations Api Practice Projects  Project Id  Invitations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "List Training Invitations",
+        "tags": [
+          "practice"
+        ]
+      },
+      "post": {
+        "description": "Face invitatiile pentru oamenii bifati si incearca emailul.\n\nCalea obisnuita de invitatii cere o asignare de chestionar, pe care un\nproiect de training n-o are \u2014 de aceea trainingul are calea lui. Linkul se\nintoarce si cand emailul nu pleaca.",
+        "operationId": "send_training_invitations_api_practice_projects__project_id__invitations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainingInvitationSendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TrainingInvitationSendItem"
+                  },
+                  "title": "Response Send Training Invitations Api Practice Projects  Project Id  Invitations Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Send Training Invitations",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/projects/{project_id}/participants/{profile_id}": {
+      "get": {
+        "description": "Pagina omului \u2014 al doilea ecran al camerei de training.",
+        "operationId": "get_project_person_api_practice_projects__project_id__participants__profile_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticePersonResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Project Person",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/projects/{project_id}/participants/{profile_id}/notes": {
+      "post": {
+        "description": "Nota trainerului despre un participant. Andrei scrie, se salveaza.",
+        "operationId": "add_trainer_note_api_practice_projects__project_id__participants__profile_id__notes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainerNoteCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainerNoteItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Add Trainer Note",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/projects/{project_id}/room": {
+      "get": {
+        "description": "Camera de training \u2014 ecranul proiectului, cu toate sectiunile lui.",
+        "operationId": "get_project_room_api_practice_projects__project_id__room_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeRoomResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Project Room",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/projects/{project_id}/setup": {
+      "get": {
+        "description": "Cum e configurata exersarea pe proiect: tema si competentele bifate.",
+        "operationId": "get_practice_setup_api_practice_projects__project_id__setup_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeSetupResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Practice Setup",
+        "tags": [
+          "practice"
+        ]
+      },
+      "put": {
+        "description": "Configureaza exersarea si scrie competentele alese. Se poate reveni oricand.",
+        "operationId": "configure_practice_setup_api_practice_projects__project_id__setup_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PracticeSetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeSetupResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Configure Practice Setup",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
     "/api/practice/sessions": {
       "post": {
         "description": "Start a new practice session for an authenticated participant.",
@@ -20961,7 +23672,7 @@
     },
     "/api/practice/sessions/{session_id}/end": {
       "post": {
-        "description": "Explicitly end a practice session and record outcome.",
+        "description": "Explicitly end a practice session, generate summary, and record outcome.",
         "operationId": "end_practice_session_api_practice_sessions__session_id__end_post",
         "parameters": [
           {
@@ -20990,7 +23701,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PracticeSessionResponse"
+                  "$ref": "#/components/schemas/PracticeSessionEndResponse"
                 }
               }
             },
@@ -21167,6 +23878,174 @@
         ]
       }
     },
+    "/api/practice/stare-summary": {
+      "get": {
+        "description": "Get system health and Cody prompt/stat summary for the /stare page.",
+        "operationId": "get_stare_summary_api_practice_stare_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeStareSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Stare Summary",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/themes": {
+      "get": {
+        "description": "Temele din care poate alege trainerul, fiecare cu competentele ei.",
+        "operationId": "list_practice_themes_api_practice_themes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PracticeThemeItem"
+                  },
+                  "title": "Response List Practice Themes Api Practice Themes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "List Practice Themes",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
     "/api/practice/trainer/sessions": {
       "post": {
         "description": "Start a practice session directly for a trainer (only when enabled).",
@@ -21254,6 +24133,98 @@
           }
         },
         "summary": "Start Trainer Practice Session",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/transcribe": {
+      "post": {
+        "description": "Transcribe an audio recording into text with Vertex AI Gemini.",
+        "operationId": "transcribe_practice_audio_api_practice_transcribe_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_transcribe_practice_audio_api_practice_transcribe_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeTranscribeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Transcribe Practice Audio",
         "tags": [
           "practice"
         ]
