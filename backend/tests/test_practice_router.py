@@ -200,7 +200,11 @@ async def test_practice_session_lifecycle_and_prompt_version():
     assert session_data["prompt_version"] == CODY_PROMPT_VERSION
     assert session_data["prompt_version"] == "v2.1"
     assert session_data["state"] == "open"
-    assert session_data["turn_count"] == 0
+    # De la plicul 38 Cody vorbeste primul: sesiunea porneste cu replica lui, nu goala.
+    assert session_data["turn_count"] == 1
+    assert session_data["first_turn"] is not None
+    assert session_data["first_turn"]["role"] == "actor"
+    assert session_data["first_turn"]["ordinal"] == 1
 
     # 2. Submit participant turn
     turn_resp = await client.post(
@@ -221,9 +225,11 @@ async def test_practice_session_lifecycle_and_prompt_version():
     hist_data = hist_resp.json()
     assert hist_data["session"]["id"] == session_id
     assert hist_data["session"]["prompt_version"] == "v2.1"
-    assert len(hist_data["turns"]) == 2
-    assert hist_data["turns"][0]["role"] == "participant"
-    assert hist_data["turns"][1]["role"] == "actor"
+    # replica de deschidere + replica omului + raspunsul lui Cody
+    assert len(hist_data["turns"]) == 3
+    assert hist_data["turns"][0]["role"] == "actor"
+    assert hist_data["turns"][1]["role"] == "participant"
+    assert hist_data["turns"][2]["role"] == "actor"
 
     # 4. End session
     end_resp = await client.post(

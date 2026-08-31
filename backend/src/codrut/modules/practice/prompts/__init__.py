@@ -24,10 +24,28 @@ QUIZ_PROMPT = (_PROMPTS_DIR / "quiz.md").read_text(encoding="utf-8").strip()
 REZUMAT_TEMPLATE = (_PROMPTS_DIR / "rezumat.md").read_text(encoding="utf-8").strip()
 
 CORE_SLOTS = [
+    # Cine e Codrut. Astea patru au fost singurele pana la plicul 38.
     ("PROFIL-ANDREI", ["codrut-profil-v2.md", "codrut-profil-mod-de-lucru-v3-0.md"]),
     ("FILOZOFIE", ["codrut-filozofie-v2.md"]),
     ("TON-SI-COMPORTAMENT", ["ton-si-comportament.md"]),
     ("REGULI-COMPORTAMENT", ["reguli-comportament.md"]),
+    # Ce preda Andrei. Statea in acelasi dosar si nu intra niciodata in prompt, deci
+    # Codrut stia cine e, dar nu si cursul pe care il tine.
+    #
+    # Slotul vine ULTIMUL dinadins: prefixul constant ramane neschimbat, ca memoria de
+    # context sa se prinda pe el.
+    #
+    # Deliberat NU intra restul teoriei (cum-primesti-feedback,
+    # cum-imi-controlez-reactiile, cum-gestionam-teama-in-comunicare,
+    # cum-transmit-informatia) si niciunul din cele 41 de fisiere reel-*.md: cu tot,
+    # promptul ar sari de la 87 KB la 159 KB, adica de doua ori cat aplicatia veche.
+    # 35 KB e proportia din vechi.
+    ("TEORIA-TEMEI", [
+        "codrut-comunicare-asertiva-v1-0.md",
+        "feedback-theory-partea-1.md",
+        "feedback-theory-part-2.md",
+        "cum-spui-nu.md",
+    ]),
 ]
 
 _MATERIAL_CACHE: dict[str, tuple[str, int]] = {}

@@ -98,3 +98,86 @@ def test_serviciul_chiar_trimite_cele_trei_piese():
     assert "project_competencies=" in sursa
     assert "memories=" in sursa
     assert "is_actor_role" not in sursa
+
+
+# ---- plicul 38 ----
+
+
+def test_cursul_lui_andrei_intra_in_prompt():
+    """Sloturile incarcau doar „cine e Codrut", nu si ce preda.
+
+    Teoria statea in acelasi dosar si nu ajungea niciodata la model.
+    """
+    from codrut.modules.practice.prompts import CORE_SLOTS
+
+    etichete = [eticheta for eticheta, _ in CORE_SLOTS]
+    assert "TEORIA-TEMEI" in etichete
+    # ultimul dinadins: prefixul constant ramane neschimbat, ca memoria de context sa
+    # se prinda pe el
+    assert etichete[-1] == "TEORIA-TEMEI"
+
+    fisiere = dict(CORE_SLOTS)["TEORIA-TEMEI"]
+    assert fisiere == [
+        "codrut-comunicare-asertiva-v1-0.md",
+        "feedback-theory-partea-1.md",
+        "feedback-theory-part-2.md",
+        "cum-spui-nu.md",
+    ]
+
+    # ce NU are voie sa intre: restul teoriei si cele 41 de reel-uri
+    toate = [f for _, fs in CORE_SLOTS for f in fs]
+    for nedorit in (
+        "cum-primesti-feedback.md",
+        "cum-imi-controlez-reactiile.md",
+        "cum-gestionam-teama-in-comunicare.md",
+        "cum-transmit-informatia.md",
+    ):
+        assert nedorit not in toate
+    assert not any(f.startswith("reel-") for f in toate)
+
+
+def test_cody_vorbeste_primul():
+    """Slotul `first_turn` exista de la inceput si era mereu null.
+
+    Aici se apara legatura, nu doar slotul: pornirea trebuie sa ceara replica, iar
+    esecul modelului nu are voie sa coste sesiunea.
+    """
+    import inspect
+
+    from codrut.modules.practice.service import PracticeSessionService
+
+    for pornire in (
+        PracticeSessionService.start_session,
+        PracticeSessionService.start_trainer_session,
+    ):
+        sursa = inspect.getsource(pornire)
+        assert "_prima_replica" in sursa, pornire.__name__
+        assert "return practice_session, prima" in sursa, pornire.__name__
+
+    prima = inspect.getsource(PracticeSessionService._prima_replica)
+    # la esec: bugetul se elibereaza si se intoarce None, sesiunea NU se inchide
+    assert "return None" in prima
+    assert "await release(" in prima
+    assert "SessionState.closed" not in prima
+    # replica se salveaza ca prima din transcript
+    assert "ordinal=1" in prima
+    assert "role=TurnRole.actor" in prima
+
+
+def test_deschiderea_nu_pune_vorbe_in_gura_participantului():
+    """Aplicatia veche trimitea in ascuns o replica falsa DIN PARTEA participantului.
+
+    Aici textul e o instructiune si nu se salveaza niciodata ca `PracticeTurn`, deci
+    transcriptul incepe curat, cu replica lui Codrut.
+    """
+    import inspect
+
+    from codrut.modules.practice.service import DESCHIDE_SESIUNEA, PracticeSessionService
+
+    prima = inspect.getsource(PracticeSessionService._prima_replica)
+    assert "DESCHIDE_SESIUNEA" in prima
+    # instructiunea nu ajunge niciodata intr-un rand de transcript
+    assert "text=DESCHIDE_SESIUNEA" not in prima.split("PracticeTurn(")[-1]
+    # si nu e o replica pusa in gura omului
+    assert "Salut" not in DESCHIDE_SESIUNEA
+    assert "sesiunea" in DESCHIDE_SESIUNEA.lower()

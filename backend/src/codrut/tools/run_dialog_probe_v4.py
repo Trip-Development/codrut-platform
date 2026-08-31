@@ -138,7 +138,7 @@ async def run_dialog_probe_v4() -> None:
         # PROBA 4: ROLE-PLAY 8 REPLICI CU PARTICIPANT PROST-INTENȚIONAT
         # -------------------------------------------------------------
         print(">>> ÎNCEPUT PROBA: Role-Play 8 replici cu participant dificil")
-        rp_session = await service.start_session(
+        rp_session, _ = await service.start_session(
             principal=principal,
             project_id=project.id,
             kind=SessionKind.roleplay,

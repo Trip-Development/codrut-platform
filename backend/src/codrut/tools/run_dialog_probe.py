@@ -127,7 +127,7 @@ async def run_dialog_probe() -> None:
         # PROBA 1: ROLE-PLAY (6 replici)
         # -------------------------------------------------------------
         print(">>> ÎNCEPUT PROBA 1: Modul Role-Play (6 replici)")
-        rp_session = await service.start_session(
+        rp_session, _ = await service.start_session(
             principal=principal,
             project_id=project.id,
             kind=SessionKind.roleplay,
@@ -163,7 +163,7 @@ async def run_dialog_probe() -> None:
         # PROBA 2: STRATEGIE (4 replici)
         # -------------------------------------------------------------
         print("\n>>> ÎNCEPUT PROBA 2: Modul Strategie (4 replici)")
-        strat_session = await service.start_session(
+        strat_session, _ = await service.start_session(
             principal=principal,
             project_id=project.id,
             kind=SessionKind.coaching,

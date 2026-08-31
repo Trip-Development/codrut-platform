@@ -27,6 +27,13 @@ export type PracticeSession = {
   endedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Replica cu care Cody deschide sesiunea, generata la pornire.
+   *
+   * E `null` cand modelul nu a raspuns — sesiunea ramane deschisa si ecranul arata
+   * starea goala. O replica ratata nu costa omul sesiunea.
+   */
+  firstTurn?: PracticeTurn | null;
 };
 
 export type PracticeSessionDetail = {
@@ -100,6 +107,17 @@ export async function startPracticeSession(payload: {
     endedAt: data.ended_at,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
+    firstTurn: data.first_turn
+      ? {
+          id: data.first_turn.id,
+          sessionId: data.first_turn.session_id,
+          ordinal: data.first_turn.ordinal,
+          role: data.first_turn.role,
+          text: data.first_turn.text,
+          createdAt: data.first_turn.created_at,
+          expiresAt: data.first_turn.expires_at,
+        }
+      : null,
   };
 }
 
