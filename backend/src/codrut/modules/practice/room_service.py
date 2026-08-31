@@ -259,3 +259,72 @@ class PracticeRoomService:
             return None
         trecut = (acum - project.starts_at).total_seconds()
         return round(min(max(trecut / total * 100, 0), 100), 1)
+
+
+class PracticeInvitationsService:
+    """Invitatiile in forma de training.
+
+    Mecanismul de invitatie si de facut cont exista si e bun
+    (`create_company_invitation`, `/invite/verify`, `/invite/exchange`) — nu se
+    construieste altul. Aici doar se aduna starea, in forma cerută:
+
+        invitat · a intrat · a facut testul de intrare
+    """
+
+    def __init__(self, session) -> None:
+        self.session = session
+
+    async def statuses(self, project_id: uuid.UUID) -> list[dict]:
+        from codrut.modules.identity.models import AssignmentInvite
+
+        randuri = (await self.session.execute(
+            select(ParticipantProfile, ProjectMembership)
+            .join(
+                ProjectMembership,
+                ProjectMembership.participant_profile_id == ParticipantProfile.id,
+            )
+            .where(ProjectMembership.project_id == project_id)
+        )).all()
+
+        emailuri = [p.email for p, _ in randuri if p.email]
+        utilizatori = (await self.session.execute(
+            select(User).where(User.email.in_(emailuri))
+        )).scalars().all() if emailuri else []
+        user_dupa_email = {u.email.lower(): u for u in utilizatori}
+
+        profil_ids = [p.id for p, _ in randuri]
+        invitatii = (await self.session.execute(
+            select(AssignmentInvite).where(
+                AssignmentInvite.respondent_profile_id.in_(profil_ids),
+                AssignmentInvite.project_id == project_id,
+            )
+        )).scalars().all() if profil_ids else []
+        invitatie_dupa_profil = {i.respondent_profile_id: i for i in invitatii}
+
+        cu_test_in = {
+            s.user_id for s in (await self.session.execute(
+                select(CompetencyScore).where(
+                    CompetencyScore.project_id == project_id,
+                    CompetencyScore.conversation_id == TEST_IN_ID,
+                )
+            )).scalars().all()
+        }
+
+        out = []
+        for profil, _ in randuri:
+            cont = profil.user_id
+            if cont is None and profil.email:
+                u = user_dupa_email.get(profil.email.lower())
+                cont = u.id if u else None
+            inv = invitatie_dupa_profil.get(profil.id)
+            out.append({
+                "participant_profile_id": profil.id,
+                "full_name": profil.full_name,
+                "email": profil.email,
+                "invited": inv is not None,
+                "invited_at": inv.created_at.isoformat() if inv and inv.created_at else None,
+                "has_account": cont is not None,
+                "has_test_in": cont in cu_test_in if cont else False,
+            })
+        out.sort(key=lambda o: (o["full_name"] or "").lower())
+        return out

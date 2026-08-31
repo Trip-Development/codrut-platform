@@ -932,3 +932,50 @@ export async function addTrainerNote(
   const n = await res.json();
   return { id: n.id, note: n.note, createdAt: n.created_at };
 }
+
+// ---- invitatiile in forma de training (plic 30) ----
+
+export type TrainingInvitation = {
+  participantProfileId: string;
+  fullName: string;
+  email: string | null;
+  invited: boolean;
+  invitedAt: string | null;
+  hasAccount: boolean;
+  hasTestIn: boolean;
+};
+
+export async function getTrainingInvitations(
+  projectId: string,
+  options: { headers?: HeadersInit } = {},
+): Promise<TrainingInvitation[]> {
+  let res: Response;
+  try {
+    res = await apiFetch(`${getApiBaseUrl()}/practice/projects/${projectId}/invitations`, {
+      cache: "no-store",
+      credentials: "include",
+      ...options,
+    });
+  } catch {
+    return [];
+  }
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => []);
+  return (data || []).map((r: {
+    participant_profile_id: string;
+    full_name: string;
+    email: string | null;
+    invited: boolean;
+    invited_at: string | null;
+    has_account: boolean;
+    has_test_in: boolean;
+  }) => ({
+    participantProfileId: r.participant_profile_id,
+    fullName: r.full_name,
+    email: r.email,
+    invited: r.invited,
+    invitedAt: r.invited_at,
+    hasAccount: r.has_account,
+    hasTestIn: r.has_test_in,
+  }));
+}
