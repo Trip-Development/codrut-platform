@@ -214,3 +214,109 @@ describe("PracticeWorkspace — ecranul de final", () => {
     await waitFor(() => expect(screen.queryByText("Se închide sesiunea.")).toBeNull());
   });
 });
+
+describe("PracticeWorkspace — Vreau altă temă", () => {
+  const REPLICA_OM = {
+    id: "om-1",
+    sessionId: "sesiune-1",
+    ordinal: 2,
+    role: "participant" as const,
+    text: "bine, hai",
+    createdAt: "2026-08-31T10:00:00Z",
+    expiresAt: "2026-09-30T10:00:00Z",
+  };
+  const SCENA = {
+    id: "cody-2",
+    sessionId: "sesiune-1",
+    ordinal: 3,
+    role: "actor" as const,
+    text: "Intrăm în scenă: ești managerul lui Vali, care a întârziat cu raportul.",
+    createdAt: "2026-08-31T10:00:05Z",
+    expiresAt: "2026-09-30T10:00:05Z",
+  };
+
+  async function pornesteCuSalut() {
+    api.startPracticeSession.mockResolvedValue({
+      ...SESIUNE_DESCHISA,
+      firstTurn: {
+        id: "cody-1",
+        sessionId: "sesiune-1",
+        ordinal: 1,
+        role: "actor" as const,
+        text: "Salut! Cum îți merge ziua până acum?",
+        createdAt: "2026-08-31T09:59:00Z",
+        expiresAt: "2026-09-30T09:59:00Z",
+      },
+    });
+    render(<PracticeWorkspace projectId="proiect-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
+    await waitFor(() => expect(api.startPracticeSession).toHaveBeenCalled());
+  }
+
+  async function raspunde(text: string, actorTurn: typeof SCENA | null) {
+    api.submitPracticeTurn.mockResolvedValue({
+      participantTurn: { ...REPLICA_OM, text },
+      actorTurn,
+      sessionState: "open" as const,
+    });
+    const caseta = screen.getByPlaceholderText(/Scrie un mesaj/);
+    fireEvent.change(caseta, { target: { value: text } });
+    fireEvent.submit(caseta.closest("form")!);
+    await waitFor(() => expect(api.submitPracticeTurn).toHaveBeenCalled());
+  }
+
+  it("nu apare sub salut, ci sub replica ce pornește scena", async () => {
+    await pornesteCuSalut();
+    // sub salut nu are la ce sa se refere: tema inca nu e aleasa
+    expect(screen.queryByRole("button", { name: "Vreau altă temă" })).toBeNull();
+
+    await raspunde("bine, hai", SCENA);
+    expect(await screen.findByRole("button", { name: "Vreau altă temă" })).toBeTruthy();
+  });
+
+  it("pune un început de mesaj în casetă și NU îl trimite", async () => {
+    await pornesteCuSalut();
+    await raspunde("bine, hai", SCENA);
+
+    api.submitPracticeTurn.mockClear();
+    fireEvent.click(await screen.findByRole("button", { name: "Vreau altă temă" }));
+
+    const caseta = screen.getByPlaceholderText(/Scrie un mesaj/) as HTMLTextAreaElement;
+    expect(caseta.value).toBe("Vreau să exersăm altceva: ");
+    expect(api.submitPracticeTurn).not.toHaveBeenCalled();
+  });
+
+  it("dispare după ce omul mai scrie ceva", async () => {
+    await pornesteCuSalut();
+    await raspunde("bine, hai", SCENA);
+    expect(await screen.findByRole("button", { name: "Vreau altă temă" })).toBeTruthy();
+
+    await raspunde("Vreau să exersăm altceva: o discuție de salariu", {
+      ...SCENA,
+      id: "cody-3",
+      ordinal: 5,
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Vreau altă temă" })).toBeNull(),
+    );
+  });
+
+  it("nu apare la coaching sau la quiz", async () => {
+    for (const kind of ["coaching", "knowledge"] as const) {
+      cleanup();
+      api.startPracticeSession.mockResolvedValue({
+        ...SESIUNE_DESCHISA,
+        kind,
+        firstTurn: {
+          id: "c1", sessionId: "s", ordinal: 1, role: "actor" as const,
+          text: "Salut!", createdAt: "2026-08-31T09:59:00Z", expiresAt: "2026-09-30T09:59:00Z",
+        },
+      });
+      render(<PracticeWorkspace projectId="proiect-1" />);
+      fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
+      await waitFor(() => expect(api.startPracticeSession).toHaveBeenCalled());
+      await raspunde("bine", SCENA);
+      expect(screen.queryByRole("button", { name: "Vreau altă temă" })).toBeNull();
+    }
+  });
+});

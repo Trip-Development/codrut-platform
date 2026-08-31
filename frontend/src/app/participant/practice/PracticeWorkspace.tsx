@@ -104,6 +104,36 @@ function taieSinteza(text: string): { titlu: string | null; corp: string }[] {
   return sectiuni.length > 0 ? sectiuni : [{ titlu: null, corp: text.trim() }];
 }
 
+/** Ce se pune in caseta cand omul apasa „Vreau alta tema". Nu se trimite singur. */
+const INCEPUT_ALTA_TEMA = "Vreau să exersăm altceva: ";
+
+/**
+ * Sub care replica a lui Cody apare butonul „Vreau alta tema".
+ *
+ * Cody anunta tema si intra direct in scena. Omul nu afla niciodata ca are voie sa vina
+ * cu tema lui, deci exerseaza mereu ce alege Cody. Butonul se pune sub replica in care
+ * tema chiar e aleasa — adica cea de dupa primul lui mesaj, nu sub salutul de la
+ * inceput, unde n-ar avea la ce sa se refere.
+ *
+ * Regula e deterministă, fara ghicit dupa continut:
+ *   role-play  ·  replica e a lui Cody  ·  e ultima din transcript
+ *   ·  omul a scris exact o data
+ *
+ * Ultima conditie il si face sa dispara: cum omul mai scrie ceva, nu mai e „exact o
+ * data". Merge si daca salutul n-a apucat sa se genereze (`first_turn` null la plicul
+ * 38): atunci replica de dupa primul mesaj e tot cea care porneste scena.
+ */
+function aratAltaTema(
+  kind: SessionKind,
+  turns: PracticeTurn[],
+  turn: PracticeTurn,
+): boolean {
+  if (kind !== "roleplay") return false;
+  if (turn.role !== "actor") return false;
+  if (turns[turns.length - 1] !== turn) return false;
+  return turns.filter((t) => t.role === "participant").length === 1;
+}
+
 const FIXED_OPENINGS = [
   {
     id: "1",
@@ -149,6 +179,8 @@ export function PracticeWorkspace({
   const [arataAlegerea, setArataAlegerea] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Ca „Vreau alta tema" sa poata pune cursorul la capatul textului pregatit.
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -581,6 +613,23 @@ export function PracticeWorkspace({
               >
                 {turn.text}
               </div>
+              {aratAltaTema(session.kind, turns, turn) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInputText(INCEPUT_ALTA_TEMA);
+                    const c = inputRef.current;
+                    if (c) {
+                      c.focus();
+                      const n = INCEPUT_ALTA_TEMA.length;
+                      c.setSelectionRange(n, n);
+                    }
+                  }}
+                  className="mt-2 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted"
+                >
+                  Vreau altă temă
+                </button>
+              ) : null}
             </div>
           );
         })}
@@ -608,6 +657,7 @@ export function PracticeWorkspace({
         >
           <div className="relative flex items-end gap-2">
             <Textarea
+              ref={inputRef}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}

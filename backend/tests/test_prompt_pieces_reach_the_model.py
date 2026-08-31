@@ -82,7 +82,7 @@ def test_memoria_ajunge_in_prompt_la_inceputul_sesiunii():
 
 def test_versiunea_promptului_a_urcat():
     """Compozitia s-a schimbat; fara urcare, sesiunile nu se mai pot compara."""
-    assert CODY_PROMPT_VERSION == "v2.2"
+    assert CODY_PROMPT_VERSION == "v2.3"
 
 
 def test_serviciul_chiar_trimite_cele_trei_piese():
@@ -232,3 +232,39 @@ def test_sinteza_care_iese_din_end_session_e_curata():
     sursa = inspect.getsource(PracticeSessionService.end_session)
     assert "return session_obj, doar_proza(summary_text)" in sursa
     assert "return session_obj, summary_text" not in sursa
+
+
+# ---- plicul 40 ----
+
+
+def test_biblioteca_de_tranzitii_nu_ajunge_in_roleplay():
+    """`actor.md` cere „nu ceri permisiunea… treci DIRECT la SETUP".
+
+    Biblioteca de tranzitii cere exact opusul: sa-l intrebe pe om ce vrea sa discute.
+    Pana la plicul 37 nu ajungea in role-play, fiindca `reguli_generale` nu se trimitea
+    acolo deloc; a venit odata cu evaluarea, si de atunci in acelasi prompt stateau doua
+    instructiuni opuse.
+    """
+    prompt = get_system_prompt_for_kind("roleplay", name="Andrei", history_length=3)
+
+    assert "BIBLIOTECA DE TRANZIȚII" not in prompt
+    assert "Ce ai zice să trecem la subiectul principal" not in prompt
+    assert "SENZORUL ANTI-PAPAGAL" not in prompt
+    # regula anti-salut de la a doua replica ramane
+    assert "REGULA ANTI-SALUT" in prompt
+
+
+def test_la_coaching_si_quiz_biblioteca_ramane():
+    """Acolo e buna: sunt moduri in care Codrut chiar intreaba ce vrea omul."""
+    for mod in ("coaching", "knowledge"):
+        prompt = get_system_prompt_for_kind(mod, name="Andrei", history_length=3)
+        assert "BIBLIOTECA DE TRANZIȚII" in prompt, mod
+        assert "SENZORUL ANTI-PAPAGAL" in prompt, mod
+
+
+def test_prima_replica_nu_are_tranzitii_in_niciun_mod():
+    """La primul mesaj regula e alta si e aceeasi peste tot: doar salut."""
+    for mod in ("roleplay", "coaching", "knowledge"):
+        prompt = get_system_prompt_for_kind(mod, name="Andrei", history_length=0)
+        assert "REGULA PRIMULUI MESAJ" in prompt, mod
+        assert "BIBLIOTECA DE TRANZIȚII" not in prompt, mod
