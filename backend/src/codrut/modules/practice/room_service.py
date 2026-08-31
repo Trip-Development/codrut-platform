@@ -353,8 +353,6 @@ class PracticeInvitationsService:
         din motive care nu tin de noi (cheie, plafon, furnizor), dar trainerul
         trebuie sa poata da linkul mai departe cum vrea.
         """
-        from codrut.modules.identity.repository import IdentityRepository
-
         if not participant_profile_ids:
             return []
 
@@ -386,7 +384,6 @@ class PracticeInvitationsService:
         }
 
         setari = get_settings()
-        depozit = IdentityRepository(self.session)
 
         out: list[dict] = []
         for profil_id in participant_profile_ids:
@@ -402,8 +399,8 @@ class PracticeInvitationsService:
 
             try:
                 async with self.session.begin_nested():
-                    utilizator = await self._contul_lui(depozit, profil)
-                    link = await self._link_de_parola(depozit, utilizator, setari)
+                    utilizator = await self._contul_lui(profil)
+                    link = await self._link_de_parola(utilizator, setari)
             except DomainError as exc:
                 out.append(_rand(profil_id, profil.full_name, profil.email, None, False,
                                  f"Contul nu s-a putut pregati: {exc.code}."))
@@ -428,24 +425,26 @@ class PracticeInvitationsService:
 
         return out
 
-    async def _contul_lui(self, depozit, profil) -> User:
+    async def _contul_lui(self, profil) -> User:
         """Contul permanent al omului. Il face daca nu exista, si nu-l atinge daca exista.
 
         Contul se naste `registered`, nu `guest`: la training omul trebuie sa ajunga
         in zona participantului, iar aceea refuza din constructie oaspetii si
         sesiunile de link. Parola ramane cea de santier pana si-o pune el.
         """
-        utilizator = await depozit.get_user_by_email(profil.email)
+        utilizator = (await self.session.execute(
+            select(User).where(User.email == profil.email.lower())
+        )).scalar_one_or_none()
         if utilizator is None:
-            utilizator = await depozit.add_user(
-                User(
-                    id=uuid.uuid4(),
-                    email=profil.email.lower(),
-                    password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
-                    role=UserRole.participant,
-                    account_type=UserAccountType.registered,
-                )
+            utilizator = User(
+                id=uuid.uuid4(),
+                email=profil.email.lower(),
+                password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
+                role=UserRole.participant,
+                account_type=UserAccountType.registered,
             )
+            self.session.add(utilizator)
+            await self.session.flush()
         elif utilizator.account_type == UserAccountType.guest:
             # Un cont de oaspete ramas de la un link vechi nu poate intra in zona
             # participantului. La training e nevoie de cont adevarat.
@@ -454,27 +453,40 @@ class PracticeInvitationsService:
             profil.user_id = utilizator.id
         return utilizator
 
-    async def _link_de_parola(self, depozit, utilizator: User, setari) -> str:
+    async def _link_de_parola(self, utilizator: User, setari) -> str:
         """Un link prin care omul isi pune parola. Acelasi mecanism ca la resetare.
 
         Nu se pastreaza nicaieri in clar: in baza sta doar amprenta lui. De aceea
         linkul se poate arata o singura data, la trimitere; „Trimite din nou" face
         unul proaspat si il stinge pe cel vechi.
         """
+        import hashlib
+
         from codrut.core.security import new_session_token
         from codrut.modules.identity.models import PasswordResetToken
-        from codrut.modules.identity.repository import hash_session_token
 
         brut = new_session_token()
-        await depozit.revoke_password_reset_tokens_for_user(utilizator.id)
-        await depozit.add_password_reset_token(
+        acum = datetime.now(UTC)
+        # Linkurile vechi ale omului se sting, ca la orice cerere de parola noua.
+        vechi = (await self.session.execute(
+            select(PasswordResetToken).where(
+                PasswordResetToken.user_id == utilizator.id,
+                PasswordResetToken.used_at.is_(None),
+            )
+        )).scalars().all()
+        for jeton in vechi:
+            jeton.used_at = acum
+        self.session.add(
             PasswordResetToken(
                 id=uuid.uuid4(),
                 user_id=utilizator.id,
-                token_hash=hash_session_token(brut),
-                expires_at=datetime.now(UTC) + timedelta(days=ZILE_LINK_PAROLA),
+                # Aceeasi amprenta ca la resetarea obisnuita, ca sa mearga pe
+                # aceeasi ruta de confirmare.
+                token_hash=hashlib.sha256(brut.encode()).hexdigest(),
+                expires_at=acum + timedelta(days=ZILE_LINK_PAROLA),
             )
         )
+        await self.session.flush()
         return f"{setari.public_app_url.rstrip('/')}/update-password?token={brut}"
 
     async def _trimite_emailul(
