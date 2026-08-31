@@ -198,7 +198,7 @@ async def test_practice_session_lifecycle_and_prompt_version():
     session_data = start_resp.json()
     session_id = session_data["id"]
     assert session_data["prompt_version"] == CODY_PROMPT_VERSION
-    assert session_data["prompt_version"] == "v2.0"
+    assert session_data["prompt_version"] == "v2.1"
     assert session_data["state"] == "open"
     assert session_data["turn_count"] == 0
 
@@ -220,7 +220,7 @@ async def test_practice_session_lifecycle_and_prompt_version():
     assert hist_resp.status_code == 200, hist_resp.text
     hist_data = hist_resp.json()
     assert hist_data["session"]["id"] == session_id
-    assert hist_data["session"]["prompt_version"] == "v2.0"
+    assert hist_data["session"]["prompt_version"] == "v2.1"
     assert len(hist_data["turns"]) == 2
     assert hist_data["turns"][0]["role"] == "participant"
     assert hist_data["turns"][1]["role"] == "actor"
@@ -345,7 +345,7 @@ async def test_trainer_direct_entry_succeeds_when_enabled():
     )
     assert resp.status_code == 201, resp.text
     data = resp.json()
-    assert data["prompt_version"] == "v2.0"
+    assert data["prompt_version"] == "v2.1"
     assert data["state"] == "open"
 
     # Trainer can also submit turns
@@ -360,7 +360,7 @@ async def test_trainer_direct_entry_succeeds_when_enabled():
 def test_cody_prompt_content_and_version():
     """Verify that prompts contain the exact SYSTEM_PROMPT_CORE without meta notes."""
     from codrut.modules.practice.prompts import get_system_prompt_for_kind
-    assert CODY_PROMPT_VERSION == "v2.0"
+    assert CODY_PROMPT_VERSION == "v2.1"
     roleplay_prompt = get_system_prompt_for_kind("roleplay")
     assert "Ești Codruț" in roleplay_prompt
     assert "Treci DIRECT la SETUP" in roleplay_prompt

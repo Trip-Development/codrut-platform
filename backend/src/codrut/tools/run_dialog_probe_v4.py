@@ -211,7 +211,6 @@ async def run_dialog_probe_v4() -> None:
             kind="roleplay",
             name="Andrei",
             history_length=3,
-            is_actor_role=True,
             biblioteca_path=settings.biblioteca_path,
         )
 

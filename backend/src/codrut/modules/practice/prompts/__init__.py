@@ -9,7 +9,10 @@ from codrut.modules.practice.models import SessionKind
 
 logger = logging.getLogger(__name__)
 
-CODY_PROMPT_VERSION = "v2.0"
+# v2.1 (plicul 37): la role-play perechea actor+evaluare a fost pusa la loc, blocul de
+# quiz si memoria chiar ajung la model. Compozitia promptului s-a schimbat, deci
+# sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
+CODY_PROMPT_VERSION = "v2.1"
 
 _PROMPTS_DIR = Path(__file__).parent
 
@@ -181,7 +184,6 @@ def get_system_prompt_for_kind(
     kind: SessionKind | str,
     name: str = "Participant",
     history_length: int = 0,
-    is_actor_role: bool = False,
     quiz_competency: str | None = None,
     project_competencies: list[str] | None = None,
     memories: list[dict[str, Any]] | None = None,
@@ -216,12 +218,22 @@ def get_system_prompt_for_kind(
     kind_val = kind.value if isinstance(kind, SessionKind) else str(kind)
 
     if kind_val == "roleplay":
-        if is_actor_role:
-            # During actor replica: material + actor rules (character persona without contradictory coach rules)
-            return f"{material}\n\n---\n\n{ACTOR_PROMPT}{memory_block}"
-        else:
-            # During evaluation / standard roleplay setup: material + general rules + actor + evaluation
-            return f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n{ACTOR_PROMPT}\n\n---\n\n{EVALUARE_PROMPT}{memory_block}"
+        # Actorul si evaluarea merg impreuna, ca in aplicatia veche si ca in plicul 22:
+        # „peste el vine coach.md SAU PERECHEA actor.md + evaluare.md, dupa mod".
+        #
+        # Pana la plicul 37 exista aici un comutator, `is_actor_role`, care la role-play
+        # era intotdeauna adevarat — deci ramura cu evaluarea nu se atingea niciodata in
+        # folosire reala. Asa s-a pierdut feedbackul imediat de dupa fiecare replica,
+        # impreuna cu regula care ii interzice lui Codrut sa dea participantului fraza
+        # gata formulata, si cu lista de jargon interzis din reguli-generale.
+        #
+        # Grija ca actorul sa nu iasa din rol in mijlocul scenei e deja in textul
+        # evaluarii („IESI COMPLET DIN ROL" dupa replica participantului), deci nu are
+        # nevoie de un comutator in cod.
+        return (
+            f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n"
+            f"{ACTOR_PROMPT}\n\n---\n\n{EVALUARE_PROMPT}{memory_block}"
+        )
 
     elif kind_val == "knowledge":
         # Quiz mode
