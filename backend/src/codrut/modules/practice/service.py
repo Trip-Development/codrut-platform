@@ -77,13 +77,20 @@ class PracticeSessionService:
         self,
         principal: SessionPrincipal,
     ) -> ParticipantProfile:
-        stmt = select(ParticipantProfile).where(
-            or_(
-                ParticipantProfile.user_id == principal.user_id,
-                ParticipantProfile.email == principal.email,
+        # Acelasi lucru, dar aici nu exista context de proiect: se alege
+        # DETERMINIST — intai cel legat de cont, apoi cel mai vechi. Nu are voie
+        # sa crape doar fiindca omul e in doua companii.
+        stmt = (
+            select(ParticipantProfile)
+            .where(
+                or_(
+                    ParticipantProfile.user_id == principal.user_id,
+                    ParticipantProfile.email == principal.email,
+                )
             )
+            .order_by(ParticipantProfile.user_id.is_(None), ParticipantProfile.created_at)
         )
-        profile = (await self.session.execute(stmt)).scalar_one_or_none()
+        profile = (await self.session.execute(stmt)).scalars().first()
         if profile is None:
             raise DomainError(
                 "Participant profile not found for principal",
@@ -122,13 +129,22 @@ class PracticeSessionService:
             )
 
         # 3. Load participant profile and project membership
-        stmt_profile = select(ParticipantProfile).where(
-            or_(
-                ParticipantProfile.user_id == principal.user_id,
-                ParticipantProfile.email == principal.email,
+        #
+        # Cautarea se face IN COMPANIA PROIECTULUI. Fara asta, un om care are
+        # profil in doua companii da MultipleResultsFound si sesiunea crapa cu 500
+        # — gasit la plicul 30, cu proba1 aflat si in „Pilot Cody", si in „test".
+        stmt_profile = (
+            select(ParticipantProfile)
+            .where(
+                ParticipantProfile.company_id == project.company_id,
+                or_(
+                    ParticipantProfile.user_id == principal.user_id,
+                    ParticipantProfile.email == principal.email,
+                ),
             )
+            .order_by(ParticipantProfile.user_id.is_(None), ParticipantProfile.created_at)
         )
-        profile = (await self.session.execute(stmt_profile)).scalar_one_or_none()
+        profile = (await self.session.execute(stmt_profile)).scalars().first()
         membership = None
         if profile is not None:
             stmt_membership = select(ProjectMembership).where(
