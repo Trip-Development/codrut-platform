@@ -5,6 +5,7 @@ import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { ParticipantContextSelector } from "./ParticipantContextSelector";
 import { ParticipantResultCycleControls } from "./ParticipantContextSelector";
 import {
+  participantActiveProjectType,
   participantScopeParams,
   participantDefaultContext,
   participantResultsHref,
@@ -338,5 +339,66 @@ describe("participant workspace context", () => {
       />,
     );
     expect(container.childElementCount).toBe(0);
+  });
+});
+
+describe("participantActiveProjectType", () => {
+  it("gaseste proiectul de training si cand summary.projects e goala", () => {
+    // Asta e cazul real de pe probă: `projects` se construieste din structurile de
+    // coaching — cicluri si chestionare — pe care un proiect de training nu le are,
+    // deci ramane goala. Proiectul e totusi acolo, in contexte.
+    const summary = {
+      projectId: "30e2523d-dfad-4d71-b573-292f4be273db",
+      projects: [],
+      questionnaireProjects: [],
+      contexts: [
+        {
+          projects: [
+            {
+              id: "30e2523d-dfad-4d71-b573-292f4be273db",
+              name: "Test proiect",
+              projectType: "training",
+              status: "active",
+              historyBucket: "current",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(participantActiveProjectType(summary)).toBe("training");
+  });
+
+  it("ia primul proiect curent din contexte cand nu se stie care e cel ales", () => {
+    const summary = {
+      projects: [],
+      contexts: [
+        {
+          projects: [
+            { id: "vechi", name: "Vechi", projectType: "coaching_echipa", historyBucket: "history" },
+            { id: "acum", name: "Acum", projectType: "training", historyBucket: "current" },
+          ],
+        },
+      ],
+    };
+
+    expect(participantActiveProjectType(summary)).toBe("training");
+  });
+
+  it("nu schimba nimic la coaching, unde lista de sus e plina", () => {
+    const summary = {
+      projectId: "p2",
+      projects: [
+        { id: "p1", name: "Unu", projectType: "coaching_echipa" },
+        { id: "p2", name: "Doi", projectType: "coaching_individual" },
+      ],
+      contexts: [{ projects: [{ id: "p9", name: "Nefolosit", projectType: "training" }] }],
+    };
+
+    expect(participantActiveProjectType(summary)).toBe("coaching_individual");
+  });
+
+  it("intoarce null cand nu are de unde sti", () => {
+    expect(participantActiveProjectType({ projects: [], contexts: [] })).toBeNull();
   });
 });

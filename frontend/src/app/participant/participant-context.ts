@@ -98,15 +98,48 @@ export function participantDefaultContext(contexts: ParticipantWorkspaceContext[
   ))[0] ?? null;
 }
 
-/** Tipul proiectului în care se află acum participantul, din sumarul lui. */
+type ProiectDinSumar = {
+  id: string;
+  projectType?: string | null;
+  status?: string | null;
+  historyBucket?: string | null;
+};
+
+/**
+ * Tipul proiectului în care se află acum participantul, din sumarul lui.
+ *
+ * `summary.projects` e construită din structurile de coaching — cicluri și
+ * chestionare. Un proiect de training n-are așa ceva, deci lista aia rămâne
+ * **goală** chiar dacă proiectul există. Până la plicul 34 funcția întorcea `null`,
+ * iar `participantNavItemsForType(null)` dădea meniul de coaching: omul de la
+ * training vedea „Chestionare" și „Rezultate" pe pagina de exersare.
+ *
+ * Proiectul e totuși acolo, complet, în `summary.contexts[].projects`. Când lista
+ * de sus e goală, se caută acolo — întâi după `projectId`, altfel primul proiect
+ * curent. Nimic nu se schimbă pe server și nimic nu se atinge la coaching, unde
+ * `summary.projects` e plină și prima ramură răspunde ca înainte.
+ */
 export function participantActiveProjectType(
-  summary: { projectId?: string | null; projects?: { id: string; projectType?: string | null }[] },
+  summary: {
+    projectId?: string | null;
+    projects?: ProiectDinSumar[];
+    contexts?: { projects?: ProiectDinSumar[] }[];
+  },
 ): string | null {
-  const projects = summary.projects ?? [];
-  const current = summary.projectId
-    ? projects.find((p) => p.id === summary.projectId)
-    : undefined;
-  return (current ?? projects[0])?.projectType ?? null;
+  const alege = (proiecte: ProiectDinSumar[]): ProiectDinSumar | undefined => {
+    if (proiecte.length === 0) return undefined;
+    const dupaId = summary.projectId
+      ? proiecte.find((p) => p.id === summary.projectId)
+      : undefined;
+    if (dupaId) return dupaId;
+    return proiecte.find((p) => p.historyBucket === "current") ?? proiecte[0];
+  };
+
+  const dinLista = alege(summary.projects ?? []);
+  if (dinLista) return dinLista.projectType ?? null;
+
+  const dinContexte = alege((summary.contexts ?? []).flatMap((c) => c.projects ?? []));
+  return dinContexte?.projectType ?? null;
 }
 
 /** Un meniu ascuns nu e o regulă, e o sugestie: paginile de coaching se închid. */

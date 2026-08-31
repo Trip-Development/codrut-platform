@@ -90,6 +90,9 @@ export function PracticeWorkspace({
   const [isLoading, setIsLoading] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // „Inapoi" duce la alegerea modului FARA sa inchida sesiunea. Sesiunea ramane in
+  // stare si pe server; omul se poate intoarce la ea din bannerul de sus.
+  const [arataAlegerea, setArataAlegerea] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -209,6 +212,19 @@ export function PracticeWorkspace({
     setInputText("");
     setErrorMsg(null);
     setSessionSummary(null);
+    setArataAlegerea(false);
+  };
+
+  /** Inapoi la alegerea modului, cu sesiunea deschisa pastrata intreaga. */
+  const handleInapoiLaAlegere = () => {
+    setErrorMsg(null);
+    setArataAlegerea(true);
+  };
+
+  /** Inapoi in sesiunea care a ramas deschisa. */
+  const handleInapoiInSesiune = () => {
+    setErrorMsg(null);
+    setArataAlegerea(false);
   };
 
   const handleAutoSubmitVoice = async (textToSend: string) => {
@@ -265,9 +281,26 @@ export function PracticeWorkspace({
   });
 
   // Ecran 1: Selecția modului și pornirea sesiunii
-  if (!session) {
+  if (!session || arataAlegerea) {
+    const sesiuneDeschisaPusaDeoparte = session && session.state === "open";
     return (
       <div className="flex flex-col gap-6 py-4 max-w-4xl mx-auto w-full">
+        {sesiuneDeschisaPusaDeoparte ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                Ai o sesiune deschisă.
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Nu s-a pierdut nimic. Te poți întoarce la ea oricând.
+              </p>
+            </div>
+            <Button size="sm" onClick={handleInapoiInSesiune}>
+              Întoarce-te la sesiune
+            </Button>
+          </div>
+        ) : null}
+
         <div>
           <h2 className="text-xl font-heading font-semibold text-foreground">
             Alege modul de antrenament
@@ -384,15 +417,27 @@ export function PracticeWorkspace({
         </div>
         <div className="flex items-center gap-2">
           {session.state === "open" ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-8 text-destructive hover:bg-destructive/10"
-              disabled={isEnding || isLoading}
-              onClick={handleEndSession}
-            >
-              {isEnding ? "Se încheie..." : "Încheie sesiunea"}
-            </Button>
+            <>
+              {/* Iesirea care NU inchide nimic. Pana la plicul 34 singura cale
+                  afara dintr-o sesiune pornita era „Incheie sesiunea". */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs h-8"
+                onClick={handleInapoiLaAlegere}
+              >
+                ← Înapoi
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs h-8 text-destructive hover:bg-destructive/10"
+                disabled={isEnding || isLoading}
+                onClick={handleEndSession}
+              >
+                {isEnding ? "Se încheie..." : "Încheie sesiunea"}
+              </Button>
+            </>
           ) : (
             <Button
               variant="default"
@@ -513,6 +558,22 @@ export function PracticeWorkspace({
         </form>
       ) : (
         <div className="space-y-4 pt-3 border-t">
+          {/* Drumul inapoi, primul lucru de pe ecran. Pana la plicul 34 era un link
+              in subsolul unei casete, sub sinteza, si omul ramanea in transcript. */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-surface p-4">
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                Sesiunea s-a încheiat.
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Sinteza rămâne mai jos. Poți începe alta oricând.
+              </p>
+            </div>
+            <Button size="sm" onClick={handleReset}>
+              ← Înapoi la alegerea modului
+            </Button>
+          </div>
+
           {sessionSummary ? (
             <div className="p-4 rounded-lg border border-primary/20 bg-primary/5 text-sm space-y-3">
               <div className="flex items-center justify-between">
