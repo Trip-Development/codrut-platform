@@ -126,7 +126,7 @@ export function TrainingInvitations({
           </p>
           {laCoada > 0 ? (
             <p className="mt-1 text-xs text-muted-foreground">
-              „La coadă" nu înseamnă „a ajuns". Plecarea se face după aceea și poate
+              {"„La coadă” nu înseamnă „a ajuns”."} Plecarea se face după aceea și poate
               eșua la furnizorul de email. Linkul din tabel merge oricum.
             </p>
           ) : null}
