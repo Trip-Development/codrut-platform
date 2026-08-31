@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -47,6 +48,14 @@ from codrut.modules.practice.quotas import (
     ensure_daily_session_limit,
     ensure_turn_length,
     is_session_turn_limit_reached,
+)
+
+logger = logging.getLogger(__name__)
+
+# Ce i se trimite modelului ca sa deschida el sesiunea. Vezi `_prima_replica`: nu e o
+# replica pusa in gura participantului, si nu se salveaza niciodata in transcript.
+DESCHIDE_SESIUNEA = (
+    "Incepe tu sesiunea, dupa regula primului mesaj din instructiunile de sistem."
 )
 
 # Regulile memoriei, pastrate din aplicatia veche.
@@ -112,7 +121,7 @@ class PracticeSessionService:
         project_id: uuid.UUID,
         kind: SessionKind,
         scenario_id: uuid.UUID | None = None,
-    ) -> PracticeSession:
+    ) -> tuple[PracticeSession, PracticeTurn | None]:
         """Start a new practice session for a participant after policy and quota checks."""
         # 1. Load project and verify project_type is training
         stmt_proj = select(CompanyProject).where(CompanyProject.id == project_id)
@@ -206,7 +215,11 @@ class PracticeSessionService:
         )
         self.session.add(practice_session)
         await self.session.flush()
-        return practice_session
+
+        # Codrut vorbeste primul. Daca modelul nu raspunde, `prima` e None si sesiunea
+        # ramane deschisa si goala — nu se pierde pentru o replica ratata.
+        prima = await self._prima_replica(practice_session, profile, program_settings)
+        return practice_session, prima
 
     async def start_trainer_session(
         self,
@@ -214,7 +227,7 @@ class PracticeSessionService:
         project_id: uuid.UUID,
         kind: SessionKind,
         scenario_id: uuid.UUID | None = None,
-    ) -> PracticeSession:
+    ) -> tuple[PracticeSession, PracticeTurn | None]:
         """Start a direct practice session for a trainer without requiring invitations."""
         if not principal.can_access_workspace(UserRole.trainer):
             raise DomainError("Trainer access required", code="trainer_required")
@@ -269,7 +282,11 @@ class PracticeSessionService:
         )
         self.session.add(practice_session)
         await self.session.flush()
-        return practice_session
+
+        # Codrut vorbeste primul. Daca modelul nu raspunde, `prima` e None si sesiunea
+        # ramane deschisa si goala — nu se pierde pentru o replica ratata.
+        prima = await self._prima_replica(practice_session, profile, program_settings)
+        return practice_session, prima
 
     async def get_session_history(
         self,
@@ -293,6 +310,124 @@ class PracticeSessionService:
         )
         turns = list((await self.session.execute(stmt_turns)).scalars().all())
         return session_obj, turns
+
+    async def _prima_replica(
+        self,
+        practice_session: PracticeSession,
+        profile: ParticipantProfile,
+        program_settings: PracticeProgramSettings,
+    ) -> PracticeTurn | None:
+        """Replica cu care Codrut deschide sesiunea, inainte ca omul sa scrie ceva.
+
+        Pana la plicul 38 participantul deschidea „Exerseaza" si primea un ecran gol,
+        pentru ca singurul loc unde se nastea o replica de la Codrut era raspunsul la un
+        mesaj al omului. Slotul `first_turn` exista in raspuns si era mereu `null`.
+
+        Regula primului mesaj e deja in prompt si e a lui Andrei: doar salut, plus
+        „Cum iti merge ziua pana acum?".
+
+        **Daca modelul nu raspunde, sesiunea ramane deschisa** si se intoarce `None`.
+        Ecranul arata atunci starea goala de pana acum. O replica ratata nu are voie sa
+        coste omul sesiunea — mai ales ca Vertex a dat 429 de mai multe ori.
+        """
+        competente = await self._competentele_proiectului(program_settings.project_id)
+        memorii = await self._memoria_participantului(profile.user_id, history_length=0)
+
+        system_instruction = get_system_prompt_for_kind(
+            kind=practice_session.kind,
+            name=profile.full_name,
+            history_length=0,
+            quiz_competency=(
+                "mix" if practice_session.kind == SessionKind.knowledge else None
+            ),
+            project_competencies=competente,
+            memories=memorii,
+            biblioteca_path=self.settings.biblioteca_path,
+        )
+
+        request = GenerationRequest(
+            # Vertex refuza o cerere fara niciun `contents`, deci trebuie o intrare.
+            #
+            # NU e trucul din aplicatia veche: acolo se trimitea in ascuns o replica
+            # falsa DIN PARTEA PARTICIPANTULUI, care apoi trebuia ascunsa din
+            # transcript. Aici textul e o instructiune limpede, nu vorbe puse in gura
+            # omului, si nu se salveaza NICIODATA ca `PracticeTurn` — transcriptul
+            # incepe curat, cu replica lui Codrut.
+            messages=(GenerationMessage(role="user", text=DESCHIDE_SESIUNEA),),
+            system_instruction=system_instruction,
+            purpose=GenerationPurpose.actor,
+            max_output_tokens=self.settings.vertex_max_output_tokens,
+            temperature=0.7,
+            thinking_budget=self.settings.thinking_budget_actor,
+        )
+
+        prompt_words = sum(len(m.text.split()) for m in request.messages)
+        if request.system_instruction:
+            prompt_words += len(request.system_instruction.split())
+        estimated_usd = estimate_pessimistic_cost(
+            prompt_tokens=max(1, prompt_words),
+            max_output_tokens=self.settings.vertex_max_output_tokens,
+            thinking_budget=self.settings.thinking_budget_actor,
+            settings=self.settings,
+        )
+        stmt_active_members = select(func.count(ProjectMembership.id)).where(
+            ProjectMembership.project_id == program_settings.project_id,
+            ProjectMembership.active.is_(True),
+        )
+        activi = (await self.session.execute(stmt_active_members)).scalar_one() or 0
+        cap_usd = Decimal(activi) * program_settings.usd_cap_per_participant
+
+        try:
+            reservation_id = await reserve(
+                session=self.session,
+                program_settings_id=program_settings.id,
+                estimated_usd=estimated_usd,
+                cap_usd=cap_usd,
+                session_id=practice_session.id,
+            )
+        except Exception:
+            logger.warning(
+                "Prima replica nu a putut rezerva buget; sesiunea ramane deschisa.",
+                extra={"practice_session_id": str(practice_session.id)},
+            )
+            return None
+
+        await self.session.commit()
+
+        try:
+            result = await self.generation_provider.generate(request)
+        except Exception:
+            await release(self.session, reservation_id)
+            await self.session.commit()
+            logger.warning(
+                "Modelul nu a dat prima replica; sesiunea ramane deschisa si goala.",
+                extra={"practice_session_id": str(practice_session.id)},
+                exc_info=True,
+            )
+            return None
+
+        await settle(self.session, reservation_id, actual_usd=result.estimated_usd)
+
+        expires_at = datetime.now(UTC) + timedelta(days=program_settings.turn_retention_days)
+        prima = PracticeTurn(
+            session_id=practice_session.id,
+            ordinal=1,
+            role=TurnRole.actor,
+            text=result.text,
+            prompt_tokens=result.usage.prompt_tokens,
+            cached_tokens=result.usage.cached_tokens,
+            output_tokens=result.usage.output_tokens,
+            thought_tokens=result.usage.thought_tokens,
+            expires_at=expires_at,
+        )
+        self.session.add(prima)
+
+        stmt_sess = select(PracticeSession).where(PracticeSession.id == practice_session.id)
+        curenta = (await self.session.execute(stmt_sess)).scalar_one()
+        curenta.turn_count += 1
+        await self.session.commit()
+        await self.session.refresh(prima)
+        return prima
 
     async def _competentele_proiectului(self, project_id: uuid.UUID) -> list[str]:
         """Competentele alese de trainer, in ordinea lor.

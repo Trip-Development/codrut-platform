@@ -143,11 +143,17 @@ export function PracticeWorkspace({
         kind: selectedKind,
       });
       setSession(newSession);
-      setTurns([]);
+      // Cody vorbeste primul. Cand modelul n-a raspuns, `firstTurn` e null si ecranul
+      // ramane cel gol de pana acum — sesiunea nu se pierde pentru o replica ratata.
+      setTurns(newSession.firstTurn ? [newSession.firstTurn] : []);
 
       if (initialText && initialText.trim()) {
         const turnRes = await submitPracticeTurn(newSession.id, initialText.trim());
-        const newTurns: PracticeTurn[] = [turnRes.participantTurn];
+        // Replica de deschidere ramane prima; altfel pornirea cu o situatie gata
+        // scrisa ar sterge-o din transcript.
+        const newTurns: PracticeTurn[] = newSession.firstTurn
+          ? [newSession.firstTurn, turnRes.participantTurn]
+          : [turnRes.participantTurn];
         if (turnRes.actorTurn) {
           newTurns.push(turnRes.actorTurn);
         }

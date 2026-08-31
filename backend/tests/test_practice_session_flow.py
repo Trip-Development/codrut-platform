@@ -166,7 +166,7 @@ async def test_ten_turn_practice_session_flow_local_provider() -> None:
         )
 
         # 1. Start session
-        practice_session = await service.start_session(
+        practice_session, _ = await service.start_session(
             principal=ctx["principal"],
             project_id=ctx["project"].id,
             kind=SessionKind.roleplay,
@@ -316,7 +316,7 @@ async def test_refusal_turn_too_long() -> None:
         redis = Redis.from_url(settings.redis_url, decode_responses=True)
         service = PracticeSessionService(session=session, redis=redis, settings=settings)
 
-        practice_session = await service.start_session(
+        practice_session, _ = await service.start_session(
             principal=ctx["principal"],
             project_id=ctx["project"].id,
             kind=SessionKind.roleplay,
@@ -347,7 +347,7 @@ async def test_refusal_daily_session_limit() -> None:
         service = PracticeSessionService(session=session, redis=redis, settings=settings)
 
         # Start session 1 -> OK
-        s1 = await service.start_session(
+        s1, _ = await service.start_session(
             principal=ctx["principal"],
             project_id=ctx["project"].id,
             kind=SessionKind.roleplay,
@@ -355,7 +355,7 @@ async def test_refusal_daily_session_limit() -> None:
         assert s1 is not None
 
         # Start session 2 -> OK
-        s2 = await service.start_session(
+        s2, _ = await service.start_session(
             principal=ctx["principal"],
             project_id=ctx["project"].id,
             kind=SessionKind.roleplay,
@@ -392,7 +392,7 @@ async def test_refusal_budget_exceeded_model_never_called() -> None:
             settings=settings,
         )
 
-        practice_session = await service.start_session(
+        practice_session, _ = await service.start_session(
             principal=ctx["principal"],
             project_id=ctx["project"].id,
             kind=SessionKind.roleplay,
@@ -441,7 +441,7 @@ async def test_generation_failure_releases_budget_and_persists_participant_turn(
             settings=settings,
         )
 
-        practice_session = await service.start_session(
+        practice_session, _ = await service.start_session(
             principal=ctx["principal"],
             project_id=ctx["project"].id,
             kind=SessionKind.roleplay,

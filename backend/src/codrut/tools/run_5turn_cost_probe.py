@@ -90,7 +90,7 @@ async def run_5turn_cost_probe() -> dict:
         )
 
         service = PracticeSessionService(session=db, settings=settings)
-        session_obj = await service.start_session(
+        session_obj, _ = await service.start_session(
             principal=principal,
             project_id=proj.id,
             kind=SessionKind.roleplay,
