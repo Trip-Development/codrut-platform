@@ -82,7 +82,7 @@ def test_memoria_ajunge_in_prompt_la_inceputul_sesiunii():
 
 def test_versiunea_promptului_a_urcat():
     """Compozitia s-a schimbat; fara urcare, sesiunile nu se mai pot compara."""
-    assert CODY_PROMPT_VERSION == "v2.3"
+    assert CODY_PROMPT_VERSION == "v2.4"
 
 
 def test_serviciul_chiar_trimite_cele_trei_piese():
@@ -254,12 +254,15 @@ def test_biblioteca_de_tranzitii_nu_ajunge_in_roleplay():
     assert "REGULA ANTI-SALUT" in prompt
 
 
-def test_la_coaching_si_quiz_biblioteca_ramane():
-    """Acolo e buna: sunt moduri in care Codrut chiar intreaba ce vrea omul."""
-    for mod in ("coaching", "knowledge"):
-        prompt = get_system_prompt_for_kind(mod, name="Andrei", history_length=3)
-        assert "BIBLIOTECA DE TRANZIȚII" in prompt, mod
-        assert "SENZORUL ANTI-PAPAGAL" in prompt, mod
+def test_la_coaching_biblioteca_ramane():
+    """Singurul mod in care Codrut chiar intreaba ce vrea omul.
+
+    Pana la plicul 41 testul asta cerea biblioteca si la quiz — gresit: acolo tranzitia
+    e chiar prima intrebare.
+    """
+    prompt = get_system_prompt_for_kind("coaching", name="Andrei", history_length=3)
+    assert "BIBLIOTECA DE TRANZIȚII" in prompt
+    assert "SENZORUL ANTI-PAPAGAL" in prompt
 
 
 def test_prima_replica_nu_are_tranzitii_in_niciun_mod():
@@ -268,3 +271,81 @@ def test_prima_replica_nu_are_tranzitii_in_niciun_mod():
         prompt = get_system_prompt_for_kind(mod, name="Andrei", history_length=0)
         assert "REGULA PRIMULUI MESAJ" in prompt, mod
         assert "BIBLIOTECA DE TRANZIȚII" not in prompt, mod
+
+
+# ---- plicul 41 ----
+
+
+def test_regulile_de_coaching_ajung_doar_la_coaching():
+    """REGULA CONTEXTULUI si REGULA DE AUR lucreaza impotriva celorlalte doua moduri.
+
+    La role-play, „bine, hai" e un mesaj vag, deci regula contextului se aprinde si
+    Codrut intreaba ce situatie vrea — desi `actor.md` interzice exact asta. La quiz,
+    regula de aur ii interzice sa dea solutia, adica exact ce trebuie sa faca acolo.
+    """
+    from codrut.modules.practice.prompts import REGULI_COACHING_PROMPT
+
+    coaching = get_system_prompt_for_kind("coaching", name="Andrei", history_length=3)
+    assert REGULI_COACHING_PROMPT in coaching
+
+    # Se verifica FISIERUL, nu fraza: „REGULA CONTEXTULUI" si „REGULA DE AUR" apar si in
+    # `reguli-comportament.md` din Biblioteca, care intra in toate modurile. Textul acela
+    # e al lui Andrei si nu se atinge — vezi `gasite-plic-41.md`.
+    for mod in ("roleplay", "knowledge"):
+        prompt = get_system_prompt_for_kind(mod, name="Andrei", history_length=3)
+        assert REGULI_COACHING_PROMPT not in prompt, mod
+        # Antetul exista DOAR in reguli-coaching.md; regulile in sine sunt scrise si in
+        # `reguli-comportament.md` din Biblioteca, care intra oricum peste tot.
+        assert "REGULI DE COACHING" not in prompt, mod
+
+
+def test_biblioteca_de_tranzitii_ramane_doar_la_coaching():
+    """Plicul 40 a scos-o din role-play si a lasat-o la quiz.
+
+    La quiz tranzitia e chiar prima intrebare, deci nu are ce cauta nici acolo.
+    """
+    assert "BIBLIOTECA DE TRANZIȚII" in get_system_prompt_for_kind(
+        "coaching", name="Andrei", history_length=3
+    )
+    for mod in ("roleplay", "knowledge"):
+        prompt = get_system_prompt_for_kind(mod, name="Andrei", history_length=3)
+        assert "BIBLIOTECA DE TRANZIȚII" not in prompt, mod
+        assert "SENZORUL ANTI-PAPAGAL" not in prompt, mod
+        # regula anti-salut ramane peste tot
+        assert "REGULA ANTI-SALUT" in prompt, mod
+
+
+def test_quizul_are_zece_intrebari_in_ambele_cazuri():
+    """Erau 7 la mix si 5 altfel, copiate din aplicatia veche.
+
+    Zece ca sa se poata numara multiplu de zece puncte, deci scorul se citeste direct
+    in procente.
+    """
+    from codrut.modules.practice.prompts import build_quiz_block
+
+    for competenta in ("mix", "Ascultare activă"):
+        for prima in (True, False):
+            bloc = build_quiz_block(
+                quiz_competency=competenta,
+                is_first=prima,
+                project_competencies=["Ascultare activă", "Feedback"],
+            )
+            assert "/10" in bloc, (competenta, prima)
+            assert "/7" not in bloc, (competenta, prima)
+            assert "/5" not in bloc, (competenta, prima)
+
+
+def test_quizul_anunta_si_incepe_in_loc_sa_ceara_voie():
+    """De la plicul 38 fiecare sesiune incepe cu un salut.
+
+    Vechea regula 5 spunea „scrie direct «Întrebarea 1/N» fara salut", corecta in
+    aplicatia veche unde la quiz nu exista salut deloc.
+    """
+    from codrut.modules.practice.prompts import build_quiz_block
+
+    bloc = build_quiz_block(quiz_competency="mix", is_first=True, project_competencies=["A"])
+    assert "DUPĂ PRIMUL SCHIMB DE REPLICI" in bloc
+    assert "Hai să vedem ce-ai reținut" in bloc
+    assert "Nu aștepți răspuns" in bloc
+    assert "Întrebarea 1/10" in bloc
+    assert "fără salut" not in bloc
