@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # v2.1 (plicul 37): la role-play perechea actor+evaluare a fost pusa la loc, blocul de
 # quiz si memoria chiar ajung la model. Compozitia promptului s-a schimbat, deci
 # sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
-CODY_PROMPT_VERSION = "v2.4"
+CODY_PROMPT_VERSION = "v2.6"
 
 _PROMPTS_DIR = Path(__file__).parent
 
@@ -33,6 +33,10 @@ CORE_SLOTS = [
     ("PROFIL-ANDREI", ["codrut-profil-v2.md", "codrut-profil-mod-de-lucru-v3-0.md"]),
     ("FILOZOFIE", ["codrut-filozofie-v2.md"]),
     ("TON-SI-COMPORTAMENT", ["ton-si-comportament.md"]),
+    # Cum SUNA Andrei, nu cum e descris ca suna. Pasaje verbatim din reel-urile lui,
+    # alese pentru ritm. Lista de expresii caracteristice era singura mostra de vorbire
+    # din tot promptul; asta o completeaza.
+    ("MOSTRE-DE-VOCE", ["mostre-de-voce.md"]),
     ("REGULI-COMPORTAMENT", ["reguli-comportament.md"]),
     # Ce preda Andrei. Statea in acelasi dosar si nu intra niciodata in prompt, deci
     # Codrut stia cine e, dar nu si cursul pe care il tine.
