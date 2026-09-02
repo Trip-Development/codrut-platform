@@ -2726,6 +2726,11 @@
             ],
             "title": "Project Type"
           },
+          "show_participant_results": {
+            "default": false,
+            "title": "Show Participant Results",
+            "type": "boolean"
+          },
           "starts_at": {
             "anyOf": [
               {
@@ -2909,6 +2914,11 @@
               }
             ],
             "title": "Project Type"
+          },
+          "show_participant_results": {
+            "default": false,
+            "title": "Show Participant Results",
+            "type": "boolean"
           },
           "starts_at": {
             "anyOf": [
@@ -3106,6 +3116,11 @@
             ],
             "title": "Project Type"
           },
+          "show_participant_results": {
+            "default": false,
+            "title": "Show Participant Results",
+            "type": "boolean"
+          },
           "starts_at": {
             "anyOf": [
               {
@@ -3277,6 +3292,17 @@
               }
             ],
             "title": "Project Type"
+          },
+          "show_participant_results": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Show Participant Results"
           },
           "starts_at": {
             "anyOf": [
@@ -6711,6 +6737,11 @@
             "title": "Name",
             "type": "string"
           },
+          "show_participant_results": {
+            "default": false,
+            "title": "Show Participant Results",
+            "type": "boolean"
+          },
           "status": {
             "default": "active",
             "title": "Status",
@@ -7066,6 +7097,11 @@
             },
             "title": "Results",
             "type": "array"
+          },
+          "show_participant_results": {
+            "default": false,
+            "title": "Show Participant Results",
+            "type": "boolean"
           },
           "tasks": {
             "items": {

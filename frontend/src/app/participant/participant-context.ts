@@ -47,8 +47,40 @@ export function participantResultsHref(params: URLSearchParams): string {
   return participantScopedHref("/participant/results", comparisonParams);
 }
 
-export function participantScopedNavItems(params: URLSearchParams): ShellNavItem[] {
-  return participantNavItems.map((item) => ({
+export function participantCanViewResults(summary: {
+  showParticipantResults?: boolean;
+  projectId?: string | null;
+  projects?: Array<{ id: string; showParticipantResults?: boolean }>;
+  contexts?: Array<{ projects?: Array<{ id: string; showParticipantResults?: boolean }> }>;
+}): boolean {
+  const allProjects = [
+    ...(summary.projects ?? []),
+    ...(summary.contexts ?? []).flatMap((c) => c.projects ?? []),
+  ];
+  if (allProjects.length > 0) {
+    if (summary.projectId) {
+      const target = allProjects.find((p) => p.id === summary.projectId);
+      if (target?.showParticipantResults !== undefined) {
+        return Boolean(target.showParticipantResults);
+      }
+    } else {
+      return allProjects.some((p) => p.showParticipantResults);
+    }
+  }
+  if (summary.showParticipantResults !== undefined) {
+    return Boolean(summary.showParticipantResults);
+  }
+  return false;
+}
+
+export function participantScopedNavItems(
+  params: URLSearchParams,
+  showResults: boolean = true,
+): ShellNavItem[] {
+  const items = showResults
+    ? participantNavItems
+    : participantNavItems.filter((item) => item.href !== "/participant/results");
+  return items.map((item) => ({
     ...item,
     href: item.href === "/participant/results"
       ? participantResultsHref(params)

@@ -27,6 +27,7 @@ import { ParticipantContextSelector } from "./ParticipantContextSelector";
 import { ParticipantTaskList } from "./ParticipantTaskList";
 import {
   participantActiveHref,
+  participantCanViewResults,
   participantResultsHref,
   participantScopeParams,
   participantScopedHref,
@@ -111,7 +112,8 @@ export function ParticipantClientWorkspace({
   const scopeParams = participantScopeParams(summaryData);
   const questionnairesHref = participantScopedHref("/participant/questionnaires", scopeParams);
   const resultsHref = participantResultsHref(scopeParams);
-  const navItems = readOnly ? [] : participantScopedNavItems(scopeParams);
+  const showResults = participantCanViewResults(summaryData);
+  const navItems = readOnly ? [] : participantScopedNavItems(scopeParams, showResults);
 
   return (
     <AppShell

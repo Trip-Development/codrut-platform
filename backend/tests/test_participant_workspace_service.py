@@ -875,11 +875,14 @@ async def test_workspace_pcm_values_are_scoped_to_selected_cycle() -> None:
                 pcm_base="thinker",
                 pcm_phase="promoter",
             )
+            # Acest test verifică delimitarea valorilor PCM pe cicluri de evaluare; setăm explicit
+            # show_participant_results=True pentru a permite afișarea rezultatelor PCM în workspace.
             project = CompanyProject(
                 id=uuid.uuid4(),
                 company_id=company.id,
                 name="Program PCM",
                 status=CompanyProjectStatus.active,
+                show_participant_results=True,
             )
             definition = QuestionnaireDefinition(
                 id=uuid.uuid4(),
@@ -1138,12 +1141,16 @@ async def test_participant_workspace_summary_uses_persisted_profile_and_assignme
                 reports_to_name="Ana Participant",
                 role_group="leadership",
             )
+            # Acest test verifică sumarul workspace-ului (profil, feedback primit, asignări);
+            # setăm explicit show_participant_results=True pentru a include
+            # rezultatele feedback agregate.
             project = CompanyProject(
                 id=uuid.uuid4(),
                 company_id=company.id,
                 name="Leadership septembrie",
                 status=CompanyProjectStatus.active,
                 due_at=datetime.now(UTC) + timedelta(days=21),
+                show_participant_results=True,
             )
             team = Team(
                 id=uuid.uuid4(),

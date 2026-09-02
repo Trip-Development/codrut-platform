@@ -5,9 +5,11 @@ import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { ParticipantContextSelector } from "./ParticipantContextSelector";
 import { ParticipantResultCycleControls } from "./ParticipantContextSelector";
 import {
-  participantScopeParams,
+  participantCanViewResults,
   participantDefaultContext,
   participantResultsHref,
+  participantScopeParams,
+  participantScopedNavItems,
   participantWorkspaceRequestOptions,
 } from "./participant-context";
 
@@ -338,5 +340,46 @@ describe("participant workspace context", () => {
       />,
     );
     expect(container.childElementCount).toBe(0);
+  });
+
+  it("evaluates participantCanViewResults and hides results from nav items when disabled", () => {
+    expect(participantCanViewResults({ showParticipantResults: true })).toBe(true);
+    expect(participantCanViewResults({ showParticipantResults: false })).toBe(false);
+    expect(
+      participantCanViewResults({
+        projectId: "proj-1",
+        projects: [{ id: "proj-1", showParticipantResults: true }],
+      }),
+    ).toBe(true);
+    expect(
+      participantCanViewResults({
+        projectId: "proj-1",
+        projects: [{ id: "proj-1", showParticipantResults: false }],
+      }),
+    ).toBe(false);
+
+    const scopeParams = participantScopeParams({
+      participantProfileId: "profile-1",
+      projectId: "project-1",
+    });
+
+    // When showResults is false
+    const navItemsDisabled = participantScopedNavItems(scopeParams, false);
+    expect(navItemsDisabled.some((item) => item.label === "Rezultate")).toBe(false);
+    expect(navItemsDisabled.map((item) => item.label)).toEqual([
+      "Acasă",
+      "Chestionare",
+      "Cont",
+    ]);
+
+    // When showResults is true
+    const navItemsEnabled = participantScopedNavItems(scopeParams, true);
+    expect(navItemsEnabled.some((item) => item.label === "Rezultate")).toBe(true);
+    expect(navItemsEnabled.map((item) => item.label)).toEqual([
+      "Acasă",
+      "Chestionare",
+      "Rezultate",
+      "Cont",
+    ]);
   });
 });

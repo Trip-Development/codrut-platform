@@ -70,6 +70,7 @@ class ParticipantWorkspaceProject(BaseModel):
     history_bucket: str = "current"
     deadline_label: str
     deadline_at: datetime | None = None
+    show_participant_results: bool = False
     cycles: list["ParticipantWorkspaceCycle"] = Field(default_factory=list)
 
 
@@ -126,6 +127,7 @@ class ParticipantWorkspaceSummary(BaseModel):
     project_name: str | None = None
     assessment_cycle_id: UUID | None = None
     context_selection_required: bool = False
+    show_participant_results: bool = False
     contexts: list[ParticipantWorkspaceContext] = Field(default_factory=list)
     cycles: list[ParticipantWorkspaceCycle] = Field(default_factory=list)
     projects: list[ParticipantWorkspaceProject] = Field(default_factory=list)
