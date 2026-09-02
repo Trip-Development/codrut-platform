@@ -67,6 +67,7 @@ const CAMPAIGN_PLACEHOLDERS = new Set([
   "{organization_name}",
   "{thumbnail_url}",
   "{unsubscribe_url}",
+  "{video_block}",
   "{video_url}",
 ]);
 
