@@ -408,7 +408,10 @@ class CompanyService:
                 user_id,
                 "reminderul de membri",
             )
-        if "show_participant_results" in payload.model_fields_set and payload.show_participant_results is not None:
+        if (
+            "show_participant_results" in payload.model_fields_set
+            and payload.show_participant_results is not None
+        ):
             project.show_participant_results = payload.show_participant_results
 
         _validate_date_window(project.starts_at, project.due_at, "invalid_project_dates")

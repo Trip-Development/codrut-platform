@@ -1,5 +1,4 @@
 import uuid
-from datetime import UTC, datetime
 
 import pytest
 
@@ -102,7 +101,7 @@ async def test_workspace_summary_hides_results_when_flag_is_false():
             id=uuid.uuid4(),
             email=f"part-{uuid.uuid4().hex[:6]}@example.com",
             role=UserRole.participant,
-            password_hash="hash",
+            password_hash="hash",  # noqa: S106
         )
         profile = ParticipantProfile(
             id=uuid.uuid4(),
@@ -192,7 +191,7 @@ async def test_workspace_summary_shows_results_when_flag_is_true():
             id=uuid.uuid4(),
             email=f"part-{uuid.uuid4().hex[:6]}@example.com",
             role=UserRole.participant,
-            password_hash="hash",
+            password_hash="hash",  # noqa: S106
         )
         profile = ParticipantProfile(
             id=uuid.uuid4(),
@@ -257,7 +256,7 @@ async def test_company_service_updates_show_participant_results():
             id=uuid.uuid4(),
             email=f"owner-{uuid.uuid4().hex[:6]}@example.com",
             role=UserRole.trainer,
-            password_hash="hash",
+            password_hash="hash",  # noqa: S106
         )
         session.add(owner)
         await session.flush()

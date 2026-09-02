@@ -2428,6 +2428,11 @@ export interface components {
             name: string;
             /** Project Type */
             project_type?: string | null;
+            /**
+             * Show Participant Results
+             * @default false
+             */
+            show_participant_results: boolean;
             /** Starts At */
             starts_at?: string | null;
             /** @default draft */
@@ -2477,6 +2482,11 @@ export interface components {
             name: string;
             /** Project Type */
             project_type: string | null;
+            /**
+             * Show Participant Results
+             * @default false
+             */
+            show_participant_results: boolean;
             /** Starts At */
             starts_at: string | null;
             status: components["schemas"]["CompanyProjectStatus"];
@@ -2528,6 +2538,11 @@ export interface components {
             name: string;
             /** Project Type */
             project_type: string | null;
+            /**
+             * Show Participant Results
+             * @default false
+             */
+            show_participant_results: boolean;
             /** Starts At */
             starts_at: string | null;
             status: components["schemas"]["CompanyProjectStatus"];
@@ -2564,6 +2579,8 @@ export interface components {
             name?: string | null;
             /** Project Type */
             project_type?: string | null;
+            /** Show Participant Results */
+            show_participant_results?: boolean | null;
             /** Starts At */
             starts_at?: string | null;
             status?: components["schemas"]["CompanyProjectStatus"] | null;
@@ -3755,6 +3772,11 @@ export interface components {
             /** Name */
             name: string;
             /**
+             * Show Participant Results
+             * @default false
+             */
+            show_participant_results: boolean;
+            /**
              * Status
              * @default active
              */
@@ -3851,6 +3873,11 @@ export interface components {
             received_feedback_groups?: components["schemas"]["ParticipantReceivedFeedbackSummary"][];
             /** Results */
             results?: components["schemas"]["ParticipantWorkspaceResult"][];
+            /**
+             * Show Participant Results
+             * @default false
+             */
+            show_participant_results: boolean;
             /** Tasks */
             tasks?: components["schemas"]["InviteTask"][];
         };

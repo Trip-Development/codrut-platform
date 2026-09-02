@@ -1142,7 +1142,8 @@ async def test_participant_workspace_summary_uses_persisted_profile_and_assignme
                 role_group="leadership",
             )
             # Acest test verifică sumarul workspace-ului (profil, feedback primit, asignări);
-            # setăm explicit show_participant_results=True pentru a include rezultatele feedback agregate.
+            # setăm explicit show_participant_results=True pentru a include
+            # rezultatele feedback agregate.
             project = CompanyProject(
                 id=uuid.uuid4(),
                 company_id=company.id,

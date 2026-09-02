@@ -161,7 +161,9 @@ class ParticipantWorkspaceService:
             if scoped_project_id is not None:
                 allowed_project_ids = {scoped_project_id}
 
-        all_needed_pids = {assignment.project_id for assignment in assignments if assignment.project_id}
+        all_needed_pids = {
+            assignment.project_id for assignment in assignments if assignment.project_id
+        }
         if project_id is not None:
             all_needed_pids.add(project_id)
         if allowed_project_ids:
