@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -123,6 +124,12 @@ class CompanyProject(TimestampMixin, Base):
     member_reminder_template_key: Mapped[str | None] = mapped_column(
         String(120),
         nullable=True,
+    )
+    show_participant_results: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=text("false"),
+        nullable=False,
     )
 
     company: Mapped[Company] = relationship(back_populates="projects")

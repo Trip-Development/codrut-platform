@@ -18,6 +18,7 @@ export type ParticipantWorkspaceSummary = {
   projectId?: string | null;
   assessmentCycleId?: string | null;
   contextSelectionRequired: boolean;
+  showParticipantResults?: boolean;
   contexts: ParticipantWorkspaceContext[];
   cycles: ParticipantWorkspaceCycle[];
   projects: ParticipantWorkspaceProject[];
@@ -43,6 +44,7 @@ export type ParticipantWorkspaceProject = {
   historyBucket?: "current" | "history";
   deadlineLabel: string;
   deadlineAt?: string | null;
+  showParticipantResults?: boolean;
   cycles?: ParticipantWorkspaceCycle[];
 };
 
@@ -135,6 +137,7 @@ type BackendParticipantWorkspaceSummary = {
   project_name?: string | null;
   assessment_cycle_id?: string | null;
   context_selection_required?: boolean;
+  show_participant_results?: boolean;
   contexts?: BackendParticipantWorkspaceContext[];
   cycles?: BackendParticipantWorkspaceCycle[];
   projects?: BackendParticipantWorkspaceProject[];
@@ -156,6 +159,7 @@ type BackendParticipantWorkspaceProject = {
   history_bucket?: "current" | "history";
   deadline_label: string;
   deadline_at?: string | null;
+  show_participant_results?: boolean;
   cycles?: BackendParticipantWorkspaceCycle[];
 };
 
@@ -307,6 +311,7 @@ export function mapParticipantWorkspaceSummary(
     projectId: data.project_id,
     assessmentCycleId: data.assessment_cycle_id,
     contextSelectionRequired: data.context_selection_required ?? false,
+    showParticipantResults: Boolean(data.show_participant_results),
     contexts: (data.contexts ?? []).map(mapParticipantWorkspaceContext),
     cycles: (data.cycles ?? []).map(mapParticipantWorkspaceCycle),
     projects: (data.projects ?? []).map(mapParticipantWorkspaceProject),
@@ -352,6 +357,7 @@ function mapParticipantWorkspaceProject(
     historyBucket: project.history_bucket ?? "current",
     deadlineLabel: project.deadline_label,
     deadlineAt: project.deadline_at,
+    showParticipantResults: Boolean(project.show_participant_results),
     ...(project.cycles
       ? { cycles: project.cycles.map(mapParticipantWorkspaceCycle) }
       : {}),
@@ -457,6 +463,7 @@ async function getDemoParticipantWorkspaceSummary(): Promise<ParticipantWorkspac
     projectId: null,
     assessmentCycleId: "synthetic-cycle-current",
     contextSelectionRequired: false,
+    showParticipantResults: false,
     contexts: [],
     cycles: [
       {

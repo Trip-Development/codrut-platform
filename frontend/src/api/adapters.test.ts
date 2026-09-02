@@ -886,6 +886,7 @@ describe("frontend API adapter stubs", () => {
         historyBucket: "current",
         deadlineLabel: "1 august",
         deadlineAt: undefined,
+        showParticipantResults: false,
       },
       {
         id: "project-2",
@@ -894,6 +895,7 @@ describe("frontend API adapter stubs", () => {
         historyBucket: "current",
         deadlineLabel: "15 august",
         deadlineAt: "2026-08-15",
+        showParticipantResults: false,
       },
     ]);
     expect(summary.results[0]).toMatchObject({

@@ -300,7 +300,7 @@ describe("ParticipantClientWorkspace", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Răspunsurile au fost trimise." })).toBeDefined();
-    expect(screen.getByText("Rezultatele vor apărea aici când sunt disponibile.")).toBeDefined();
+    expect(screen.getByText("Îți mulțumim. Răspunsurile tale au fost înregistrate.")).toBeDefined();
     expect(screen.queryByRole("link", { name: /Deschide rezultatele/i })).toBeNull();
   });
 

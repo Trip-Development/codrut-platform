@@ -13,6 +13,7 @@ type WorkspaceSummary = {
   participantEmail?: string | null;
   pcmBase?: string | null;
   pcmPhase?: string | null;
+  showParticipantResults?: boolean;
   tasks?: InviteTask[];
 };
 
@@ -28,11 +29,12 @@ export function AccountWorkspace({ session, summary }: AccountWorkspaceProps) {
     { label: "Email", value: email, tone: "accent" },
     { label: "Rol", value: "Participant" },
   ];
+  const showPcm = summary.showParticipantResults !== false && Boolean(summary.pcmBase || summary.pcmPhase);
   const contextRows: AccountSettingsDetailRow[] = [
     { label: "Companie", value: company },
     { label: "Proiect", value: summary.projectName },
-    ...pcmRow("Bază PCM", summary.pcmBase),
-    ...pcmRow("Fază PCM", summary.pcmPhase),
+    ...(showPcm ? pcmRow("Bază PCM", summary.pcmBase) : []),
+    ...(showPcm ? pcmRow("Fază PCM", summary.pcmPhase) : []),
   ];
 
   return (
