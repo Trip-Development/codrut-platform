@@ -10,14 +10,12 @@ afterEach(cleanup);
 const mockTemplate: EmailTemplate = {
   id: "template-1",
   name: "Promo prospect",
-  key: "promo_potential_intro",
+  baseKey: "promo_potential_intro",
   lane: "campaign",
   version: 1,
   subject: "Subiect de test",
   body: "Corp de test",
-  variables: ["{first_name}"],
   placeholders: ["{first_name}"],
-  active: true,
 };
 
 function createProps(overrides: Partial<TemplatesWorkspaceViewProps> = {}): TemplatesWorkspaceViewProps {
