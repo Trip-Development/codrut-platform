@@ -181,7 +181,9 @@ export function TemplatesWorkspaceView(props: TemplatesWorkspaceViewProps) {
                 {props.isEditing ? (
                   <div className="mb-2 flex flex-wrap gap-2">
                     <Button type="button" variant="outline" size="xs" onClick={() => props.setEditBody((current) => `${current.trim() ? `${current.trim()}\n\n` : ""}${DEFAULT_ACTION_TOKEN}`)} disabled={props.isLoading || emailTemplateCtaCount(props.editBody) >= 1}>Adaugă buton link</Button>
-                    <Button type="button" variant="outline" size="xs" onClick={() => props.setEditBody((current) => `${current.trim() ? `${current.trim()}\n\n` : ""}${DEFAULT_VIDEO_TOKEN}`)} disabled={props.isLoading}>Adaugă video</Button>
+                    {props.editLane === "campaign" ? (
+                      <Button type="button" variant="outline" size="xs" onClick={() => props.setEditBody((current) => `${current.trim() ? `${current.trim()}\n\n` : ""}${DEFAULT_VIDEO_TOKEN}`)} disabled={props.isLoading}>Adaugă video</Button>
+                    ) : null}
                   </div>
                 ) : null}
                 <Textarea id="template-email-body" disabled={!props.isEditing || props.isLoading} value={props.isEditing ? props.editBody : parseEmailTemplateEditorDraft(selectedTemplate.body, selectedTemplate.subject).body} onChange={(event) => props.setEditBody(event.target.value)} aria-invalid={props.isEditing && !props.editBody.trim() ? true : undefined} className="min-h-[200px] flex-1 resize-none py-4 font-mono leading-relaxed disabled:opacity-60" />
