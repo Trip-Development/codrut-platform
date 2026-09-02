@@ -320,6 +320,7 @@ class CompanyService:
                 member_invitation_template_key=member_inv_key,
                 leadership_reminder_template_key=leadership_rem_key,
                 member_reminder_template_key=member_rem_key,
+                show_participant_results=payload.show_participant_results,
             )
         )
         self.repository.session.add(
@@ -407,6 +408,8 @@ class CompanyService:
                 user_id,
                 "reminderul de membri",
             )
+        if "show_participant_results" in payload.model_fields_set and payload.show_participant_results is not None:
+            project.show_participant_results = payload.show_participant_results
 
         _validate_date_window(project.starts_at, project.due_at, "invalid_project_dates")
         _validate_date_window(project.form_opens_at, project.form_closes_at, "invalid_form_window")

@@ -9,7 +9,7 @@ const DynamicProjectSettingsForm = dynamic<ProjectSettingsFormProps>(
   () => import("./ProjectSettingsForm").then((mod) => mod.ProjectSettingsForm),
   {
     loading: () => <WorkspaceSkeleton kind="editor" label="Pregătim setările proiectului" />,
-    ssr: false,
+    ssr: true,
   },
 );
 

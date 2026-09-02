@@ -6,6 +6,7 @@ import { ParticipantCompletionState } from "../ParticipantCompletionState";
 import { ParticipantTaskList } from "../ParticipantTaskList";
 import {
   participantActiveHref,
+  participantCanViewResults,
   participantScopeParams,
   participantScopedHref,
   participantScopedNavItems,
@@ -46,6 +47,7 @@ export default async function ParticipantQuestionnairesPage({
     hasTasks &&
     allQuestionnaires.every((task) => task.status === "completed");
   const resultCount = countAvailableParticipantResults(summary);
+  const showResults = participantCanViewResults(summary);
 
   return (
     <AppShell
@@ -53,7 +55,7 @@ export default async function ParticipantQuestionnairesPage({
       eyebrow=""
       title="Chestionare"
       description=""
-      navItems={participantScopedNavItems(scopeParams)}
+      navItems={participantScopedNavItems(scopeParams, showResults)}
       activeHref={participantActiveHref("/participant/questionnaires", scopeParams)}
       userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
       session={participant}

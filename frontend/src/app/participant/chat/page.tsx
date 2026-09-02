@@ -8,6 +8,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { ParticipantContextSelector } from "../ParticipantContextSelector";
 import {
   participantActiveHref,
+  participantCanViewResults,
   participantScopeParams,
   participantScopedHref,
   participantScopedNavItems,
@@ -29,6 +30,7 @@ export default async function ParticipantChatPage({
     ),
   ]);
   const scopeParams = participantScopeParams(summary);
+  const showResults = participantCanViewResults(summary);
   const identity = summary.participantFullName.trim() || summary.anonymousName?.trim() || "Participant";
   const openTasks = summary.tasks.filter((task) => task.status !== "completed").length;
 
@@ -38,7 +40,7 @@ export default async function ParticipantChatPage({
       eyebrow=""
       title="Suport"
       description=""
-      navItems={participantScopedNavItems(scopeParams)}
+      navItems={participantScopedNavItems(scopeParams, showResults)}
       activeHref={participantActiveHref("/participant/chat", scopeParams)}
       userLabel={identity.split(/\s+/)[0]}
       session={participant}
@@ -58,7 +60,9 @@ export default async function ParticipantChatPage({
           </div>
           <nav className="divide-y divide-border" aria-label="Acțiuni de suport">
             <SupportLink href={participantScopedHref("/participant/questionnaires", scopeParams)} label="Chestionare" detail={openTasks > 0 ? `${openTasks} sarcini deschise` : "Nicio sarcină deschisă"} />
-            <SupportLink href={participantScopedHref("/participant/results", scopeParams)} label="Rezultate" detail="Scoruri și interpretări disponibile" />
+            {showResults ? (
+              <SupportLink href={participantScopedHref("/participant/results", scopeParams)} label="Rezultate" detail="Scoruri și interpretări disponibile" />
+            ) : null}
           </nav>
         </section>
 

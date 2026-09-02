@@ -291,4 +291,76 @@ describe("ProjectSettingsForm", () => {
     });
     await waitFor(() => expect(screen.queryByText("Salvăm setările proiectului")).toBeNull());
   });
+
+  it("handles show_participant_results toggle with confirmation dialog on open", async () => {
+    render(
+      <ProjectSettingsForm
+        project={{
+          id: "project-1",
+          company_id: "company-1",
+          name: "Leadership Septembrie",
+          description: null,
+          project_type: "team_coaching",
+          status: "active",
+          starts_at: null,
+          due_at: null,
+          form_opens_at: null,
+          form_closes_at: null,
+          show_participant_results: false,
+          created_at: "2026-06-11T09:00:00Z",
+          updated_at: "2026-06-11T09:00:00Z",
+        }}
+      />,
+    );
+
+    const toggle = screen.getByLabelText("Afișează rezultatele pentru participanți") as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+
+    // Click toggle to open results -> modal should appear
+    fireEvent.click(toggle);
+    expect(screen.getByText("Sigur deschizi rezultatele pentru toți participanții din acest proiect?")).toBeTruthy();
+    expect(toggle.checked).toBe(false);
+
+    // Cancel modal -> should stay closed
+    fireEvent.click(screen.getByRole("button", { name: "Anulează" }));
+    expect(screen.queryByText("Sigur deschizi rezultatele pentru toți participanții din acest proiect?")).toBeNull();
+    expect(toggle.checked).toBe(false);
+
+    // Open again and confirm
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole("button", { name: "Da, deschide rezultatele" }));
+    expect(screen.queryByText("Sigur deschizi rezultatele pentru toți participanții din acest proiect?")).toBeNull();
+    expect(toggle.checked).toBe(true);
+
+    // Save
+    const saveButton = screen.getByRole("button", { name: "Salvează setările" });
+    const saveForm = saveButton.closest("form");
+    fireEvent.submit(saveForm!);
+
+    await waitFor(() =>
+      expect(updateCompanyProject).toHaveBeenCalledWith(
+        "company-1",
+        "project-1",
+        expect.objectContaining({
+          showParticipantResults: true,
+        }),
+      ),
+    );
+
+    // Toggle OFF -> immediately false without modal
+    fireEvent.click(toggle);
+    expect(screen.queryByText("Sigur deschizi rezultatele pentru toți participanții din acest proiect?")).toBeNull();
+    expect(toggle.checked).toBe(false);
+
+    fireEvent.submit(saveForm!);
+    await waitFor(() =>
+      expect(updateCompanyProject).toHaveBeenCalledWith(
+        "company-1",
+        "project-1",
+        expect.objectContaining({
+          showParticipantResults: false,
+        }),
+      ),
+    );
+  });
 });

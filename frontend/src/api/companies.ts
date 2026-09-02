@@ -172,6 +172,7 @@ export type CompanyProject = {
   member_invitation_template_key?: string | null;
   leadership_reminder_template_key?: string | null;
   member_reminder_template_key?: string | null;
+  show_participant_results?: boolean;
   archived_at?: string | null;
   archived_by_user_id?: string | null;
   archived_from_status?: CompanyProjectStatus | null;
@@ -209,6 +210,8 @@ export type CompanyProjectPayload = {
   member_invitation_template_key?: string | null;
   leadership_reminder_template_key?: string | null;
   member_reminder_template_key?: string | null;
+  showParticipantResults?: boolean;
+  show_participant_results?: boolean;
 };
 
 export type CompanyAssignment = {
@@ -2555,7 +2558,7 @@ export async function getCompanyDetail(
 }
 
 function projectPayloadToApi(payload: CompanyProjectPayload) {
-  const body: Record<string, string | null> = {};
+  const body: Record<string, unknown> = {};
   if ("name" in payload) body.name = payload.name ?? "";
   if ("description" in payload) body.description = payload.description ?? null;
   if ("projectType" in payload) body.project_type = payload.projectType ?? null;
@@ -2587,6 +2590,12 @@ function projectPayloadToApi(payload: CompanyProjectPayload) {
   }
   if ("member_reminder_template_key" in payload) {
     body.member_reminder_template_key = payload.member_reminder_template_key ?? null;
+  }
+  if ("showParticipantResults" in payload) {
+    body.show_participant_results = payload.showParticipantResults ?? false;
+  }
+  if ("show_participant_results" in payload) {
+    body.show_participant_results = payload.show_participant_results ?? false;
   }
   return body;
 }

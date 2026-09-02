@@ -56,6 +56,7 @@ class CompanyProjectCreateRequest(StrictRequestModel):
     member_invitation_template_key: str | None = Field(default=None, max_length=120)
     leadership_reminder_template_key: str | None = Field(default=None, max_length=120)
     member_reminder_template_key: str | None = Field(default=None, max_length=120)
+    show_participant_results: bool = False
 
 
 class CompanyProjectUpdateRequest(StrictRequestModel):
@@ -71,6 +72,7 @@ class CompanyProjectUpdateRequest(StrictRequestModel):
     member_invitation_template_key: str | None = Field(default=None, max_length=120)
     leadership_reminder_template_key: str | None = Field(default=None, max_length=120)
     member_reminder_template_key: str | None = Field(default=None, max_length=120)
+    show_participant_results: bool | None = None
 
 
 class CompanyProjectResponse(BaseModel):
@@ -90,6 +92,7 @@ class CompanyProjectResponse(BaseModel):
     member_invitation_template_key: str | None = None
     leadership_reminder_template_key: str | None = None
     member_reminder_template_key: str | None = None
+    show_participant_results: bool = False
     archived_at: datetime | None = None
     archived_by_user_id: UUID | None = None
     archived_from_status: CompanyProjectStatus | None = None

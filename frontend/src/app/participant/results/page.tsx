@@ -13,8 +13,10 @@ import { ParticipantResultsHistory, ParticipantResultsPanel } from "../Participa
 import { ParticipantContextSelector, ParticipantResultCycleControls } from "../ParticipantContextSelector";
 import {
   participantActiveHref,
+  participantCanViewResults,
   participantDefaultContext,
   participantScopeParams,
+  participantScopedHref,
   participantScopedNavItems,
   participantWorkspaceRequestOptions,
   firstValue,
@@ -37,6 +39,13 @@ export default async function ParticipantResultsPage({
       }),
     ),
   ]);
+
+  if (!participantCanViewResults(selectedSummary)) {
+    const scopeParams = participantScopeParams(selectedSummary);
+    redirect(participantScopedHref("/participant", scopeParams));
+    return null;
+  }
+
   if (!participantWorkspaceRequestOptions(undefined, routeParams).projectId) {
     const preferred = participantDefaultContext(selectedSummary.contexts);
     if (preferred) {

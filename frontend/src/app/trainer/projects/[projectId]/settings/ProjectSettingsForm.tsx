@@ -62,6 +62,10 @@ export function ProjectSettingsForm({
   const [dueAt, setDueAt] = useState(dateInput(project.due_at));
   const [formOpensAt, setFormOpensAt] = useState(dateInput(project.form_opens_at));
   const [formClosesAt, setFormClosesAt] = useState(dateInput(project.form_closes_at));
+  const [showParticipantResults, setShowParticipantResults] = useState(
+    project.show_participant_results ?? false,
+  );
+  const [confirmOpenResultsModal, setConfirmOpenResultsModal] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<"neutral" | "danger">("neutral");
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -77,6 +81,24 @@ export function ProjectSettingsForm({
   const operationPending = saving || deleting || restoring || permanentlyDeleting;
   const formLocked = operationPending || archived;
   const canDelete = deleteConfirmation.trim() === project.name.trim();
+
+  function handleToggleShowResults(nextValue: boolean) {
+    if (formLocked) return;
+    if (nextValue) {
+      setConfirmOpenResultsModal(true);
+    } else {
+      setShowParticipantResults(false);
+    }
+  }
+
+  function handleConfirmOpenResults() {
+    setShowParticipantResults(true);
+    setConfirmOpenResultsModal(false);
+  }
+
+  function handleCancelOpenResults() {
+    setConfirmOpenResultsModal(false);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -102,6 +124,7 @@ export function ProjectSettingsForm({
         dueAt: toIso(dueAt),
         formOpensAt: toIso(formOpensAt),
         formClosesAt: toIso(formClosesAt),
+        showParticipantResults,
       });
       setMessage("Setările proiectului au fost salvate.");
       setMessageTone("neutral");
@@ -221,6 +244,29 @@ export function ProjectSettingsForm({
             <SettingsField label="Formulare active din" value={formOpensAt} onChange={setFormOpensAt} type="date" disabled={formLocked} />
             <SettingsField label="Formulare active până la" value={formClosesAt} onChange={setFormClosesAt} type="date" disabled={formLocked} />
 
+            <div className="rounded-lg border border-border bg-surface p-4 md:col-span-2">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <label htmlFor="project-show-participant-results" className="text-sm font-semibold text-foreground cursor-pointer">
+                    Afișează rezultatele pentru participanți
+                  </label>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Când e oprit, participanții văd doar ce au completat și ce mai au de completat.
+                  </p>
+                </div>
+                <div className="flex items-center pt-0.5">
+                  <input
+                    id="project-show-participant-results"
+                    type="checkbox"
+                    checked={showParticipantResults}
+                    disabled={formLocked}
+                    onChange={(e) => handleToggleShowResults(e.target.checked)}
+                    className="size-4 rounded border-input text-primary focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
+
             <Field className="md:col-span-2" data-disabled={formLocked ? true : undefined}>
               <FieldLabel htmlFor="project-settings-notes" className={labelClass}>Notițe</FieldLabel>
               <Textarea
@@ -250,6 +296,39 @@ export function ProjectSettingsForm({
               </InlineFeedback>
             ) : null}
           </div>
+
+          {confirmOpenResultsModal ? (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="confirm-open-results-title"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
+            >
+              <div className="w-full max-w-md rounded-lg border border-border bg-surface p-6 shadow-xl">
+                <h3 id="confirm-open-results-title" className="text-base font-semibold text-foreground">
+                  Deschizi rezultatele pentru participanți?
+                </h3>
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                  Sigur deschizi rezultatele pentru toți participanții din acest proiect?
+                </p>
+                <div className="mt-6 flex justify-end gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCancelOpenResults}
+                  >
+                    Anulează
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleConfirmOpenResults}
+                  >
+                    Da, deschide rezultatele
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {saving ? (
             <OperationFeedback

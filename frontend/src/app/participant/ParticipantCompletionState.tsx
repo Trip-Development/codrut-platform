@@ -58,7 +58,7 @@ export function ParticipantCompletionState({
             <p className={resultsReady ? "mt-2 text-sm text-white/76" : "mt-2 text-sm text-muted-foreground"}>
               {resultsReady
                 ? `${resultCount} ${resultCount === 1 ? "rezultat este pregătit" : "rezultate sunt pregătite"}.`
-                : "Rezultatele vor apărea aici când sunt disponibile."}
+                : "Îți mulțumim. Răspunsurile tale au fost înregistrate."}
             </p>
           </div>
         </div>

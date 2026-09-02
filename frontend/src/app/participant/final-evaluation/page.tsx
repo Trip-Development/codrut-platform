@@ -8,6 +8,7 @@ import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 import { ParticipantContextSelector } from "../ParticipantContextSelector";
 import {
   participantActiveHref,
+  participantCanViewResults,
   participantScopeParams,
   participantScopedHref,
   participantScopedNavItems,
@@ -31,6 +32,8 @@ export default async function ParticipantFinalEvaluationPage({
   const scopeParams = participantScopeParams(summary);
   const questionnairesHref = participantScopedHref("/participant/questionnaires", scopeParams);
   const resultsHref = participantScopedHref("/participant/results", scopeParams);
+  const canViewResults = participantCanViewResults(summary);
+  const showResults = canViewResults && summary.results.length > 0;
   const completed = summary.tasks.filter((task) => task.status === "completed").length;
   const total = summary.tasks.length;
   const openTasks = summary.tasks.filter((task) => task.status !== "completed");
@@ -42,7 +45,7 @@ export default async function ParticipantFinalEvaluationPage({
       eyebrow=""
       title={hasOpenTasks ? "Mai ai sarcini de completat" : "Ai finalizat partea ta"}
       description=""
-      navItems={participantScopedNavItems(scopeParams)}
+      navItems={participantScopedNavItems(scopeParams, canViewResults)}
       activeHref={participantActiveHref("/participant", scopeParams)}
       userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
       session={participant}
@@ -74,9 +77,15 @@ export default async function ParticipantFinalEvaluationPage({
             </>
           ) : (
             <div className="border-y border-border py-8">
-              <h2 className="text-xl font-semibold text-foreground">Răspunsurile au fost trimise</h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">Rezultatele apar după procesarea chestionarelor eligibile.</p>
-              <Link href={resultsHref} className={serverLinkButtonClassName({ className: "mt-5" })}>Vezi rezultatele</Link>
+              <h2 className="text-xl font-semibold text-foreground">Răspunsurile au fost trimise.</h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {showResults
+                  ? "Rezultatele apar după procesarea chestionarelor eligibile."
+                  : "Îți mulțumim. Răspunsurile tale au fost înregistrate."}
+              </p>
+              {showResults ? (
+                <Link href={resultsHref} className={serverLinkButtonClassName({ className: "mt-5" })}>Vezi rezultatele</Link>
+              ) : null}
             </div>
           )}
         </section>

@@ -5,6 +5,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { ParticipantContextSelector } from "../ParticipantContextSelector";
 import {
   participantActiveHref,
+  participantCanViewResults,
   participantScopeParams,
   participantScopedNavItems,
   participantWorkspaceRequestOptions,
@@ -33,7 +34,7 @@ export default async function ParticipantAccountPage({
       eyebrow=""
       title="Contul tău"
       description=""
-      navItems={participantScopedNavItems(scopeParams)}
+      navItems={participantScopedNavItems(scopeParams, participantCanViewResults(summary))}
       activeHref={participantActiveHref("/participant/account", scopeParams)}
       userLabel={name.split(" ")[0]}
       session={participant}

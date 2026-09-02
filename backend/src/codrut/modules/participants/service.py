@@ -160,11 +160,56 @@ class ParticipantWorkspaceService:
             allowed_project_ids = {assignment.project_id for assignment in assignments}
             if scoped_project_id is not None:
                 allowed_project_ids = {scoped_project_id}
+
+        all_needed_pids = {assignment.project_id for assignment in assignments if assignment.project_id}
+        if project_id is not None:
+            all_needed_pids.add(project_id)
+        if allowed_project_ids:
+            all_needed_pids.update({pid for pid in allowed_project_ids if pid is not None})
+        missing_pids = all_needed_pids - set(projects.keys())
+        if missing_pids:
+            extra_res = await self.session.execute(
+                select(CompanyProject).where(CompanyProject.id.in_(missing_pids))
+            )
+            for p in extra_res.scalars().all():
+                projects[p.id] = p
+
+        workspace_project_id, project_name = self._workspace_project(
+            company,
+            assignments,
+            projects,
+        )
+        if project_id is not None:
+            workspace_project_id = project_id
+            project = projects.get(project_id)
+            if project is not None:
+                project_name = project.name
+            elif selected_project is not None:
+                project_name = selected_project.name
+
+        active_project = projects.get(workspace_project_id) if workspace_project_id else None
+        active_show_results = (
+            active_project.show_participant_results
+            if active_project is not None
+            else True
+        )
+
+        if not active_show_results:
+            pcm_base = None
+            pcm_phase = None
+
         received_feedback_groups = await self._get_received_feedback_summaries(
             profile,
             allowed_project_ids=allowed_project_ids,
             cycle_id=cycle_id,
         )
+        filtered_feedback_groups: list[ParticipantReceivedFeedbackSummary] = []
+        for group in received_feedback_groups:
+            group_project = projects.get(group.project_id) if group.project_id else None
+            if group_project is not None and not group_project.show_participant_results:
+                continue
+            filtered_feedback_groups.append(group)
+        received_feedback_groups = filtered_feedback_groups
         received_feedback = (
             received_feedback_groups[0] if len(received_feedback_groups) == 1 else None
         )
@@ -185,6 +230,11 @@ class ParticipantWorkspaceService:
                 or assignment.id not in scoring_results
             ):
                 continue
+            assignment_project = (
+                projects.get(assignment.project_id) if assignment.project_id else None
+            )
+            if assignment_project is not None and not assignment_project.show_participant_results:
+                continue
             workspace_result = self._assignment_to_result(
                 assignment=assignment,
                 result=scoring_results[assignment.id],
@@ -196,18 +246,7 @@ class ParticipantWorkspaceService:
             )
             if workspace_result is not None:
                 results.append(workspace_result)
-        workspace_project_id, project_name = self._workspace_project(
-            company,
-            assignments,
-            projects,
-        )
-        if project_id is not None:
-            workspace_project_id = project_id
-            project = projects.get(project_id)
-            if project is not None:
-                project_name = project.name
-            elif selected_project is not None:
-                project_name = selected_project.name
+
         deadline_at = self._workspace_deadline(assignments, projects)
         completed = sum(1 for task in tasks if task.status == "completed")
         pending = len(tasks) - completed
@@ -224,6 +263,8 @@ class ParticipantWorkspaceService:
             project_id=workspace_project_id,
             project_name=project_name,
             assessment_cycle_id=cycle_id,
+            context_selection_required=False,
+            show_participant_results=active_show_results,
             contexts=contexts,
             cycles=self._selected_cycles(contexts, profile.id, workspace_project_id),
             projects=self._workspace_projects(
@@ -940,6 +981,7 @@ class ParticipantWorkspaceService:
                             project_assignments,
                             {project.id: project},
                         ),
+                        show_participant_results=project.show_participant_results,
                         cycles=[
                             self._cycle_to_schema(cycle)
                             for cycle in cycles_by_project.get(project.id, [])
@@ -1560,6 +1602,7 @@ class ParticipantWorkspaceService:
                     ),
                     deadline_label=_format_deadline(deadline_at),
                     deadline_at=deadline_at,
+                    show_participant_results=project.show_participant_results,
                     cycles=cycles_by_project.get(project.id, []),
                 )
             )
