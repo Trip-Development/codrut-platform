@@ -205,6 +205,10 @@ class QuestionnaireAssignment(TimestampMixin, Base):
             name="reminder_count_bounds",
         ),
         CheckConstraint(
+            "reopen_count >= 0",
+            name="reopen_count_non_negative",
+        ),
+        CheckConstraint(
             "icare_cohort is null or icare_cohort in "
             "('direct_team', 'leadership_peers', 'self')",
             name="questionnaire_assignment_icare_cohort",
@@ -300,3 +304,11 @@ class QuestionnaireAssignment(TimestampMixin, Base):
         nullable=True,
     )
     reminder_count: Mapped[int] = mapped_column(nullable=False, default=0)
+    # Cate redeschideri a avut asignarea. server_default pus de baza, ca cele
+    # 813 randuri existente sa primeasca zero fara sa fie rescrise.
+    reopen_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )

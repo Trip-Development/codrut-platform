@@ -118,6 +118,26 @@ export type CompanyParticipant = {
   avatar_palette_key?: number | null;
   account_type?: "guest" | "registered" | null;
   is_shadow_account?: boolean;
+  /** De cate ori i s-au redeschis chestionare in proiectul curent. */
+  reopen_count?: number;
+  /** Cand a fost ultima redeschidere. Lipseste daca nu a fost niciuna. */
+  last_reopened_at?: string | null;
+  /** Ce chestionare i se pot redeschide acum (doar cele trimise). */
+  reopenable_assignments?: ParticipantReopenableAssignment[];
+};
+
+export type ParticipantReopenableAssignment = {
+  assignment_id: string;
+  questionnaire_key: string;
+  reopen_count: number;
+};
+
+export type ReopenAssignmentResult = {
+  assignment_id: string;
+  status: string;
+  reopen_count: number;
+  archived_response_id: string;
+  archived_had_score: boolean;
 };
 
 export function hasPermanentParticipantAccount(participant: CompanyParticipant): boolean {
@@ -2260,6 +2280,48 @@ export async function removeProjectParticipant(
     `${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}/participants/${participantId}`,
     expectedDirectReportIds,
   );
+}
+
+/**
+ * Redeschide un chestionar deja trimis, ca omul sa il poata reface de la zero.
+ * Raspunsurile vechi se arhiveaza; nu se trimite niciun email.
+ */
+export async function reopenParticipantAssignment(
+  companyId: string,
+  assignmentId: string,
+): Promise<ReopenAssignmentResult> {
+  const response = await apiFetch(
+    `${getApiBaseUrl()}/companies/${companyId}/assignments/${assignmentId}/reopen`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+    },
+  );
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    const code = typeof data?.error?.code === "string" ? data.error.code : undefined;
+    throw new Error(reopenErrorMessage(code, response.status));
+  }
+  return (await response.json()) as ReopenAssignmentResult;
+}
+
+/** Traduce refuzurile serverului in propozitii pe care le citeste un om. */
+export function reopenErrorMessage(code: string | undefined, status?: number): string {
+  switch (code) {
+    case "reopen_submission_processing":
+      return "Chestionarul se calculează chiar acum. Mai încearcă peste un minut.";
+    case "reopen_no_response":
+      return "Omul nu a trimis încă acest chestionar, deci nu are ce fi redeschis.";
+    case "company_access_denied":
+      return "Nu ai dreptul să redeschizi chestionare în această companie.";
+    case "assignment_not_found":
+      return "Chestionarul nu a fost găsit. Reîncarcă pagina și încearcă din nou.";
+    default:
+      return status
+        ? `Redeschiderea nu a reușit (eroare ${status}). Reîncarcă pagina și încearcă din nou.`
+        : "Redeschiderea nu a reușit. Reîncarcă pagina și încearcă din nou.";
+  }
 }
 
 export async function deleteCompanyParticipant(

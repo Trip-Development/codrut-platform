@@ -9,6 +9,7 @@ import {
   Loader2Icon,
   PencilIcon,
   PlusIcon,
+  RotateCcwIcon,
   UploadIcon,
   XIcon,
 } from "lucide-react";
@@ -47,6 +48,10 @@ import {
   normalizeWorkspaceSearch,
   WorkspaceSearchInput,
 } from "../../project-workspace-controls";
+import {
+  ReopenQuestionnaireDialog,
+  reopenSummaryText,
+} from "./reopen-questionnaire-dialog";
 
 export type ProjectParticipantsWorkspaceProps = {
   companyId: string;
@@ -183,6 +188,7 @@ export function ProjectParticipantsWorkspace({
   const [savingId, setSavingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
+  const [reopeningParticipant, setReopeningParticipant] = useState<CompanyParticipant | null>(null);
   const [error, setError] = useState<string | null>(null);
   const addingRef = useRef(false);
   const savingParticipantRef = useRef<string | null>(null);
@@ -506,6 +512,7 @@ export function ProjectParticipantsWorkspace({
           projectId={projectId}
           operationLocked={mutationLocked}
           onEdit={startEdit}
+          onReopen={setReopeningParticipant}
           emptyMessage={participants.length === 0
             ? "Nu există participanți. Adaugă manual sau importă rosterul."
             : "Niciun participant pentru filtrele curente."}
@@ -712,6 +719,17 @@ export function ProjectParticipantsWorkspace({
             </div>
         </ModalLayer>
       ) : null}
+      {reopeningParticipant ? (
+        <ReopenQuestionnaireDialog
+          companyId={companyId}
+          participant={reopeningParticipant}
+          onClose={() => setReopeningParticipant(null)}
+          onDone={() => {
+            setReopeningParticipant(null);
+            router.refresh();
+          }}
+        />
+      ) : null}
     </section>
   );
 }
@@ -722,6 +740,7 @@ function RosterTable({
   projectId,
   operationLocked,
   onEdit,
+  onReopen,
   emptyMessage,
 }: {
   rows: AccessRow[];
@@ -729,6 +748,7 @@ function RosterTable({
   projectId: string;
   operationLocked: boolean;
   onEdit: (participant: CompanyParticipant) => void;
+  onReopen: (participant: CompanyParticipant) => void;
   emptyMessage: string;
 }) {
   return (
@@ -778,6 +798,7 @@ function RosterTable({
                 projectId={projectId}
                 operationLocked={operationLocked}
                 onEdit={() => onEdit(row.participant)}
+                onReopen={() => onReopen(row.participant)}
               />
             ))
           )}
@@ -793,14 +814,18 @@ function ParticipantRow({
   projectId,
   operationLocked,
   onEdit,
+  onReopen,
 }: {
   row: AccessRow;
   companyId: string;
   projectId: string;
   operationLocked: boolean;
   onEdit: () => void;
+  onReopen: () => void;
 }) {
   const participant = row.participant;
+  const reopenSummary = reopenSummaryText(participant);
+  const canReopen = (participant.reopenable_assignments?.length ?? 0) > 0;
   return (
     <tr data-participant-row={participant.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/35 md:table-row md:px-0 md:py-0">
       <th scope="row" className="col-start-1 row-start-1 min-w-0 text-left align-middle font-semibold text-foreground md:px-4 md:py-3">
@@ -817,6 +842,11 @@ function ParticipantRow({
           />
           <span className="min-w-0">{participant.full_name}</span>
         </Link>
+        {reopenSummary ? (
+          <span className="mt-1 block text-xs font-normal text-muted-foreground">
+            {reopenSummary}
+          </span>
+        ) : null}
       </th>
       <td className="col-span-2 row-start-2 break-all align-middle text-foreground/65 md:px-4 md:py-3">
         <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Email</span>
@@ -859,6 +889,22 @@ function ParticipantRow({
             className="rounded-md text-muted-foreground shadow-none hover:text-burgundy"
           >
             <PencilIcon aria-hidden="true" strokeWidth={1.8} />
+          </Button>
+          <Button
+            type="button"
+            onClick={onReopen}
+            disabled={operationLocked || !canReopen}
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Redeschide un chestionar pentru ${participant.full_name}`}
+            title={
+              canReopen
+                ? `Redeschide un chestionar pentru ${participant.full_name}`
+                : `${participant.full_name} nu a trimis niciun chestionar, deci nu are ce fi redeschis`
+            }
+            className="rounded-md text-muted-foreground shadow-none hover:text-burgundy"
+          >
+            <RotateCcwIcon aria-hidden="true" strokeWidth={1.8} />
           </Button>
         </div>
       </td>
