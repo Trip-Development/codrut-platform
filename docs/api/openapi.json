@@ -845,6 +845,41 @@
         "title": "AssignmentPlanScopeResponse",
         "type": "object"
       },
+      "AssignmentReopenResponse": {
+        "description": "Ce s-a intamplat la redeschiderea unui chestionar.",
+        "properties": {
+          "archived_had_score": {
+            "title": "Archived Had Score",
+            "type": "boolean"
+          },
+          "archived_response_id": {
+            "format": "uuid",
+            "title": "Archived Response Id",
+            "type": "string"
+          },
+          "assignment_id": {
+            "format": "uuid",
+            "title": "Assignment Id",
+            "type": "string"
+          },
+          "reopen_count": {
+            "title": "Reopen Count",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AssignmentStatus"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "status",
+          "reopen_count",
+          "archived_response_id",
+          "archived_had_score"
+        ],
+        "title": "AssignmentReopenResponse",
+        "type": "object"
+      },
       "AssignmentResponse": {
         "properties": {
           "access_mode": {
@@ -6200,6 +6235,31 @@
         "title": "ParticipantRemovalRequest",
         "type": "object"
       },
+      "ParticipantReopenableAssignment": {
+        "description": "Un chestionar pe care trainerul il poate redeschide pentru omul asta.",
+        "properties": {
+          "assignment_id": {
+            "format": "uuid",
+            "title": "Assignment Id",
+            "type": "string"
+          },
+          "questionnaire_key": {
+            "title": "Questionnaire Key",
+            "type": "string"
+          },
+          "reopen_count": {
+            "title": "Reopen Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "questionnaire_key",
+          "reopen_count"
+        ],
+        "title": "ParticipantReopenableAssignment",
+        "type": "object"
+      },
       "ParticipantResponse": {
         "properties": {
           "account_type": {
@@ -7351,6 +7411,18 @@
             "title": "Is Shadow Account",
             "type": "boolean"
           },
+          "last_reopened_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Reopened At"
+          },
           "location": {
             "anyOf": [
               {
@@ -7410,6 +7482,18 @@
             "format": "uuid",
             "title": "Project Membership Id",
             "type": "string"
+          },
+          "reopen_count": {
+            "default": 0,
+            "title": "Reopen Count",
+            "type": "integer"
+          },
+          "reopenable_assignments": {
+            "items": {
+              "$ref": "#/components/schemas/ParticipantReopenableAssignment"
+            },
+            "title": "Reopenable Assignments",
+            "type": "array"
           },
           "reports_to_name": {
             "anyOf": [
@@ -14045,6 +14129,109 @@
           }
         },
         "summary": "Save Company Assignment Plan",
+        "tags": [
+          "assignments"
+        ]
+      }
+    },
+    "/api/companies/{company_id}/assignments/{assignment_id}/reopen": {
+      "post": {
+        "operationId": "reopen_company_assignment_api_companies__company_id__assignments__assignment_id__reopen_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assignment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentReopenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Reopen Company Assignment",
         "tags": [
           "assignments"
         ]

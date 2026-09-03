@@ -14,6 +14,7 @@ from codrut.modules.assignments.schemas import (
     AssignmentPlanResponse,
     AssignmentPlanSaveRequest,
     AssignmentPlanSaveResponse,
+    AssignmentReopenResponse,
     AssignmentResponse,
     AssignmentStatusUpdateRequest,
     InvitationCreateRequest,
@@ -428,6 +429,27 @@ async def update_company_assignment_status(
     )
     await session.commit()
     return assignment
+
+
+@router.post(
+    "/companies/{company_id}/assignments/{assignment_id}/reopen",
+    response_model=AssignmentReopenResponse,
+)
+async def reopen_company_assignment(
+    company_id: UUID,
+    assignment_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> AssignmentReopenResponse:
+    require_trainer_principal(principal)
+    result = await AssignmentService(session).reopen_assignment(
+        principal.user_id,
+        company_id,
+        assignment_id,
+        reopened_by_email=principal.email,
+    )
+    await session.commit()
+    return result
 
 
 @router.post(

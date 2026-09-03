@@ -382,6 +382,20 @@ class FakeCompanyRepository:
                 return membership
         return None
 
+    async def list_project_reopen_counters(
+        self,
+        company_id: uuid.UUID,
+        project_id: uuid.UUID,
+    ) -> dict[uuid.UUID, tuple[int, datetime | None]]:
+        return {}
+
+    async def list_project_reopenable_assignments(
+        self,
+        company_id: uuid.UUID,
+        project_id: uuid.UUID,
+    ) -> dict[uuid.UUID, list[tuple[uuid.UUID, str, int]]]:
+        return {}
+
     async def list_project_memberships_for_participant(
         self,
         company_id: uuid.UUID,

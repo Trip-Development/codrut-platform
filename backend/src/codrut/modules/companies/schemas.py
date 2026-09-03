@@ -273,8 +273,19 @@ class ProjectMembershipResponse(BaseModel):
     notes: str | None
 
 
+class ParticipantReopenableAssignment(BaseModel):
+    """Un chestionar pe care trainerul il poate redeschide pentru omul asta."""
+
+    assignment_id: UUID
+    questionnaire_key: str
+    reopen_count: int
+
+
 class ProjectParticipantResponse(ParticipantResponse):
     project_membership_id: UUID
+    reopen_count: int = 0
+    last_reopened_at: datetime | None = None
+    reopenable_assignments: list[ParticipantReopenableAssignment] = Field(default_factory=list)
 
 
 class RosterImportEmailResult(BaseModel):
