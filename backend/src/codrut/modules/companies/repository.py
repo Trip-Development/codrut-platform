@@ -1,8 +1,10 @@
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import case, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from codrut.modules.assignments.models import QuestionnaireAssignment
 from codrut.modules.companies.models import (
     Company,
     CompanyAccessCode,
@@ -15,6 +17,11 @@ from codrut.modules.companies.models import (
     ParticipantViewAudit,
     ProjectLifecycleEvent,
     ProjectMembership,
+)
+from codrut.modules.forms.models import (
+    QuestionnaireResponse,
+    QuestionnaireResponseArchive,
+    QuestionnaireResponseStatus,
 )
 from codrut.modules.identity.models import User
 
@@ -357,6 +364,81 @@ class CompanyRepository:
             .order_by(ParticipantProfile.full_name)
         )
         return [(membership, participant) for membership, participant in result.all()]
+
+    async def list_project_reopen_counters(
+        self,
+        company_id: UUID,
+        project_id: UUID,
+    ) -> dict[UUID, tuple[int, datetime | None]]:
+        """De cate ori a fost redeschis fiecare om din proiect, si cand ultima data.
+
+        Numarul vine din contorul de pe asignari. Data vine dintr-un ``max()``
+        peste arhiva, adus ca subinterogare agregata: daca s-ar face join direct
+        pe randurile de arhiva, un om cu doua redeschideri ar aparea de doua ori
+        si suma contoarelor ar iesi dubla.
+        """
+        archive_last = (
+            select(
+                QuestionnaireResponseArchive.assignment_id.label("assignment_id"),
+                func.max(QuestionnaireResponseArchive.reopened_at).label("last_reopened_at"),
+            )
+            .group_by(QuestionnaireResponseArchive.assignment_id)
+            .subquery()
+        )
+        result = await self.session.execute(
+            select(
+                QuestionnaireAssignment.respondent_profile_id,
+                func.coalesce(func.sum(QuestionnaireAssignment.reopen_count), 0),
+                func.max(archive_last.c.last_reopened_at),
+            )
+            .outerjoin(
+                archive_last,
+                archive_last.c.assignment_id == QuestionnaireAssignment.id,
+            )
+            .where(QuestionnaireAssignment.company_id == company_id)
+            .where(QuestionnaireAssignment.project_id == project_id)
+            .group_by(QuestionnaireAssignment.respondent_profile_id)
+        )
+        return {
+            profile_id: (int(total or 0), last_reopened_at)
+            for profile_id, total, last_reopened_at in result.all()
+        }
+
+    async def list_project_reopenable_assignments(
+        self,
+        company_id: UUID,
+        project_id: UUID,
+    ) -> dict[UUID, list[tuple[UUID, str, int]]]:
+        """Ce chestionare are fiecare om de redeschis.
+
+        Redeschidem doar ce a fost trimis: fara raspuns trimis nu exista nimic de
+        arhivat, iar butonul trebuie sa fie stins, nu sa dea eroare.
+        """
+        result = await self.session.execute(
+            select(
+                QuestionnaireAssignment.respondent_profile_id,
+                QuestionnaireAssignment.id,
+                QuestionnaireAssignment.questionnaire_key,
+                QuestionnaireAssignment.reopen_count,
+            )
+            .join(
+                QuestionnaireResponse,
+                QuestionnaireResponse.assignment_id == QuestionnaireAssignment.id,
+            )
+            .where(QuestionnaireAssignment.company_id == company_id)
+            .where(QuestionnaireAssignment.project_id == project_id)
+            .where(QuestionnaireResponse.status == QuestionnaireResponseStatus.submitted)
+            .order_by(
+                QuestionnaireAssignment.questionnaire_key,
+                QuestionnaireAssignment.id,
+            )
+        )
+        reopenable: dict[UUID, list[tuple[UUID, str, int]]] = {}
+        for profile_id, assignment_id, questionnaire_key, reopen_count in result.all():
+            reopenable.setdefault(profile_id, []).append(
+                (assignment_id, questionnaire_key, int(reopen_count or 0))
+            )
+        return reopenable
 
     async def get_project_membership(
         self,

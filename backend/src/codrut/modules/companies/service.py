@@ -53,6 +53,7 @@ from codrut.modules.companies.schemas import (
     ParticipantInviteBatchRequest,
     ParticipantInviteBatchResponse,
     ParticipantRemovalRequest,
+    ParticipantReopenableAssignment,
     ParticipantUpdateRequest,
     ProjectLifecycleEventResponse,
     ProjectParticipantResponse,
@@ -571,8 +572,27 @@ class CompanyService:
         memberships = await self.repository.list_project_memberships(company_id, project_id)
         participants = [participant for _membership, participant in memberships]
         await self._ensure_anonymous_names(participants)
+        counters = await self.repository.list_project_reopen_counters(company_id, project_id)
+        reopenable = await self.repository.list_project_reopenable_assignments(
+            company_id,
+            project_id,
+        )
         return [
-            _project_participant_response(membership, participant)
+            _project_participant_response(
+                membership,
+                participant,
+                *counters.get(participant.id, (0, None)),
+                [
+                    ParticipantReopenableAssignment(
+                        assignment_id=assignment_id,
+                        questionnaire_key=questionnaire_key,
+                        reopen_count=assignment_reopen_count,
+                    )
+                    for assignment_id, questionnaire_key, assignment_reopen_count in reopenable.get(
+                        participant.id, []
+                    )
+                ],
+            )
             for membership, participant in memberships
         ]
 
@@ -2201,6 +2221,9 @@ def _participant_account_link_status(
 def _project_participant_response(
     membership: ProjectMembership,
     participant: ParticipantProfile,
+    reopen_count: int = 0,
+    last_reopened_at: datetime | None = None,
+    reopenable_assignments: list[ParticipantReopenableAssignment] | None = None,
 ) -> ProjectParticipantResponse:
     return ProjectParticipantResponse(
         id=participant.id,
@@ -2220,6 +2243,9 @@ def _project_participant_response(
         pcm_phase=participant.pcm_phase,
         anonymous_name=participant.anonymous_name,
         project_membership_id=membership.id,
+        reopen_count=reopen_count,
+        last_reopened_at=last_reopened_at,
+        reopenable_assignments=reopenable_assignments or [],
     )
 
 

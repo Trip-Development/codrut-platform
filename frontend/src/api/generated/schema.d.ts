@@ -763,6 +763,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/companies/{company_id}/assignments/{assignment_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen Company Assignment */
+        post: operations["reopen_company_assignment_api_companies__company_id__assignments__assignment_id__reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/companies/{company_id}/assignments/{assignment_id}/status": {
         parameters: {
             query?: never;
@@ -1805,6 +1822,27 @@ export interface components {
             participant_ids: string[];
             /** Type */
             type: string;
+        };
+        /**
+         * AssignmentReopenResponse
+         * @description Ce s-a intamplat la redeschiderea unui chestionar.
+         */
+        AssignmentReopenResponse: {
+            /** Archived Had Score */
+            archived_had_score: boolean;
+            /**
+             * Archived Response Id
+             * Format: uuid
+             */
+            archived_response_id: string;
+            /**
+             * Assignment Id
+             * Format: uuid
+             */
+            assignment_id: string;
+            /** Reopen Count */
+            reopen_count: number;
+            status: components["schemas"]["AssignmentStatus"];
         };
         /** AssignmentResponse */
         AssignmentResponse: {
@@ -3600,6 +3638,21 @@ export interface components {
             /** Expected Direct Report Ids */
             expected_direct_report_ids?: string[];
         };
+        /**
+         * ParticipantReopenableAssignment
+         * @description Un chestionar pe care trainerul il poate redeschide pentru omul asta.
+         */
+        ParticipantReopenableAssignment: {
+            /**
+             * Assignment Id
+             * Format: uuid
+             */
+            assignment_id: string;
+            /** Questionnaire Key */
+            questionnaire_key: string;
+            /** Reopen Count */
+            reopen_count: number;
+        };
         /** ParticipantResponse */
         ParticipantResponse: {
             /** Account Type */
@@ -3974,6 +4027,8 @@ export interface components {
              * @default false
              */
             is_shadow_account: boolean;
+            /** Last Reopened At */
+            last_reopened_at?: string | null;
             /** Location */
             location: string | null;
             /** Pcm Base */
@@ -3989,6 +4044,13 @@ export interface components {
              * Format: uuid
              */
             project_membership_id: string;
+            /**
+             * Reopen Count
+             * @default 0
+             */
+            reopen_count: number;
+            /** Reopenable Assignments */
+            reopenable_assignments?: components["schemas"]["ParticipantReopenableAssignment"][];
             /** Reports To Name */
             reports_to_name: string | null;
             /** Role Group */
@@ -8710,6 +8772,83 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssignmentPlanSaveResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reopen_company_assignment_api_companies__company_id__assignments__assignment_id__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                assignment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentReopenResponse"];
                 };
             };
             /** @description Bad Request */

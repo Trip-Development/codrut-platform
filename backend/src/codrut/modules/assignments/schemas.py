@@ -131,6 +131,18 @@ class AssignmentStatusUpdateRequest(StrictRequestModel):
     status: AssignmentStatus
 
 
+class AssignmentReopenResponse(BaseModel):
+    """Ce s-a intamplat la redeschiderea unui chestionar."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    assignment_id: UUID
+    status: AssignmentStatus
+    reopen_count: int
+    archived_response_id: UUID
+    archived_had_score: bool
+
+
 class InvitationCreateRequest(StrictRequestModel):
     respondent_profile_id: UUID
     project_id: UUID | None = None

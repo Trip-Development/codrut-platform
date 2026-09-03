@@ -12,6 +12,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -99,6 +100,76 @@ class QuestionnaireResponse(TimestampMixin, Base):
     )
     answers: Mapped[dict] = mapped_column(JSONB, nullable=False)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class QuestionnaireResponseArchive(Base):
+    """Istoria raspunsurilor inlocuite la redeschiderea unui chestionar.
+
+    Un rand pentru fiecare redeschidere. Raspunde, si peste un an, la intrebarea
+    "ce a bifat omul asta prima data si cine i-a permis sa schimbe".
+
+    ATENTIE: spre deosebire de ``QuestionnaireResponse``, aici NU exista
+    UniqueConstraint pe ``assignment_id``. Aceeasi asignare are cate un rand
+    pentru fiecare redeschidere; unicitatea sta pe perechea
+    (assignment_id, reopen_sequence).
+    """
+
+    __tablename__ = "questionnaire_response_archives"
+    __table_args__ = (
+        CheckConstraint(
+            "reopen_sequence > 0",
+            name="reopen_sequence_positive",
+        ),
+        UniqueConstraint(
+            "assignment_id",
+            "reopen_sequence",
+            name="uq_questionnaire_response_archives_assignment_sequence",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    assignment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("questionnaire_assignments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    respondent_profile_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("participant_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # Scrise ca atare, fara legatura, ca randul sa ramana citibil singur.
+    assessment_cycle_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    questionnaire_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    questionnaire_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    response_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    answers: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    response_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    response_submitted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    scores: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    primary_result: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reopened_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    reopened_by_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    reopen_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    reopened_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        index=True,
+    )
 
 
 class SubmissionProcessingJob(TimestampMixin, Base):

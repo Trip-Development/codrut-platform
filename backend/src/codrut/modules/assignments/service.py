@@ -35,6 +35,7 @@ from codrut.modules.assignments.schemas import (
     AssignmentPlanSaveRequest,
     AssignmentPlanSaveResponse,
     AssignmentPlanScopeResponse,
+    AssignmentReopenResponse,
     AssignmentStatusUpdateRequest,
     TeamCreateRequest,
     TeamMembershipCreateRequest,
@@ -51,7 +52,11 @@ from codrut.modules.companies.models import (
     ProjectMembership,
 )
 from codrut.modules.companies.repository import CompanyRepository
-from codrut.modules.forms.models import QuestionnaireDefinition
+from codrut.modules.forms.models import (
+    QuestionnaireDefinition,
+    QuestionnaireResponseArchive,
+    SubmissionProcessingStatus,
+)
 from codrut.modules.forms.repository import FormsRepository
 from codrut.modules.scoring.publication import ResultPublicationService
 from codrut.modules.scoring.repository import ScoringRepository
@@ -564,6 +569,119 @@ class AssignmentService:
 
     async def require_company_manager(self, user_id: UUID, company_id: UUID) -> None:
         await self._require_company_manager(user_id, company_id)
+
+    async def reopen_assignment(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        assignment_id: UUID,
+        *,
+        reopened_by_email: str,
+    ) -> AssignmentReopenResponse:
+        """Redeschide un chestionar deja trimis, pentru ca omul sa il refaca de la zero.
+
+        Ordinea e obligatorie: se ARHIVEAZA intai, si abia apoi se sterge ceva.
+        Totul intr-o singura tranzactie; commit-ul il face routerul, deci daca
+        arhivarea cade nu se atinge raspunsul.
+        """
+        # Blocam intai asignarea, apoi bonul, apoi raspunsul. Aceeasi ordine
+        # peste tot, ca doua redeschideri simultane sa nu se incalece.
+        assignment = await self.forms_repository.get_assignment_by_id(
+            assignment_id,
+            for_update=True,
+        )
+        if assignment is None or assignment.company_id != company_id:
+            raise DomainError("Assignment not found.", code="assignment_not_found")
+
+        await self._require_company_manager(user_id, company_id)
+
+        # Daca robotul tine chiar acum lucrarea, nu avem voie sa-i tragem
+        # raspunsul de sub picioare: ar scrie un scor pentru ceva ce nu mai
+        # exista. Refuzam pe fata, nu in tacere.
+        job = await self.forms_repository.get_submission_processing_for_assignment(
+            assignment_id,
+            for_update=True,
+        )
+        if job is not None and job.status == SubmissionProcessingStatus.processing:
+            raise DomainError(
+                "Chestionarul se proceseaza chiar acum. Incearca peste un minut.",
+                code="reopen_submission_processing",
+            )
+
+        response = await self.forms_repository.get_response_by_assignment(
+            assignment_id,
+            for_update=True,
+        )
+        if response is None:
+            raise DomainError(
+                "Nu exista un raspuns de redeschis pentru aceasta asignare.",
+                code="reopen_no_response",
+            )
+
+        # Numarul de ordine vine din contorul de pe asignare, citit sub blocarea
+        # de mai sus. NU dintr-o numaratoare a arhivei: doi traineri care apasa
+        # in aceeasi secunda ar obtine amandoi acelasi numar.
+        reopen_sequence = assignment.reopen_count + 1
+
+        scoring_result = await self.scoring_repository.get_by_assignment(assignment_id)
+
+        # 1. ARHIVEAZA. Nimic nu se sterge inainte ca asta sa fie scris.
+        self.session.add(
+            QuestionnaireResponseArchive(
+                id=uuid4(),
+                assignment_id=assignment.id,
+                company_id=assignment.company_id,
+                respondent_profile_id=assignment.respondent_profile_id,
+                assessment_cycle_id=assignment.assessment_cycle_id,
+                project_id=assignment.project_id,
+                questionnaire_key=response.questionnaire_key,
+                questionnaire_version=response.questionnaire_version,
+                response_id=response.id,
+                answers=response.answers,
+                response_status=response.status.value,
+                response_submitted_at=response.submitted_at,
+                scores=scoring_result.scores if scoring_result is not None else None,
+                primary_result=(
+                    scoring_result.primary_result if scoring_result is not None else None
+                ),
+                reopened_by_user_id=user_id,
+                reopened_by_email=reopened_by_email,
+                reopen_sequence=reopen_sequence,
+            )
+        )
+        await self.session.flush()
+
+        # 2. Abia acum golim: scorul, raspunsul si bonul de lucru ramas in coada.
+        await self.scoring_repository.delete_by_assignment(assignment_id)
+        await self.forms_repository.delete_response_by_assignment(assignment_id)
+        await self.forms_repository.delete_submission_processing_for_assignment(assignment_id)
+
+        # 3. Asignarea se intoarce intr-o stare din care omul CHIAR poate completa
+        #    (vezi EDITABLE_ASSIGNMENT_STATUSES). Pastram adevarul istoric: daca
+        #    fusese invitat, ramane invitat; altfel se intoarce la assigned.
+        assignment.status = (
+            AssignmentStatus.invited
+            if assignment.invited_at is not None
+            else AssignmentStatus.assigned
+        )
+        assignment.started_at = None
+        assignment.submitted_at = None
+        assignment.validated_at = None
+        assignment.scored_at = None
+        assignment.reopen_count = reopen_sequence
+        await self.session.flush()
+
+        # 4. Anulam rezultatul publicat si recalculam agregatele de echipa,
+        #    prin mecanismul care exista deja. Vede ca nu mai e scor si revoca.
+        await self.result_publication_service.reconcile_assignment(assignment_id)
+
+        return AssignmentReopenResponse(
+            assignment_id=assignment.id,
+            status=assignment.status,
+            reopen_count=assignment.reopen_count,
+            archived_response_id=response.id,
+            archived_had_score=scoring_result is not None,
+        )
 
     async def build_default_assignment_plan(
         self,

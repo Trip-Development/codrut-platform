@@ -199,6 +199,27 @@ class FormsRepository:
         await self.session.flush()
         return job
 
+    async def get_submission_processing_for_assignment(
+        self,
+        assignment_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> SubmissionProcessingJob | None:
+        statement = select(SubmissionProcessingJob).where(
+            SubmissionProcessingJob.assignment_id == assignment_id
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        result = await self.session.execute(statement)
+        return result.scalar_one_or_none()
+
+    async def delete_response_by_assignment(self, assignment_id: UUID) -> None:
+        await self.session.execute(
+            delete(QuestionnaireResponse).where(
+                QuestionnaireResponse.assignment_id == assignment_id
+            )
+        )
+
     async def delete_submission_processing_for_assignment(
         self,
         assignment_id: UUID,
