@@ -565,24 +565,44 @@ def test_salutul_il_cheama_pe_prenume():
 # ---- plicul 53 ----
 
 
-def test_salutul_are_din_ce_varia():
-    """Dupa plicul 50 salutul cheama omul pe nume, dar suna la fel.
+def test_salutul_se_alege_in_cod_nu_la_voia_modelului():
+    """Plicul 53 a dat modelului o lista si i-a cerut sa se uite in istoric ca sa nu
+    repete. La primul mesaj al unei sesiuni noi istoricul e GOL — n-are la ce sa se uite,
+    si ia primul element: sase din opt sesiuni au inceput identic.
 
-    Masurat de Andrei: „Ma bucur sa ne auzim" in cinci din opt sesiuni. Cody repeta orice
-    n-are din ce varia — acelasi tipar ca la numele personajelor.
+    Deci alegem noi, dupa a cata sesiune e omul. Acelasi numarator care tine rotatia
+    scenei la 8 din 8.
     """
-    for mod in ("roleplay", "knowledge", "coaching"):
-        p = get_system_prompt_for_kind(mod, name="Ion Popescu", history_length=0)
-        assert "VARIAȚIA SALUTULUI" in p, mod
-        assert "SENZORUL ANTI-PAPAGAL LA SALUT" in p, mod
-        # prenumele intra in text, nu numele intreg
-        assert "după „Salut, Ion\" pui" in p, mod
-        # formula tocita e interzisa pe nume
-        assert 'INTERZIS „Mă bucur să ne auzim"' in p, mod
-        # si un salut sec ramane o varianta buna
-        assert "sau NIMIC" in p, mod
+    from codrut.modules.practice.prompts import SALUTURI, formula_de_salut
 
-    # mai tarziu in conversatie nu se aplica; acolo ramane regula anti-salut
+    # fiecare sesiune primeste alta formula, si se reia dupa ce se termina lista
+    formule = [formula_de_salut("Ion", {"nr_sesiuni_anterioare": n}) for n in range(len(SALUTURI))]
+    assert len(set(formule)) == len(SALUTURI)
+    assert formula_de_salut("Ion", {"nr_sesiuni_anterioare": len(SALUTURI)}) == formule[0]
+
+    # a saptea e seaca, dinadins
+    seaca = formula_de_salut("Ion", {"nr_sesiuni_anterioare": len(SALUTURI) - 1})
+    assert "„Salut, Ion.\" și treci direct la întrebare" in seaca
+    assert "NIMIC în plus" in seaca
+
+    # prenumele intra in text, nu numele intreg
+    prima = formula_de_salut("Ion", {"nr_sesiuni_anterioare": 0})
+    assert "„Salut, Ion. mă bucur că te-ai apucat.\"" in prima
+    # si i se cere sa foloseasca fix vorba aleasa, nu sa aleaga el
+    assert "Folosești fix vorba asta" in prima
+
+    # fara profil nu crapa: cade pe prima formula
+    assert formula_de_salut("Ion", None) == formule[0]
+
+    # ajunge in prompt la toate trei modurile, doar la prima replica
+    for mod in ("roleplay", "knowledge", "coaching"):
+        p = get_system_prompt_for_kind(
+            mod, name="Ion Popescu", history_length=0,
+            profil_rol={"nr_sesiuni_anterioare": 2},
+        )
+        assert "SALUTUL, EXACT" in p, mod
+        assert "bine că ai prins un moment." in p, mod
+
     tarziu = get_system_prompt_for_kind("roleplay", name="Ion Popescu", history_length=4)
-    assert "VARIAȚIA SALUTULUI" not in tarziu
+    assert "SALUTUL, EXACT" not in tarziu
     assert "REGULA ANTI-SALUT" in tarziu
