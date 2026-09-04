@@ -12,8 +12,7 @@ logger = logging.getLogger(__name__)
 # v2.1 (plicul 37): la role-play perechea actor+evaluare a fost pusa la loc, blocul de
 # quiz si memoria chiar ajung la model. Compozitia promptului s-a schimbat, deci
 # sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
-# `-fara-filozofie` ca proba plicului 44 sa se poata deosebi in `prompt_version`.
-CODY_PROMPT_VERSION = "v2.9"
+CODY_PROMPT_VERSION = "v3.0"
 
 # Comanda care declanseaza pornirea, pusa ULTIMA in prompt — plicul 45.
 #
@@ -64,17 +63,13 @@ CORE_SLOTS = [
     # alese pentru ritm. Lista de expresii caracteristice era singura mostra de vorbire
     # din tot promptul; asta o completeaza.
     ("MOSTRE-DE-VOCE", ["mostre-de-voce.md"]),
-    # SCOS TEMPORAR — plicul 44, o proba, nu o reparatie.
+    # Gandirea lui, in cuvintele lui: cele 92 de replici ale lui Andrei din conversatia
+    # de filozofie din 11 martie, traduse si curatate de artefactele dictarii.
     #
-    # Intre v2.4 si v2.8 role-play-ul s-a stricat: dupa „bine, hai" Cody raspunde cu o
-    # intrebare de explorare in loc sa intre in SETUP. Codul e corect si fraza nu exista
-    # in niciun fisier — deci banuiala e ca exemplul cantareste mai greu decat regula:
-    # 22 KB in care Andrei face coaching, contra opt randuri de actor.md care cer un rol.
-    # Quizul rezista fiindca instructiunea lui e rigida si numerotata.
-    #
-    # Fisierul RAMANE pe disc. Daca role-play-ul isi revine, Andrei alege ce se intampla
-    # cu materialul: doar la coaching, taiat la filozofie curata, sau afara de tot.
-    # ("FILOZOFIE-CONVERSATII", ["conversatii-filozofie-ANDREI-ro.md"]),
+    # A fost scos la plicul 44 ca proba, banuit ca strica role-play-ul. NU el era
+    # vinovatul: fara el, tot 2 din 6. Cauza era locul instructiunii, nu materialul, si
+    # s-a reparat la plicul 45 — comanda de pornire pusa ULTIMA in prompt.
+    ("FILOZOFIE-CONVERSATII", ["conversatii-filozofie-ANDREI-ro.md"]),
     ("REGULI-COMPORTAMENT", ["reguli-comportament.md"]),
     # Ce preda Andrei. Statea in acelasi dosar si nu intra niciodata in prompt, deci
     # Codrut stia cine e, dar nu si cursul pe care il tine.
