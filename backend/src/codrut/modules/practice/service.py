@@ -274,6 +274,10 @@ class PracticeSessionService:
             )
         )
         profile = (await self.session.execute(stmt_profile)).scalar_one_or_none()
+        if profile is not None and profile.full_name == "Trainer":
+            # Plicul 49: numele-santinela pus de noi, inlocuit la prima atingere.
+            profile.full_name = _nume_din_email(principal.email)
+            await self.session.flush()
         if profile is None:
             stmt_proj = select(CompanyProject).where(CompanyProject.id == project_id)
             project = (await self.session.execute(stmt_proj)).scalar_one_or_none()
@@ -287,7 +291,7 @@ class PracticeSessionService:
                 id=uuid.uuid4(),
                 company_id=project.company_id,
                 user_id=principal.user_id if user_exists else None,
-                full_name="Trainer",
+                full_name=_nume_din_email(principal.email),
                 email=principal.email,
             )
             self.session.add(profile)
@@ -1018,3 +1022,15 @@ class PracticeSessionService:
             "last_error": None,
         }
 
+
+def _nume_din_email(email: str | None) -> str:
+    """Un nume de om, scos din adresă, pentru intrarea directă a trainerului.
+
+    Pana la plicul 49 aici scria literal „Trainer". Modelului i se spunea ca omul din
+    fata lui se cheama asa — si, fiindca nu e un nume, si-l inventa singur: cand „Mihai",
+    cand un „Andrei" ghicit, cand „[Trainer]" cu paranteze, ca un loc necompletat.
+    """
+    local = (email or "").split("@")[0]
+    curat = re.sub(r"[._\-]+", " ", local).strip()
+    curat = re.sub(r"\d+", "", curat).strip()
+    return curat.title() if curat else "Participant"
