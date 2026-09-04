@@ -127,13 +127,16 @@ def formula_de_salut(prenume: str, profil_rol: dict[str, Any] | None) -> str:
     vorba = SALUTURI[n % len(SALUTURI)]
     if not vorba:
         return (
-            f'\n- SALUTUL, EXACT: „Salut, {prenume}." și treci direct la întrebare. '
-            f'NIMIC în plus — nicio vorbă caldă, niciun „mă bucur". Un salut sec e bun '
-            f'din când în când.'
+            f'\n- SALUTUL: mesajul tău începe cu exact aceste cuvinte, copiate ca atare: '
+            f'Salut, {prenume}. Apoi vine direct întrebarea, nimic între. Numele e scris '
+            f'acolo — îl folosești pe el. INTERZIS să lași un loc gol de tipul „[Nume]" '
+            f'și INTERZIS să pui alt nume.'
         )
     return (
-        f'\n- SALUTUL, EXACT: „Salut, {prenume}. {vorba}" — apoi întrebarea. '
-        f'Folosești fix vorba asta, nu alta, și nimic în plus.'
+        f'\n- SALUTUL: mesajul tău începe cu exact aceste cuvinte, copiate ca atare: '
+        f'Salut, {prenume}. {vorba} Apoi vine întrebarea. Numele e scris acolo — '
+        f'îl folosești pe el. INTERZIS să lași un loc gol de tipul „[Nume]" și INTERZIS '
+        f'să pui alt nume.'
     )
 
 # Replica la care omul raspunde intrebarii de pornire. Salutul se genereaza la
@@ -379,24 +382,21 @@ def get_system_prompt_for_kind(
         # devine semnalul — vezi `COMANDA_DE_PORNIRE` mai jos.
         if kind_val == "roleplay":
             dyn_rules = (
-                f'- REGULA PRIMULUI MESAJ: îl saluți OBLIGATORIU pe prenume — '
-                f'„Salut, {prenume}" — cald, o vorbă scurtă, și îl '
-                f'întrebi dacă e gata să înceapă un joc de rol. O SINGURĂ întrebare în '
+                f'- REGULA PRIMULUI MESAJ: după salut îl întrebi dacă e gata să înceapă '
+                f'un joc de rol. O SINGURĂ întrebare în '
                 f'mesaj. INTERZIS orice frază de tranziție și INTERZIS să întrebi ce '
                 f'situație sau ce temă vrea — situația o alegi tu, la pasul următor.'
             )
         elif kind_val == "knowledge":
             dyn_rules = (
-                f'- REGULA PRIMULUI MESAJ: îl saluți OBLIGATORIU pe prenume — '
-                f'„Salut, {prenume}" — cald, o vorbă scurtă, și îl '
-                f'întrebi dacă e gata să-și verifice cunoștințele. O SINGURĂ întrebare în '
+                f'- REGULA PRIMULUI MESAJ: după salut îl întrebi dacă e gata să-și '
+                f'verifice cunoștințele. O SINGURĂ întrebare în '
                 f'mesaj. INTERZIS orice frază de tranziție și INTERZIS să întrebi ce temă '
                 f'vrea.'
             )
         else:
             dyn_rules = (
-                f'- REGULA PRIMULUI MESAJ: DOAR îl saluți OBLIGATORIU pe prenume — '
-                f'„Salut, {prenume}" — cald, și îl întrebi '
+                f'- REGULA PRIMULUI MESAJ: DOAR saluți și îl întrebi '
                 f'"Cum îți merge ziua până acum?". INTERZIS orice frază de tranziție la subiect.'
             )
         # Toate trei modurile saluta, deci variatia merge la toate trei. Mai tarziu in

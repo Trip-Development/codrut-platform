@@ -440,14 +440,14 @@ def test_prima_replica_intreaba_daca_e_gata_doar_la_roleplay_si_quiz():
     # INTERZIS. Textul acela e al lui Andrei si nu se atinge.
     rp = get_system_prompt_for_kind("roleplay", name="Andrei", history_length=0)
     assert "dacă e gata să înceapă un joc de rol" in rp
-    assert "DOAR îl saluți OBLIGATORIU pe prenume" not in rp
+    assert "REGULA PRIMULUI MESAJ: DOAR saluți" not in rp
 
     quiz = get_system_prompt_for_kind("knowledge", name="Andrei", history_length=0)
     assert "dacă e gata să-și verifice cunoștințele" in quiz
-    assert "DOAR îl saluți OBLIGATORIU pe prenume" not in quiz
+    assert "REGULA PRIMULUI MESAJ: DOAR saluți" not in quiz
 
     coaching = get_system_prompt_for_kind("coaching", name="Andrei", history_length=0)
-    assert "DOAR îl saluți OBLIGATORIU pe prenume" in coaching
+    assert "REGULA PRIMULUI MESAJ: DOAR saluți" in coaching
     assert "dacă e gata să înceapă un joc de rol" not in coaching
 
 
@@ -543,22 +543,32 @@ def test_omul_are_nume_nu_santinela():
 def test_salutul_il_cheama_pe_prenume():
     """Numele era in prompt de la plicul 49, dar salutul nu-l folosea.
 
-    Masurat de Andrei: sase din opt sesiuni deschideau cu „Salut!" sec. In profil numele
-    e intreg — „Ion Popescu" — iar „Salut, Ion Popescu" suna a formular, nu a om.
+    De la plicul 56 salutul e cerut intr-un SINGUR loc — `formula_de_salut`. Inainte era
+    cerut si de regula primului mesaj, doua sabloane pentru acelasi lucru, si in trei din
+    zece sesiuni modelul le-a tratat ca pe un formular.
     """
     for mod in ("roleplay", "knowledge", "coaching"):
-        p = get_system_prompt_for_kind(mod, name="Ion Popescu", history_length=0)
-        assert "îl saluți OBLIGATORIU pe prenume" in p, mod
-        assert "„Salut, Ion\"" in p, mod
+        p = get_system_prompt_for_kind(
+            mod, name="Ion Popescu", history_length=0,
+            profil_rol={"nr_sesiuni_anterioare": 0},
+        )
+        # prenumele, nu numele intreg
+        assert "Salut, Ion." in p, mod
         assert "Salut, Ion Popescu" not in p, mod
+        # un singur sablon, nu doua
+        assert p.count("Salut, Ion") == 1, mod
+        # si regula primului mesaj nu mai cere ea salutul
+        assert "îl saluți OBLIGATORIU pe prenume" not in p, mod
 
-    # un singur cuvant ramane cum e
-    p = get_system_prompt_for_kind("roleplay", name="Andrei", history_length=0)
-    assert "„Salut, Andrei\"" in p
+    # un nume dintr-un singur cuvant ramane cum e
+    p = get_system_prompt_for_kind(
+        "roleplay", name="Andrei", history_length=0, profil_rol={"nr_sesiuni_anterioare": 0}
+    )
+    assert "Salut, Andrei." in p
 
     # regula se aplica DOAR la prima replica
     tarziu = get_system_prompt_for_kind("roleplay", name="Ion Popescu", history_length=4)
-    assert "îl saluți OBLIGATORIU pe prenume" not in tarziu
+    assert "SALUTUL:" not in tarziu
     assert "REGULA ANTI-SALUT" in tarziu
 
 
@@ -582,14 +592,18 @@ def test_salutul_se_alege_in_cod_nu_la_voia_modelului():
 
     # a saptea e seaca, dinadins
     seaca = formula_de_salut("Ion", {"nr_sesiuni_anterioare": len(SALUTURI) - 1})
-    assert "„Salut, Ion.\" și treci direct la întrebare" in seaca
-    assert "NIMIC în plus" in seaca
+    assert "Salut, Ion. Apoi vine direct întrebarea" in seaca
+    assert "nimic între" in seaca
+    # garda impotriva locului gol si a numelui inventat (plicul 56)
+    assert "INTERZIS să lași un loc gol" in seaca
+    assert "INTERZIS să pui alt nume" in seaca
 
     # prenumele intra in text, nu numele intreg
     prima = formula_de_salut("Ion", {"nr_sesiuni_anterioare": 0})
-    assert "„Salut, Ion. mă bucur că te-ai apucat.\"" in prima
-    # si i se cere sa foloseasca fix vorba aleasa, nu sa aleaga el
-    assert "Folosești fix vorba asta" in prima
+    assert "Salut, Ion. mă bucur că te-ai apucat." in prima
+    # numele e scris acolo, nu de completat
+    assert "Numele e scris acolo" in prima
+    assert "INTERZIS să lași un loc gol" in prima
 
     # fara profil nu crapa: cade pe prima formula
     assert formula_de_salut("Ion", None) == formule[0]
@@ -600,9 +614,9 @@ def test_salutul_se_alege_in_cod_nu_la_voia_modelului():
             mod, name="Ion Popescu", history_length=0,
             profil_rol={"nr_sesiuni_anterioare": 2},
         )
-        assert "SALUTUL, EXACT" in p, mod
+        assert "- SALUTUL:" in p, mod
         assert "bine că ai prins un moment." in p, mod
 
     tarziu = get_system_prompt_for_kind("roleplay", name="Ion Popescu", history_length=4)
-    assert "SALUTUL, EXACT" not in tarziu
+    assert "- SALUTUL:" not in tarziu
     assert "REGULA ANTI-SALUT" in tarziu
