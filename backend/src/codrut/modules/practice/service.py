@@ -476,11 +476,22 @@ class PracticeSessionService:
         if session_id is not None:
             stmt = stmt.where(PracticeSession.id != session_id)
         anterioare = int((await self.session.execute(stmt)).scalar() or 0)
+
+        # Toate sesiunile, nu doar cele de role-play: toate trei modurile saluta, iar
+        # formula de salut se alege dupa a cata sesiune e omul (plicul 54).
+        stmt_toate = select(func.count(PracticeSession.id)).where(
+            PracticeSession.participant_profile_id == profile.id,
+        )
+        if session_id is not None:
+            stmt_toate = stmt_toate.where(PracticeSession.id != session_id)
+        toate = int((await self.session.execute(stmt_toate)).scalar() or 0)
+
         return {
             "conduce_oameni": (profile.role_group or "").strip().casefold()
             in {"leadership", "manager"},
             "functie": profile.position,
             "nr_roleplay_anterioare": anterioare,
+            "nr_sesiuni_anterioare": toate,
         }
 
     async def _competentele_proiectului(self, project_id: uuid.UUID) -> list[str]:

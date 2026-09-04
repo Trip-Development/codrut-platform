@@ -102,24 +102,39 @@ def bloc_de_distributie(profil_rol: dict[str, Any] | None) -> str:
     )
 
 
-# Variatia salutului — plicul 53.
+# Salutul se alege in cod — plicul 54.
 #
-# Dupa plicul 50 salutul cheama omul pe nume, dar suna la fel: „Ma bucur sa ne auzim" in
-# cinci din opt sesiuni masurate. Aceeasi solutie ca la tranzitiile de coaching, care
-# merge de la plicul 37: o lista scurta, rotatie, si un senzor care se uita in istoric.
+# Plicul 53 a dat modelului o lista si i-a cerut sa se uite in istoric ca sa nu repete.
+# La primul mesaj al unei sesiuni noi istoricul e GOL, deci n-are la ce sa se uite, si
+# ia primul element din lista: sase din opt sesiuni au inceput identic.
 #
-# Formulele sunt scurte si fara ceremonie, ca in `mostre-de-voce.md`. Niciuna nu e
-# intrebare — regula primului mesaj cere O SINGURA intrebare in mesaj, si aia e „esti gata?".
-VARIATIA_SALUTULUI = (
-    '\n- VARIAȚIA SALUTULUI (ROTAȚIE): după „Salut, {prenume}" pui o singură vorbă caldă, '
-    'scurtă, una din: „mă bucur că te-ai apucat." / „hai să vedem ce iese azi." / '
-    '„bine că ai prins un moment." / „ne apucăm de treabă." / „mă bucur să te văd." / '
-    '„hai să lucrăm puțin." — sau NIMIC, doar salutul și întrebarea; un salut sec e bun '
-    'din când în când, așa vorbesc oamenii.\n'
-    '- SENZORUL ANTI-PAPAGAL LA SALUT: uită-te în istoric. Dacă ai folosit deja o formulă '
-    'în sesiunile trecute, alegi obligatoriu alta. INTERZIS „Mă bucur să ne auzim" — s-a '
-    'tocit de atâta folosit.'
+# Deci nu-i mai cerem sa aleaga. Alegem noi, dupa a cata sesiune e omul — acelasi
+# numarator care tine rotatia scenei la 8 din 8. Ultima e goala dinadins: un salut sec
+# e bun din cand in cand, asa vorbesc oamenii.
+SALUTURI = (
+    "mă bucur că te-ai apucat.",
+    "hai să vedem ce iese azi.",
+    "bine că ai prins un moment.",
+    "ne apucăm de treabă.",
+    "mă bucur să te văd.",
+    "hai să lucrăm puțin.",
+    "",
 )
+
+
+def formula_de_salut(prenume: str, profil_rol: dict[str, Any] | None) -> str:
+    n = int((profil_rol or {}).get("nr_sesiuni_anterioare") or 0)
+    vorba = SALUTURI[n % len(SALUTURI)]
+    if not vorba:
+        return (
+            f'\n- SALUTUL, EXACT: „Salut, {prenume}." și treci direct la întrebare. '
+            f'NIMIC în plus — nicio vorbă caldă, niciun „mă bucur". Un salut sec e bun '
+            f'din când în când.'
+        )
+    return (
+        f'\n- SALUTUL, EXACT: „Salut, {prenume}. {vorba}" — apoi întrebarea. '
+        f'Folosești fix vorba asta, nu alta, și nimic în plus.'
+    )
 
 # Replica la care omul raspunde intrebarii de pornire. Salutul se genereaza la
 # `history_length` 0; primul mesaj al omului aduce numaratoarea la 2.
@@ -386,7 +401,7 @@ def get_system_prompt_for_kind(
             )
         # Toate trei modurile saluta, deci variatia merge la toate trei. Mai tarziu in
         # conversatie nu se aplica — acolo ramane regula anti-salut, neatinsa.
-        dyn_rules += VARIATIA_SALUTULUI.replace("{prenume}", prenume)
+        dyn_rules += formula_de_salut(prenume, profil_rol)
     else:
         dyn_rules = '- REGULA ANTI-SALUT: INTERZIS să mai folosești "Salut", "Bună".'
         # Biblioteca de tranzitii e de coaching: intreaba omul ce vrea sa discute.
