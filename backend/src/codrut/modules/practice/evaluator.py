@@ -54,14 +54,14 @@ MIN_CHARS = 400
 TRAINER_PREFIX = "[TRAINER]"
 
 INSUFFICIENT_CLOSING = {
-    "good_moment": "Ai început să interacționezi cu Codruț — primul pas e făcut.",
+    "good_moment": "Ai început să interacționezi cu Cody — primul pas e făcut.",
     "growth_point": (
         "Sesiunea a fost prea scurtă pentru o evaluare reală. Pentru ca antrenamentul "
         "să producă insight, ai nevoie de cel puțin 5-6 schimburi pe aceeași situație."
     ),
     "homework": (
         "Reia sesiunea cu o situație concretă din viața ta — ceva care încă te macină. "
-        "Mergi în detaliu cu Codruț, nu te grăbi să închizi."
+        "Mergi în detaliu cu Cody, nu te grăbi să închizi."
     ),
 }
 
@@ -69,7 +69,7 @@ INSUFFICIENT_CLOSING = {
 def build_transcript(turns: list[PracticeTurn], participant_name: str) -> str:
     linii = []
     for t in turns:
-        cine = participant_name if t.role == TurnRole.participant else "Codruț"
+        cine = participant_name if t.role == TurnRole.participant else "Cody"
         linii.append(f"{cine}: {t.text}")
     return "\n\n".join(linii)
 
