@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # v2.1 (plicul 37): la role-play perechea actor+evaluare a fost pusa la loc, blocul de
 # quiz si memoria chiar ajung la model. Compozitia promptului s-a schimbat, deci
 # sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
-CODY_PROMPT_VERSION = "v2.6"
+CODY_PROMPT_VERSION = "v2.8"
 
 _PROMPTS_DIR = Path(__file__).parent
 
@@ -37,6 +37,10 @@ CORE_SLOTS = [
     # alese pentru ritm. Lista de expresii caracteristice era singura mostra de vorbire
     # din tot promptul; asta o completeaza.
     ("MOSTRE-DE-VOCE", ["mostre-de-voce.md"]),
+    # Gandirea lui, in cuvintele lui: replicile lui Andrei din conversatia de filozofie
+    # din 11 martie, traduse si curatate de artefactele dictarii. Cerut explicit de el pe
+    # 1 septembrie: „se pastreaza discutia cu claude, traduci in romana si folosesti".
+    ("FILOZOFIE-CONVERSATII", ["conversatii-filozofie-ANDREI-ro.md"]),
     ("REGULI-COMPORTAMENT", ["reguli-comportament.md"]),
     # Ce preda Andrei. Statea in acelasi dosar si nu intra niciodata in prompt, deci
     # Codrut stia cine e, dar nu si cursul pe care il tine.

@@ -1,4 +1,4 @@
-# Adăugiri Oprite (Nu se încarcă în prompturile lui Codruț)
+# Adăugiri Oprite (Nu se încarcă în prompturile lui Cody)
 
 ## 1. Inerția stării emoționale
 Personajul din role-play își păstrează starea emoțională și atitudinea defensivă/ostilă până când participantul aplică un comportament asertiv sau de clarificare observabil.
