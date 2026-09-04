@@ -13,7 +13,33 @@ logger = logging.getLogger(__name__)
 # quiz si memoria chiar ajung la model. Compozitia promptului s-a schimbat, deci
 # sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
 # `-fara-filozofie` ca proba plicului 44 sa se poata deosebi in `prompt_version`.
-CODY_PROMPT_VERSION = "v2.8-fara-filozofie"
+CODY_PROMPT_VERSION = "v2.9"
+
+# Comanda care declanseaza pornirea, pusa ULTIMA in prompt — plicul 45.
+#
+# Regula din `actor.md` sta la coada unui prompt de ~125.000 de octeti, dupa o suta de
+# kiloocteti de material despre conversatii de coaching. Opt randuri nu bat o suta de
+# kiloocteti, si de aceea intrarea in rol era la voia intamplarii: 2 din 6.
+#
+# Ce e scris ultimul cantareste cel mai mult. Nu ne certam cu modelul, ii structuram tura:
+# omul a confirmat, deci momentul nu mai e de judecat, e de executat.
+COMANDA_DE_PORNIRE = {
+    "roleplay": (
+        "\n\n---\n"
+        "ACUM: următorul tău mesaj începe cu SETUP-ul. Nicio întrebare de explorare, "
+        "nicio frază de tranziție. Descrii contextul, spui obiectivul participantului, "
+        "intri în rol."
+    ),
+    "knowledge": (
+        "\n\n---\n"
+        "ACUM: următorul tău mesaj e „Întrebarea 1/10:\", cu cele patru variante. "
+        "Nicio întrebare de explorare, nicio frază de tranziție."
+    ),
+}
+
+# Replica la care omul raspunde intrebarii de pornire. Salutul se genereaza la
+# `history_length` 0; primul mesaj al omului aduce numaratoarea la 2.
+REPLICA_DE_CONFIRMARE = 2
 
 _PROMPTS_DIR = Path(__file__).parent
 
@@ -242,10 +268,35 @@ def get_system_prompt_for_kind(
 
     # Dynamic rules for first message vs subsequent transitions
     if history_length <= 1:
-        dyn_rules = (
-            f'- REGULA PRIMULUI MESAJ: DOAR saluți pe {name} cald și îl întrebi '
-            f'"Cum îți merge ziua până acum?". INTERZIS orice frază de tranziție la subiect.'
-        )
+        # Pornirea in doi pasi, plicul 45.
+        #
+        # Pana acum prima replica era aceeasi peste tot: salut plus „Cum iti merge ziua
+        # pana acum?". La coaching e buna si ramane — e decizia lui Andrei din 31 august.
+        #
+        # La role-play si la quiz nu era: dupa ea, modelul trebuia sa JUDECE singur cand
+        # s-au terminat politeturile si sa intre in scena. Masurat, judecata aia rateaza
+        # in patru din sase porniri, si atunci raspunde cu o intrebare de coaching.
+        # Deci prima replica pune o intrebare cu raspuns clar, iar confirmarea omului
+        # devine semnalul — vezi `COMANDA_DE_PORNIRE` mai jos.
+        if kind_val == "roleplay":
+            dyn_rules = (
+                f'- REGULA PRIMULUI MESAJ: saluți pe {name} cald, o vorbă scurtă, și îl '
+                f'întrebi dacă e gata să înceapă un joc de rol. O SINGURĂ întrebare în '
+                f'mesaj. INTERZIS orice frază de tranziție și INTERZIS să întrebi ce '
+                f'situație sau ce temă vrea — situația o alegi tu, la pasul următor.'
+            )
+        elif kind_val == "knowledge":
+            dyn_rules = (
+                f'- REGULA PRIMULUI MESAJ: saluți pe {name} cald, o vorbă scurtă, și îl '
+                f'întrebi dacă e gata să-și verifice cunoștințele. O SINGURĂ întrebare în '
+                f'mesaj. INTERZIS orice frază de tranziție și INTERZIS să întrebi ce temă '
+                f'vrea.'
+            )
+        else:
+            dyn_rules = (
+                f'- REGULA PRIMULUI MESAJ: DOAR saluți pe {name} cald și îl întrebi '
+                f'"Cum îți merge ziua până acum?". INTERZIS orice frază de tranziție la subiect.'
+            )
     else:
         dyn_rules = '- REGULA ANTI-SALUT: INTERZIS să mai folosești "Salut", "Bună".'
         # Biblioteca de tranzitii e de coaching: intreaba omul ce vrea sa discute.
@@ -276,6 +327,13 @@ def get_system_prompt_for_kind(
     if memories and history_length <= 2:
         memory_block = format_participant_memory(memories)
 
+    # Ultimul lucru din prompt, si numai la replica in care omul tocmai a confirmat.
+    comanda = (
+        COMANDA_DE_PORNIRE.get(kind_val, "")
+        if history_length == REPLICA_DE_CONFIRMARE
+        else ""
+    )
+
     if kind_val == "roleplay":
         # Actorul si evaluarea merg impreuna, ca in aplicatia veche si ca in plicul 22:
         # „peste el vine coach.md SAU PERECHEA actor.md + evaluare.md, dupa mod".
@@ -291,7 +349,7 @@ def get_system_prompt_for_kind(
         # nevoie de un comutator in cod.
         return (
             f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n"
-            f"{ACTOR_PROMPT}\n\n---\n\n{EVALUARE_PROMPT}{memory_block}"
+            f"{ACTOR_PROMPT}\n\n---\n\n{EVALUARE_PROMPT}{memory_block}{comanda}"
         )
 
     elif kind_val == "knowledge":
@@ -310,7 +368,10 @@ def get_system_prompt_for_kind(
                 is_first=(history_length <= 2),
                 project_competencies=project_competencies,
             )
-        return f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n{QUIZ_PROMPT}{quiz_block}{memory_block}"
+        return (
+            f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n"
+            f"{QUIZ_PROMPT}{quiz_block}{memory_block}{comanda}"
+        )
 
     else:
         # Coaching (strategie) or default. Singurul loc unde intra regulile de coaching.

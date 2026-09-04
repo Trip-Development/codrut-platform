@@ -215,108 +215,76 @@ describe("PracticeWorkspace — ecranul de final", () => {
   });
 });
 
-describe("PracticeWorkspace — Vreau altă temă", () => {
-  const REPLICA_OM = {
-    id: "om-1",
-    sessionId: "sesiune-1",
-    ordinal: 2,
-    role: "participant" as const,
-    text: "bine, hai",
-    createdAt: "2026-08-31T10:00:00Z",
-    expiresAt: "2026-09-30T10:00:00Z",
-  };
+describe("PracticeWorkspace — pornirea în doi pași", () => {
   const SCENA = {
     id: "cody-2",
     sessionId: "sesiune-1",
     ordinal: 3,
     role: "actor" as const,
-    text: "Intrăm în scenă: ești managerul lui Vali, care a întârziat cu raportul.",
-    createdAt: "2026-08-31T10:00:05Z",
-    expiresAt: "2026-09-30T10:00:05Z",
+    text: "Setup: ești managerul lui Vali. Obiectivul tău: să ceri raportul asertiv.",
+    createdAt: "2026-09-04T10:00:05Z",
+    expiresAt: "2026-10-04T10:00:05Z",
+  };
+  const SALUT = {
+    id: "cody-1",
+    sessionId: "sesiune-1",
+    ordinal: 1,
+    role: "actor" as const,
+    text: "Salut! Ești gata să începem un joc de rol?",
+    createdAt: "2026-09-04T09:59:00Z",
+    expiresAt: "2026-10-04T09:59:00Z",
   };
 
-  async function pornesteCuSalut() {
-    api.startPracticeSession.mockResolvedValue({
-      ...SESIUNE_DESCHISA,
-      firstTurn: {
-        id: "cody-1",
-        sessionId: "sesiune-1",
-        ordinal: 1,
-        role: "actor" as const,
-        text: "Salut! Cum îți merge ziua până acum?",
-        createdAt: "2026-08-31T09:59:00Z",
-        expiresAt: "2026-09-30T09:59:00Z",
-      },
-    });
+  async function pornesteCuIntrebarea(kind: "roleplay" | "coaching" | "knowledge" = "roleplay") {
+    api.startPracticeSession.mockResolvedValue({ ...SESIUNE_DESCHISA, kind, firstTurn: SALUT });
     render(<PracticeWorkspace projectId="proiect-1" />);
     fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
     await waitFor(() => expect(api.startPracticeSession).toHaveBeenCalled());
   }
 
-  async function raspunde(text: string, actorTurn: typeof SCENA | null) {
-    api.submitPracticeTurn.mockResolvedValue({
-      participantTurn: { ...REPLICA_OM, text },
-      actorTurn,
-      sessionState: "open" as const,
-    });
-    const caseta = screen.getByPlaceholderText(/Scrie un mesaj/);
-    fireEvent.change(caseta, { target: { value: text } });
-    fireEvent.submit(caseta.closest("form")!);
-    await waitFor(() => expect(api.submitPracticeTurn).toHaveBeenCalled());
-  }
+  it("cele două butoane apar sub PRIMA replică, nu sub cea care pornește scena", async () => {
+    await pornesteCuIntrebarea();
 
-  it("nu apare sub salut, ci sub replica ce pornește scena", async () => {
-    await pornesteCuSalut();
-    // sub salut nu are la ce sa se refere: tema inca nu e aleasa
-    expect(screen.queryByRole("button", { name: "Vreau altă temă" })).toBeNull();
-
-    await raspunde("bine, hai", SCENA);
-    expect(await screen.findByRole("button", { name: "Vreau altă temă" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Da, hai" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Vreau să spun eu tema" })).toBeTruthy();
   });
 
-  it("pune un început de mesaj în casetă și NU îl trimite", async () => {
-    await pornesteCuSalut();
-    await raspunde("bine, hai", SCENA);
+  it("butonul Da, hai trimite confirmarea", async () => {
+    await pornesteCuIntrebarea();
+    api.submitPracticeTurn.mockResolvedValue({
+      participantTurn: {
+        ...SALUT, id: "om-1", ordinal: 2, role: "participant" as const, text: "Da, hai.",
+      },
+      actorTurn: SCENA,
+      sessionState: "open" as const,
+    });
 
+    fireEvent.click(await screen.findByRole("button", { name: "Da, hai" }));
+
+    await waitFor(() =>
+      expect(api.submitPracticeTurn).toHaveBeenCalledWith("sesiune-1", "Da, hai."),
+    );
+    // si dispar dupa ce a apasat
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Da, hai" })).toBeNull());
+  });
+
+  it("butonul Vreau sa spun eu tema pune textul in caseta si NU trimite", async () => {
+    await pornesteCuIntrebarea();
     api.submitPracticeTurn.mockClear();
-    fireEvent.click(await screen.findByRole("button", { name: "Vreau altă temă" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Vreau să spun eu tema" }));
 
     const caseta = screen.getByPlaceholderText(/Scrie un mesaj/) as HTMLTextAreaElement;
     expect(caseta.value).toBe("Vreau să exersăm altceva: ");
     expect(api.submitPracticeTurn).not.toHaveBeenCalled();
   });
 
-  it("dispare după ce omul mai scrie ceva", async () => {
-    await pornesteCuSalut();
-    await raspunde("bine, hai", SCENA);
-    expect(await screen.findByRole("button", { name: "Vreau altă temă" })).toBeTruthy();
-
-    await raspunde("Vreau să exersăm altceva: o discuție de salariu", {
-      ...SCENA,
-      id: "cody-3",
-      ordinal: 5,
-    });
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Vreau altă temă" })).toBeNull(),
-    );
-  });
-
-  it("nu apare la coaching sau la quiz", async () => {
+  it("nu apar la coaching sau la quiz", async () => {
     for (const kind of ["coaching", "knowledge"] as const) {
       cleanup();
-      api.startPracticeSession.mockResolvedValue({
-        ...SESIUNE_DESCHISA,
-        kind,
-        firstTurn: {
-          id: "c1", sessionId: "s", ordinal: 1, role: "actor" as const,
-          text: "Salut!", createdAt: "2026-08-31T09:59:00Z", expiresAt: "2026-09-30T09:59:00Z",
-        },
-      });
-      render(<PracticeWorkspace projectId="proiect-1" />);
-      fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
-      await waitFor(() => expect(api.startPracticeSession).toHaveBeenCalled());
-      await raspunde("bine", SCENA);
-      expect(screen.queryByRole("button", { name: "Vreau altă temă" })).toBeNull();
+      await pornesteCuIntrebarea(kind);
+      expect(screen.queryByRole("button", { name: "Da, hai" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Vreau să spun eu tema" })).toBeNull();
     }
   });
 });

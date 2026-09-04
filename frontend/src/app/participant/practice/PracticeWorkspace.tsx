@@ -104,26 +104,30 @@ function taieSinteza(text: string): { titlu: string | null; corp: string }[] {
   return sectiuni.length > 0 ? sectiuni : [{ titlu: null, corp: text.trim() }];
 }
 
-/** Ce se pune in caseta cand omul apasa „Vreau alta tema". Nu se trimite singur. */
+/** Ce se pune in caseta cand omul apasa „Vreau sa spun eu tema". Nu se trimite singur. */
 const INCEPUT_ALTA_TEMA = "Vreau să exersăm altceva: ";
 
+/** Ce se trimite cand omul apasa „Da, hai". */
+const CONFIRMARE = "Da, hai.";
+
 /**
- * Sub care replica a lui Cody apare butonul „Vreau alta tema".
+ * Sub care replica a lui Cody apar cele doua butoane de pornire.
  *
- * Cody anunta tema si intra direct in scena. Omul nu afla niciodata ca are voie sa vina
- * cu tema lui, deci exerseaza mereu ce alege Cody. Butonul se pune sub replica in care
- * tema chiar e aleasa — adica cea de dupa primul lui mesaj, nu sub salutul de la
- * inceput, unde n-ar avea la ce sa se refere.
+ * Pana la plicul 45, prima replica era un salut plus „Cum iti merge ziua?", iar modelul
+ * trebuia sa JUDECE singur cand s-au terminat politeturile si sa intre in scena. Masurat:
+ * reusea in 2 din 6 porniri. Acum prima replica intreaba direct daca e gata, iar
+ * confirmarea omului e semnalul.
  *
- * Regula e deterministă, fara ghicit dupa continut:
+ * Deci butoanele stau sub PRIMA replica a lui Cody — cea care pune intrebarea — nu sub
+ * cea care porneste scena, cum erau la plicul 40.
+ *
+ * Regula ramane deterministă, fara ghicit dupa continut:
  *   role-play  ·  replica e a lui Cody  ·  e ultima din transcript
- *   ·  omul a scris exact o data
+ *   ·  omul n-a scris inca nimic
  *
- * Ultima conditie il si face sa dispara: cum omul mai scrie ceva, nu mai e „exact o
- * data". Merge si daca salutul n-a apucat sa se genereze (`first_turn` null la plicul
- * 38): atunci replica de dupa primul mesaj e tot cea care porneste scena.
+ * Ultima conditie le si face sa dispara, cum omul scrie sau apasa orice.
  */
-function aratAltaTema(
+function aratButoaneleDePornire(
   kind: SessionKind,
   turns: PracticeTurn[],
   turn: PracticeTurn,
@@ -131,7 +135,7 @@ function aratAltaTema(
   if (kind !== "roleplay") return false;
   if (turn.role !== "actor") return false;
   if (turns[turns.length - 1] !== turn) return false;
-  return turns.filter((t) => t.role === "participant").length === 1;
+  return turns.every((t) => t.role !== "participant");
 }
 
 const FIXED_OPENINGS = [
@@ -235,13 +239,15 @@ export function PracticeWorkspace({
     }
   };
 
-  const handleSendMessage = async (e?: React.FormEvent) => {
+  // `textDirect` exista pentru butonul „Da, hai": trimite fara sa treaca prin caseta.
+  const handleSendMessage = async (e?: React.FormEvent, textDirect?: string) => {
     if (e) e.preventDefault();
-    if (!session || !inputText.trim() || isLoading || session.state !== "open") {
+    const brut = textDirect ?? inputText;
+    if (!session || !brut.trim() || isLoading || session.state !== "open") {
       return;
     }
 
-    const textToSend = inputText.trim();
+    const textToSend = brut.trim();
     setInputText("");
     setIsLoading(true);
     setErrorMsg(null);
@@ -613,22 +619,33 @@ export function PracticeWorkspace({
               >
                 {turn.text}
               </div>
-              {aratAltaTema(session.kind, turns, turn) ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setInputText(INCEPUT_ALTA_TEMA);
-                    const c = inputRef.current;
-                    if (c) {
-                      c.focus();
-                      const n = INCEPUT_ALTA_TEMA.length;
-                      c.setSelectionRange(n, n);
-                    }
-                  }}
-                  className="mt-2 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted"
-                >
-                  Vreau altă temă
-                </button>
+              {aratButoaneleDePornire(session.kind, turns, turn) ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => handleSendMessage(undefined, CONFIRMARE)}
+                    className="rounded-md bg-burgundy px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                  >
+                    Da, hai
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => {
+                      setInputText(INCEPUT_ALTA_TEMA);
+                      const c = inputRef.current;
+                      if (c) {
+                        c.focus();
+                        const n = INCEPUT_ALTA_TEMA.length;
+                        c.setSelectionRange(n, n);
+                      }
+                    }}
+                    className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+                  >
+                    Vreau să spun eu tema
+                  </button>
+                </div>
               ) : null}
             </div>
           );

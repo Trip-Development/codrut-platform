@@ -82,7 +82,7 @@ def test_memoria_ajunge_in_prompt_la_inceputul_sesiunii():
 
 def test_versiunea_promptului_a_urcat():
     """Compozitia s-a schimbat; fara urcare, sesiunile nu se mai pot compara."""
-    assert CODY_PROMPT_VERSION == "v2.8-fara-filozofie"
+    assert CODY_PROMPT_VERSION == "v2.9"
 
 
 def test_serviciul_chiar_trimite_cele_trei_piese():
@@ -381,3 +381,60 @@ def test_quizul_primeste_pornirea_cand_trebuie_sa_porneasca():
     )
     assert "NUMĂR FIX" not in mai_tarziu
     assert "MOD QUIZ ACTIV" in mai_tarziu
+
+
+# ---- plicul 45 ----
+
+
+def test_comanda_de_pornire_e_ULTIMUL_lucru_din_prompt():
+    """Ce e scris ultimul cantareste cel mai mult.
+
+    Regula din `actor.md` sta la coada unui prompt de ~125.000 de octeti, dupa o suta de
+    kiloocteti de material despre conversatii de coaching. Opt randuri nu bat o suta de
+    kiloocteti — masurat, intrarea in rol reusea in 2 din 6 porniri.
+    """
+    from codrut.modules.practice.prompts import COMANDA_DE_PORNIRE, REPLICA_DE_CONFIRMARE
+
+    for mod in ("roleplay", "knowledge"):
+        prompt = get_system_prompt_for_kind(
+            mod, name="Andrei", history_length=REPLICA_DE_CONFIRMARE,
+            quiz_competency="mix" if mod == "knowledge" else None,
+            project_competencies=["A"],
+        )
+        assert prompt.endswith(COMANDA_DE_PORNIRE[mod]), mod
+
+
+def test_comanda_apare_doar_la_replica_de_confirmare():
+    """Nici mai devreme, nici mai tarziu: e un declansator, nu o regula permanenta."""
+    from codrut.modules.practice.prompts import COMANDA_DE_PORNIRE
+
+    for h in (0, 1, 3, 4, 8):
+        prompt = get_system_prompt_for_kind("roleplay", name="Andrei", history_length=h)
+        assert COMANDA_DE_PORNIRE["roleplay"] not in prompt, h
+
+
+def test_comanda_nu_ajunge_la_coaching():
+    """Acolo pornirea in doi pasi n-are ce cauta — decizia lui Andrei din 31 august."""
+    from codrut.modules.practice.prompts import COMANDA_DE_PORNIRE
+
+    prompt = get_system_prompt_for_kind("coaching", name="Andrei", history_length=2)
+    for text in COMANDA_DE_PORNIRE.values():
+        assert text not in prompt
+
+
+def test_prima_replica_intreaba_daca_e_gata_doar_la_roleplay_si_quiz():
+    """La coaching ramane salutul plus «Cum iti merge ziua», decizia lui Andrei."""
+    # Se verifica REGULA, nu fraza: „Cum iti merge ziua pana acum" apare si in
+    # `reguli-comportament.md` din Biblioteca, sectiunea 12A, unde e citata ca exemplu
+    # INTERZIS. Textul acela e al lui Andrei si nu se atinge.
+    rp = get_system_prompt_for_kind("roleplay", name="Andrei", history_length=0)
+    assert "dacă e gata să înceapă un joc de rol" in rp
+    assert "REGULA PRIMULUI MESAJ: DOAR saluți" not in rp
+
+    quiz = get_system_prompt_for_kind("knowledge", name="Andrei", history_length=0)
+    assert "dacă e gata să-și verifice cunoștințele" in quiz
+    assert "REGULA PRIMULUI MESAJ: DOAR saluți" not in quiz
+
+    coaching = get_system_prompt_for_kind("coaching", name="Andrei", history_length=0)
+    assert "REGULA PRIMULUI MESAJ: DOAR saluți" in coaching
+    assert "dacă e gata să înceapă un joc de rol" not in coaching
