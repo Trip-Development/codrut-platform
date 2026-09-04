@@ -560,3 +560,29 @@ def test_salutul_il_cheama_pe_prenume():
     tarziu = get_system_prompt_for_kind("roleplay", name="Ion Popescu", history_length=4)
     assert "îl saluți OBLIGATORIU pe prenume" not in tarziu
     assert "REGULA ANTI-SALUT" in tarziu
+
+
+# ---- plicul 53 ----
+
+
+def test_salutul_are_din_ce_varia():
+    """Dupa plicul 50 salutul cheama omul pe nume, dar suna la fel.
+
+    Masurat de Andrei: „Ma bucur sa ne auzim" in cinci din opt sesiuni. Cody repeta orice
+    n-are din ce varia — acelasi tipar ca la numele personajelor.
+    """
+    for mod in ("roleplay", "knowledge", "coaching"):
+        p = get_system_prompt_for_kind(mod, name="Ion Popescu", history_length=0)
+        assert "VARIAȚIA SALUTULUI" in p, mod
+        assert "SENZORUL ANTI-PAPAGAL LA SALUT" in p, mod
+        # prenumele intra in text, nu numele intreg
+        assert "după „Salut, Ion\" pui" in p, mod
+        # formula tocita e interzisa pe nume
+        assert 'INTERZIS „Mă bucur să ne auzim"' in p, mod
+        # si un salut sec ramane o varianta buna
+        assert "sau NIMIC" in p, mod
+
+    # mai tarziu in conversatie nu se aplica; acolo ramane regula anti-salut
+    tarziu = get_system_prompt_for_kind("roleplay", name="Ion Popescu", history_length=4)
+    assert "VARIAȚIA SALUTULUI" not in tarziu
+    assert "REGULA ANTI-SALUT" in tarziu
