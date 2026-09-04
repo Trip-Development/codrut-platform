@@ -798,7 +798,7 @@ class PracticeSessionService:
         if turns:
             history_lines = []
             for t in turns:
-                speaker = profile.full_name if t.role == TurnRole.participant else "Codruț"
+                speaker = profile.full_name if t.role == TurnRole.participant else "Cody"
                 history_lines.append(f"{speaker}: {t.text}")
             history_str = "\n\n".join(history_lines)
             from codrut.modules.practice.prompts import get_summary_prompt
