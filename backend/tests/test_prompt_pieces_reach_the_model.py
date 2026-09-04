@@ -506,3 +506,32 @@ def test_distributia_nu_ajunge_la_coaching_sau_quiz():
             project_competencies=["A"], profil_rol=profil,
         )
         assert "DISTRIBUȚIA SCENEI" not in prompt, mod
+
+
+# ---- plicul 49 ----
+
+
+def test_omul_are_nume_nu_santinela():
+    """La intrarea directa a trainerului, profilul se crea cu numele literal „Trainer".
+
+    Modelului i se spunea ca omul din fata lui se cheama asa — si, fiindca nu e un nume,
+    si-l inventa singur: cand „Mihai", cand un „Andrei" ghicit, cand „[Trainer]" cu
+    paranteze, ca un loc necompletat. Masurat de Andrei in opt sesiuni la rand.
+    """
+    import inspect
+
+    from codrut.modules.practice.service import PracticeSessionService, _nume_din_email
+
+    assert _nume_din_email("andrei.vacaru@tripdevelopment.ro") == "Andrei Vacaru"
+    assert _nume_din_email("ion_popescu@firma.ro") == "Ion Popescu"
+    assert _nume_din_email("maria-ionescu2@x.ro") == "Maria Ionescu"
+    # cazurile in care nu se poate scoate nimic cad pe un cuvant care macar e o categorie
+    for gol in ("123@x.ro", "", None):
+        assert _nume_din_email(gol) == "Participant"
+
+    # si legatura: pornirea trainerului nu mai scrie santinela
+    sursa = inspect.getsource(PracticeSessionService.start_trainer_session)
+    assert 'full_name="Trainer"' not in sursa
+    assert "_nume_din_email(principal.email)" in sursa
+    # profilul vechi, scris cu santinela, se corecteaza la prima atingere
+    assert 'profile.full_name == "Trainer"' in sursa
