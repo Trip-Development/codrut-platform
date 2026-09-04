@@ -324,6 +324,9 @@ def get_system_prompt_for_kind(
     material, _ = get_core_material(biblioteca_path)
 
     kind_val = kind.value if isinstance(kind, SessionKind) else str(kind)
+    # Salutul se face pe prenume. In profil numele e intreg („Ion Popescu"), iar „Salut,
+    # Ion Popescu" suna a formular, nu a om.
+    prenume = (name or "").strip().split(" ")[0] or name
     # „coaching" si orice altceva nerecunoscut cad pe ramura de coaching mai jos, deci
     # asta e aceeasi impartire, scrisa o singura data.
     e_coaching = kind_val not in ("roleplay", "knowledge")
@@ -342,21 +345,24 @@ def get_system_prompt_for_kind(
         # devine semnalul — vezi `COMANDA_DE_PORNIRE` mai jos.
         if kind_val == "roleplay":
             dyn_rules = (
-                f'- REGULA PRIMULUI MESAJ: saluți pe {name} cald, o vorbă scurtă, și îl '
+                f'- REGULA PRIMULUI MESAJ: îl saluți OBLIGATORIU pe prenume — '
+                f'„Salut, {prenume}" — cald, o vorbă scurtă, și îl '
                 f'întrebi dacă e gata să înceapă un joc de rol. O SINGURĂ întrebare în '
                 f'mesaj. INTERZIS orice frază de tranziție și INTERZIS să întrebi ce '
                 f'situație sau ce temă vrea — situația o alegi tu, la pasul următor.'
             )
         elif kind_val == "knowledge":
             dyn_rules = (
-                f'- REGULA PRIMULUI MESAJ: saluți pe {name} cald, o vorbă scurtă, și îl '
+                f'- REGULA PRIMULUI MESAJ: îl saluți OBLIGATORIU pe prenume — '
+                f'„Salut, {prenume}" — cald, o vorbă scurtă, și îl '
                 f'întrebi dacă e gata să-și verifice cunoștințele. O SINGURĂ întrebare în '
                 f'mesaj. INTERZIS orice frază de tranziție și INTERZIS să întrebi ce temă '
                 f'vrea.'
             )
         else:
             dyn_rules = (
-                f'- REGULA PRIMULUI MESAJ: DOAR saluți pe {name} cald și îl întrebi '
+                f'- REGULA PRIMULUI MESAJ: DOAR îl saluți OBLIGATORIU pe prenume — '
+                f'„Salut, {prenume}" — cald, și îl întrebi '
                 f'"Cum îți merge ziua până acum?". INTERZIS orice frază de tranziție la subiect.'
             )
     else:

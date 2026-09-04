@@ -440,14 +440,14 @@ def test_prima_replica_intreaba_daca_e_gata_doar_la_roleplay_si_quiz():
     # INTERZIS. Textul acela e al lui Andrei si nu se atinge.
     rp = get_system_prompt_for_kind("roleplay", name="Andrei", history_length=0)
     assert "dacă e gata să înceapă un joc de rol" in rp
-    assert "REGULA PRIMULUI MESAJ: DOAR saluți" not in rp
+    assert "DOAR îl saluți OBLIGATORIU pe prenume" not in rp
 
     quiz = get_system_prompt_for_kind("knowledge", name="Andrei", history_length=0)
     assert "dacă e gata să-și verifice cunoștințele" in quiz
-    assert "REGULA PRIMULUI MESAJ: DOAR saluți" not in quiz
+    assert "DOAR îl saluți OBLIGATORIU pe prenume" not in quiz
 
     coaching = get_system_prompt_for_kind("coaching", name="Andrei", history_length=0)
-    assert "REGULA PRIMULUI MESAJ: DOAR saluți" in coaching
+    assert "DOAR îl saluți OBLIGATORIU pe prenume" in coaching
     assert "dacă e gata să înceapă un joc de rol" not in coaching
 
 
@@ -535,3 +535,28 @@ def test_omul_are_nume_nu_santinela():
     assert "_nume_din_email(principal.email)" in sursa
     # profilul vechi, scris cu santinela, se corecteaza la prima atingere
     assert 'profile.full_name == "Trainer"' in sursa
+
+
+# ---- plicul 50 ----
+
+
+def test_salutul_il_cheama_pe_prenume():
+    """Numele era in prompt de la plicul 49, dar salutul nu-l folosea.
+
+    Masurat de Andrei: sase din opt sesiuni deschideau cu „Salut!" sec. In profil numele
+    e intreg — „Ion Popescu" — iar „Salut, Ion Popescu" suna a formular, nu a om.
+    """
+    for mod in ("roleplay", "knowledge", "coaching"):
+        p = get_system_prompt_for_kind(mod, name="Ion Popescu", history_length=0)
+        assert "îl saluți OBLIGATORIU pe prenume" in p, mod
+        assert "„Salut, Ion\"" in p, mod
+        assert "Salut, Ion Popescu" not in p, mod
+
+    # un singur cuvant ramane cum e
+    p = get_system_prompt_for_kind("roleplay", name="Andrei", history_length=0)
+    assert "„Salut, Andrei\"" in p
+
+    # regula se aplica DOAR la prima replica
+    tarziu = get_system_prompt_for_kind("roleplay", name="Ion Popescu", history_length=4)
+    assert "îl saluți OBLIGATORIU pe prenume" not in tarziu
+    assert "REGULA ANTI-SALUT" in tarziu
