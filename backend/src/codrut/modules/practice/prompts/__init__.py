@@ -102,6 +102,25 @@ def bloc_de_distributie(profil_rol: dict[str, Any] | None) -> str:
     )
 
 
+# Variatia salutului — plicul 53.
+#
+# Dupa plicul 50 salutul cheama omul pe nume, dar suna la fel: „Ma bucur sa ne auzim" in
+# cinci din opt sesiuni masurate. Aceeasi solutie ca la tranzitiile de coaching, care
+# merge de la plicul 37: o lista scurta, rotatie, si un senzor care se uita in istoric.
+#
+# Formulele sunt scurte si fara ceremonie, ca in `mostre-de-voce.md`. Niciuna nu e
+# intrebare — regula primului mesaj cere O SINGURA intrebare in mesaj, si aia e „esti gata?".
+VARIATIA_SALUTULUI = (
+    '\n- VARIAȚIA SALUTULUI (ROTAȚIE): după „Salut, {prenume}" pui o singură vorbă caldă, '
+    'scurtă, una din: „mă bucur că te-ai apucat." / „hai să vedem ce iese azi." / '
+    '„bine că ai prins un moment." / „ne apucăm de treabă." / „mă bucur să te văd." / '
+    '„hai să lucrăm puțin." — sau NIMIC, doar salutul și întrebarea; un salut sec e bun '
+    'din când în când, așa vorbesc oamenii.\n'
+    '- SENZORUL ANTI-PAPAGAL LA SALUT: uită-te în istoric. Dacă ai folosit deja o formulă '
+    'în sesiunile trecute, alegi obligatoriu alta. INTERZIS „Mă bucur să ne auzim" — s-a '
+    'tocit de atâta folosit.'
+)
+
 # Replica la care omul raspunde intrebarii de pornire. Salutul se genereaza la
 # `history_length` 0; primul mesaj al omului aduce numaratoarea la 2.
 REPLICA_DE_CONFIRMARE = 2
@@ -365,6 +384,9 @@ def get_system_prompt_for_kind(
                 f'„Salut, {prenume}" — cald, și îl întrebi '
                 f'"Cum îți merge ziua până acum?". INTERZIS orice frază de tranziție la subiect.'
             )
+        # Toate trei modurile saluta, deci variatia merge la toate trei. Mai tarziu in
+        # conversatie nu se aplica — acolo ramane regula anti-salut, neatinsa.
+        dyn_rules += VARIATIA_SALUTULUI.replace("{prenume}", prenume)
     else:
         dyn_rules = '- REGULA ANTI-SALUT: INTERZIS să mai folosești "Salut", "Bună".'
         # Biblioteca de tranzitii e de coaching: intreaba omul ce vrea sa discute.
