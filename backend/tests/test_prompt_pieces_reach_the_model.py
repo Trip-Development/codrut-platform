@@ -82,7 +82,7 @@ def test_memoria_ajunge_in_prompt_la_inceputul_sesiunii():
 
 def test_versiunea_promptului_a_urcat():
     """Compozitia s-a schimbat; fara urcare, sesiunile nu se mai pot compara."""
-    assert CODY_PROMPT_VERSION == "v3.0"
+    assert CODY_PROMPT_VERSION == "v3.1"
 
 
 def test_serviciul_chiar_trimite_cele_trei_piese():
@@ -395,13 +395,24 @@ def test_comanda_de_pornire_e_ULTIMUL_lucru_din_prompt():
     """
     from codrut.modules.practice.prompts import COMANDA_DE_PORNIRE, REPLICA_DE_CONFIRMARE
 
-    for mod in ("roleplay", "knowledge"):
-        prompt = get_system_prompt_for_kind(
-            mod, name="Andrei", history_length=REPLICA_DE_CONFIRMARE,
-            quiz_competency="mix" if mod == "knowledge" else None,
-            project_competencies=["A"],
-        )
-        assert prompt.endswith(COMANDA_DE_PORNIRE[mod]), mod
+    # La quiz, comanda e chiar ultima. La role-play, plicul 47 lipeste dupa ea blocul de
+    # distributie — acelasi moment, aceeasi pozitie — deci acolo cele doua impreuna sunt
+    # coada promptului.
+    quiz = get_system_prompt_for_kind(
+        "knowledge", name="Andrei", history_length=REPLICA_DE_CONFIRMARE,
+        quiz_competency="mix", project_competencies=["A"],
+    )
+    assert quiz.endswith(COMANDA_DE_PORNIRE["knowledge"])
+
+    rp = get_system_prompt_for_kind(
+        "roleplay", name="Andrei", history_length=REPLICA_DE_CONFIRMARE,
+    )
+    coada = rp[-1200:]
+    assert COMANDA_DE_PORNIRE["roleplay"] in coada
+    assert "DISTRIBUȚIA SCENEI" in coada
+    # nimic altceva nu se strecoara intre ele
+    assert coada.index(COMANDA_DE_PORNIRE["roleplay"]) < coada.index("DISTRIBUȚIA SCENEI")
+    assert rp.rstrip().endswith("se schimbă doar cu cine.")
 
 
 def test_comanda_apare_doar_la_replica_de_confirmare():
@@ -438,3 +449,60 @@ def test_prima_replica_intreaba_daca_e_gata_doar_la_roleplay_si_quiz():
     coaching = get_system_prompt_for_kind("coaching", name="Andrei", history_length=0)
     assert "REGULA PRIMULUI MESAJ: DOAR saluți" in coaching
     assert "dacă e gata să înceapă un joc de rol" not in coaching
+
+
+# ---- plicul 47 ----
+
+
+def test_scena_se_alege_dupa_pozitia_reala_a_omului():
+    """Toate cele 15 scenarii de pana acum il puneau pe om manager care da feedback.
+
+    Un om care nu conduce pe nimeni juca mereu un rol pe care nu-l are.
+    """
+    from codrut.modules.practice.prompts import bloc_de_distributie
+
+    # cine nu conduce nu primeste NICIODATA o scena „in jos"
+    for n in range(12):
+        t = bloc_de_distributie({"conduce_oameni": False, "nr_roleplay_anterioare": n})
+        assert "DIN ECHIPA participantului" not in t, n
+        assert "INTERZIS să-l pui pe participant în poziție de manager" in t, n
+
+    # cine conduce le primeste pe toate patru, si se rotesc
+    directii = {
+        bloc_de_distributie({"conduce_oameni": True, "nr_roleplay_anterioare": n})
+        for n in range(4)
+    }
+    assert len(directii) == 4
+
+
+def test_functia_omului_intra_in_scena_daca_o_stim():
+    from codrut.modules.practice.prompts import bloc_de_distributie
+
+    cu = bloc_de_distributie({"conduce_oameni": True, "functie": "inginer de producție"})
+    assert "inginer de producție" in cu
+    assert "plauzibil pentru funcția asta" in cu
+
+    fara = bloc_de_distributie({"conduce_oameni": True, "functie": None})
+    assert "Funcția lui în firmă" not in fara
+
+
+def test_fara_profil_se_merge_pe_varianta_sigura():
+    """Un om care conduce si primeste o scena cu un coleg pierde putin; unul care nu
+    conduce si e pus «manager de echipa» joaca o minciuna."""
+    from codrut.modules.practice.prompts import bloc_de_distributie
+
+    for gol in (None, {}, {"conduce_oameni": None}):
+        t = bloc_de_distributie(gol)
+        assert "DIN ECHIPA participantului" not in t
+        assert "INTERZIS să-l pui pe participant în poziție de manager" in t
+
+
+def test_distributia_nu_ajunge_la_coaching_sau_quiz():
+    profil = {"conduce_oameni": True, "nr_roleplay_anterioare": 0}
+    for mod in ("coaching", "knowledge"):
+        prompt = get_system_prompt_for_kind(
+            mod, name="Andrei", history_length=2,
+            quiz_competency="mix" if mod == "knowledge" else None,
+            project_competencies=["A"], profil_rol=profil,
+        )
+        assert "DISTRIBUȚIA SCENEI" not in prompt, mod

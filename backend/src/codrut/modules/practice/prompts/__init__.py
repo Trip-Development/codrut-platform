@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # v2.1 (plicul 37): la role-play perechea actor+evaluare a fost pusa la loc, blocul de
 # quiz si memoria chiar ajung la model. Compozitia promptului s-a schimbat, deci
 # sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
-CODY_PROMPT_VERSION = "v3.0"
+CODY_PROMPT_VERSION = "v3.1"
 
 # Comanda care declanseaza pornirea, pusa ULTIMA in prompt — plicul 45.
 #
@@ -35,6 +35,72 @@ COMANDA_DE_PORNIRE = {
         "Nicio întrebare de explorare, nicio frază de tranziție."
     ),
 }
+
+# Cine e celalalt personaj din scena — plicul 47.
+#
+# Datele exista deja in platforma: `ParticipantProfile.role_group` e normalizat in doua
+# galeti (`leadership` / `member`) de `_normalize_role_group` din companies/service.py,
+# iar `position` e functia scrisa de trainer la import.
+#
+# Textul asta se lipeste de COMANDA_DE_PORNIRE, deci sta ULTIMUL in prompt — acolo unde
+# masuratoarea din plicul 45 a aratat ca instructiunea chiar se executa.
+DIRECTII_SCENA = {
+    "jos": (
+        "Celălalt personaj e un om DIN ECHIPA participantului, cineva pe care el îl "
+        "conduce."
+    ),
+    "lateral": (
+        "Celălalt personaj e un COLEG de același nivel — nimeni nu e șeful nimănui în "
+        "scena asta."
+    ),
+    "sus": (
+        "Celălalt personaj e ȘEFUL participantului. Participantul e cel care are ceva "
+        "de spus în sus."
+    ),
+    "client": (
+        "Celălalt personaj e un CLIENT sau un partener din afara companiei."
+    ),
+}
+
+# Ordinea in care se rotesc. Cine nu conduce oameni nu primeste niciodata „jos".
+ROTATIE_CONDUCE = ("jos", "lateral", "sus", "client")
+ROTATIE_NU_CONDUCE = ("lateral", "sus", "client")
+
+
+def bloc_de_distributie(profil_rol: dict[str, Any] | None) -> str:
+    """Spune modelului cine e celalalt din scena, si ii interzice sa mute omul din
+    pozitia lui reala.
+
+    Fara profil — la o proba tehnica, sau daca trainerul n-a completat nimic — se merge
+    pe rotatia celui care NU conduce oameni. E alegerea sigura: un om care conduce si
+    primeste o scena cu un coleg pierde putin, un om care nu conduce si e pus „manager
+    de echipa" joaca o minciuna.
+    """
+    if not profil_rol:
+        profil_rol = {}
+    conduce = bool(profil_rol.get("conduce_oameni"))
+    rotatie = ROTATIE_CONDUCE if conduce else ROTATIE_NU_CONDUCE
+    n = int(profil_rol.get("nr_roleplay_anterioare") or 0)
+    directie = rotatie[n % len(rotatie)]
+
+    functie = (profil_rol.get("functie") or "").strip()
+    randul_functiei = (
+        f" Funcția lui în firmă e: {functie}. Contextul scenei să fie plauzibil "
+        f"pentru funcția asta."
+        if functie
+        else ""
+    )
+    interdictia = (
+        ""
+        if conduce
+        else " INTERZIS să-l pui pe participant în poziție de manager sau de șef de "
+        "echipă — nu conduce pe nimeni."
+    )
+    return (
+        f"\nDISTRIBUȚIA SCENEI: {DIRECTII_SCENA[directie]}{randul_functiei}"
+        f"{interdictia} Competența exersată rămâne aceeași; se schimbă doar cu cine."
+    )
+
 
 # Replica la care omul raspunde intrebarii de pornire. Salutul se genereaza la
 # `history_length` 0; primul mesaj al omului aduce numaratoarea la 2.
@@ -253,6 +319,7 @@ def get_system_prompt_for_kind(
     project_competencies: list[str] | None = None,
     memories: list[dict[str, Any]] | None = None,
     biblioteca_path: str = "",
+    profil_rol: dict[str, Any] | None = None,
 ) -> str:
     material, _ = get_core_material(biblioteca_path)
 
@@ -328,6 +395,9 @@ def get_system_prompt_for_kind(
         if history_length == REPLICA_DE_CONFIRMARE
         else ""
     )
+    # Distributia se lipeste de comanda de pornire: acelasi moment, aceeasi pozitie.
+    if comanda and kind_val == "roleplay":
+        comanda += bloc_de_distributie(profil_rol)
 
     if kind_val == "roleplay":
         # Actorul si evaluarea merg impreuna, ca in aplicatia veche si ca in plicul 22:

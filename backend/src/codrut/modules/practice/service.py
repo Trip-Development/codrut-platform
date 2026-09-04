@@ -5,6 +5,7 @@ import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import Any
 
 from redis.asyncio import Redis
 from sqlalchemy import func, or_, select
@@ -367,6 +368,7 @@ class PracticeSessionService:
             project_competencies=competente,
             memories=memorii,
             biblioteca_path=self.settings.biblioteca_path,
+            profil_rol=await self._profilul_de_rol(profile, practice_session.id),
         )
 
         request = GenerationRequest(
@@ -452,6 +454,30 @@ class PracticeSessionService:
         await self.session.commit()
         await self.session.refresh(prima)
         return prima
+
+    async def _profilul_de_rol(
+        self,
+        profile: ParticipantProfile,
+        session_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]:
+        """Ce stie platforma despre pozitia omului, plus a cata sesiune de role-play e.
+
+        `role_group` e deja normalizat la scriere in `leadership` / `member`; verificarea
+        de aici e aceeasi cu cea din scoring/service.py rd. 1816, scrisa la fel.
+        """
+        stmt = select(func.count(PracticeSession.id)).where(
+            PracticeSession.participant_profile_id == profile.id,
+            PracticeSession.kind == SessionKind.roleplay,
+        )
+        if session_id is not None:
+            stmt = stmt.where(PracticeSession.id != session_id)
+        anterioare = int((await self.session.execute(stmt)).scalar() or 0)
+        return {
+            "conduce_oameni": (profile.role_group or "").strip().casefold()
+            in {"leadership", "manager"},
+            "functie": profile.position,
+            "nr_roleplay_anterioare": anterioare,
+        }
 
     async def _competentele_proiectului(self, project_id: uuid.UUID) -> list[str]:
         """Competentele alese de trainer, in ordinea lor.
@@ -613,6 +639,7 @@ class PracticeSessionService:
                 project_competencies=competente,
                 memories=memorii,
                 biblioteca_path=self.settings.biblioteca_path,
+                profil_rol=await self._profilul_de_rol(profile, session_obj.id),
             )
 
             request = GenerationRequest(
