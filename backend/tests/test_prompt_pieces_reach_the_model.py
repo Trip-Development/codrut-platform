@@ -82,7 +82,7 @@ def test_memoria_ajunge_in_prompt_la_inceputul_sesiunii():
 
 def test_versiunea_promptului_a_urcat():
     """Compozitia s-a schimbat; fara urcare, sesiunile nu se mai pot compara."""
-    assert CODY_PROMPT_VERSION == "v3.1"
+    assert CODY_PROMPT_VERSION == "v3.2"
 
 
 def test_serviciul_chiar_trimite_cele_trei_piese():
@@ -620,3 +620,81 @@ def test_salutul_se_alege_in_cod_nu_la_voia_modelului():
     tarziu = get_system_prompt_for_kind("roleplay", name="Ion Popescu", history_length=4)
     assert "- SALUTUL:" not in tarziu
     assert "REGULA ANTI-SALUT" in tarziu
+
+
+# ---- plicul 57 ----
+
+
+def test_vocea_lui_andrei_e_ceruta_nu_doar_prezenta():
+    """Cele treisprezece expresii erau deja in prompt, in `ton-si-comportament.md`.
+
+    Stateau intr-o lista, la inceputul unui prompt de 147.000 de semne, si nimic nu-i
+    cerea vreodata sa le foloseasca. Andrei, 5 septembrie: „nu foloseste mai deloc stilul
+    meu de a comunica".
+    """
+    from codrut.modules.practice.prompts import EXPRESII_ANDREI, bloc_de_voce
+
+    for mod in ("roleplay", "knowledge", "coaching"):
+        p = get_system_prompt_for_kind(
+            mod, name="Ion", history_length=4,
+            quiz_competency="mix" if mod == "knowledge" else None,
+            project_competencies=["A"], profil_rol={"nr_sesiuni_anterioare": 0},
+        )
+        assert "CUM VORBEȘTI, ÎN FIECARE RĂSPUNS" in p, mod
+        assert "FOLOSEȘTE CEL PUȚIN O MIȘCARE" in p, mod
+        # mișcările se cer la fiecare replică, expresia o singură dată pe sesiune
+        assert "O SINGURĂ DATĂ în sesiunea asta" in p, mod
+        assert EXPRESII_ANDREI[0] in p, mod
+
+
+def test_expresia_se_roteste_ca_salutul():
+    """Andrei: „ar fi bine sa construiasca in tipare. Frazele mai rar."
+
+    O lista din care alege modelul singur inseamna, la o sesiune noua fara istoric, ca ia
+    mereu primul element — masurat la plicul 54.
+    """
+    from codrut.modules.practice.prompts import EXPRESII_ANDREI, bloc_de_voce
+
+    alese = [
+        bloc_de_voce({"nr_sesiuni_anterioare": n}, e_roleplay=False)
+        for n in range(len(EXPRESII_ANDREI))
+    ]
+    assert len(set(alese)) == len(EXPRESII_ANDREI)
+    # se reia dupa ce se termina lista
+    assert bloc_de_voce({"nr_sesiuni_anterioare": len(EXPRESII_ANDREI)}, e_roleplay=False) == alese[0]
+    # fara profil nu crapa
+    assert bloc_de_voce(None, e_roleplay=False) == alese[0]
+
+    # o singura expresie pe bloc, nu toate
+    for i, bloc in enumerate(alese):
+        gasite = [e for e in EXPRESII_ANDREI if e in bloc]
+        assert gasite == [EXPRESII_ANDREI[i]], i
+
+
+def test_personajul_din_scena_nu_vorbeste_ca_andrei():
+    """La role-play Cody joaca seful, colegul, clientul. Daca personajul ar vorbi ca
+    Andrei, scena ar fi falsa. Vocea lui apare in feedbackul de dupa replica."""
+    from codrut.modules.practice.prompts import bloc_de_voce
+
+    rp = bloc_de_voce({"nr_sesiuni_anterioare": 0}, e_roleplay=True)
+    assert "vocea ta de PROFESOR" in rp
+    assert "NU vorbește niciodată așa" in rp
+
+    altele = bloc_de_voce({"nr_sesiuni_anterioare": 0}, e_roleplay=False)
+    assert "vocea ta de PROFESOR" not in altele
+
+
+def test_vocea_e_ultima_cand_nu_exista_comanda_de_pornire():
+    """La replica de confirmare comanda ramane ultima — lacatul de la plicul 45 e intact.
+
+    La toate celelalte replici, vocea devine ultimul lucru din prompt.
+    """
+    for mod in ("roleplay", "knowledge", "coaching"):
+        p = get_system_prompt_for_kind(
+            mod, name="Ion", history_length=4,
+            quiz_competency="mix" if mod == "knowledge" else None,
+            project_competencies=["A"], profil_rol={"nr_sesiuni_anterioare": 0},
+        )
+        coada = p.rstrip()[-260:]
+        assert "CUM VORBEȘTI, ÎN FIECARE RĂSPUNS" in p, mod
+        assert "spui direct." in coada or "el e altcineva." in coada, mod
