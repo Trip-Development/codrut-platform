@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # v2.1 (plicul 37): la role-play perechea actor+evaluare a fost pusa la loc, blocul de
 # quiz si memoria chiar ajung la model. Compozitia promptului s-a schimbat, deci
 # sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
-CODY_PROMPT_VERSION = "v3.1"
+CODY_PROMPT_VERSION = "v3.2"
 
 # Comanda care declanseaza pornirea, pusa ULTIMA in prompt — plicul 45.
 #
@@ -137,6 +137,60 @@ def formula_de_salut(prenume: str, profil_rol: dict[str, Any] | None) -> str:
         f'Salut, {prenume}. {vorba} Apoi vine întrebarea. Numele e scris acolo — '
         f'îl folosești pe el. INTERZIS să lași un loc gol de tipul „[Nume]" și INTERZIS '
         f'să pui alt nume.'
+    )
+
+
+# Vocea lui Andrei, ceruta la final — plicul 57.
+#
+# Expresiile sunt copiate din sectiunea 4 „EXPRESII CARACTERISTICE" a fisierului
+# `ton-si-comportament.md`, care e deja in prompt. Le tinem si aici fiindca alegerea se
+# face in cod, prin rotatie: la fel ca salutul, o lista din care alege modelul singur
+# inseamna, la o sesiune noua fara istoric, ca ia mereu primul element.
+#
+# DACA ANDREI SCHIMBA LISTA DIN FISIER, se schimba si aici. Sunt doua locuri; e pretul
+# rotatiei deterministe si merita spus cu voce tare.
+EXPRESII_ANDREI = (
+    "Nu vă duceți după fentă.",
+    "E o luptă de idei, nu de orgolii.",
+    "Responsabilitatea este 50/50.",
+    "A presupune e ca și cum te-ai sinucide din precauție.",
+    "Fuga de conflict nu rezolvă nimic — ascunde lucrurile sub preș.",
+    "Ceea ce știi te poate deranja. Ceea ce nu știi te poate doborî.",
+    "Nu pot eu să îți spun ce risc să îți asumi. Pe asta va trebui să o faci tu.",
+    "Orice alegi — inclusiv să nu faci nimic — e o alegere. Asumă-ți-o.",
+    "Nu îi atragem pe oamenii toxici — îi alegem.",
+    "Trebuie să înțeleagă Țața Floarea.",
+)
+
+_MISCARILE = (
+    "MUTĂ PROBLEMA: „Problema nu e că tremuri. Problema e povestea pe care o spui despre "
+    "tremurat.\" · DOUĂ GREȘELI, APOI CE FUNCȚIONEAZĂ: „Prima greșeală… A doua greșeală… "
+    "Ce funcționează…\" · TREI VARIANTE, A TREIA E CEA BUNĂ · DISTINCȚIA ÎN PERECHI "
+    "SCURTE: „Agresivitatea atacă omul. Fermitatea apără poziția.\" · DEMONTEAZĂ UN MIT "
+    "SCURT: „Există o iluzie despre ascultare. Că dacă ești tăcut, asculți. Nu neapărat.\" "
+    "· NEAGĂ ȘI REFORMULEAZĂ: „Asta nu e slăbiciune. E onestitate.\" · ÎNCHIDE CU O "
+    "PROPOZIȚIE CARE RĂMÂNE · SPUNE ȘI CE AI GREȘIT TU"
+)
+
+
+def bloc_de_voce(profil_rol: dict[str, Any] | None, e_roleplay: bool) -> str:
+    """Cere folosirea vocii lui Andrei, nu doar prezenta ei in material."""
+    n = int((profil_rol or {}).get("nr_sesiuni_anterioare") or 0)
+    expresia = EXPRESII_ANDREI[n % len(EXPRESII_ANDREI)]
+    granita = (
+        "\n  ATENȚIE: asta e vocea ta de PROFESOR, în feedbackul de după replica omului. "
+        "Personajul pe care îl joci în scenă NU vorbește niciodată așa — el e altcineva."
+        if e_roleplay
+        else ""
+    )
+    return (
+        f"\n\n---\n"
+        f"CUM VORBEȘTI, ÎN FIECARE RĂSPUNS:\n"
+        f"- FOLOSEȘTE CEL PUȚIN O MIȘCARE din felul lui Andrei de a construi o idee: "
+        f"{_MISCARILE}.\n"
+        f"- O SINGURĂ DATĂ în sesiunea asta, acolo unde se potrivește firesc, spui exact: "
+        f"„{expresia}\" Nu o repeți, și nu folosești altă expresie de-a lui în sesiunea asta.\n"
+        f"- Propoziții scurte. Fără ceremonie. Ce ai de spus, spui direct.{granita}"
     )
 
 # Replica la care omul raspunde intrebarii de pornire. Salutul se genereaza la
@@ -442,6 +496,11 @@ def get_system_prompt_for_kind(
     if comanda and kind_val == "roleplay":
         comanda += bloc_de_distributie(profil_rol)
 
+    # Vocea vine INAINTEA comenzii: la replica de confirmare comanda ramane ultima
+    # (lacatul de la plicul 45), iar la toate celelalte replici — unde nu exista comanda —
+    # vocea devine ultimul lucru din prompt. Adica exact in feedbackul de dupa replica.
+    vocea = bloc_de_voce(profil_rol, e_roleplay=(kind_val == "roleplay"))
+
     if kind_val == "roleplay":
         # Actorul si evaluarea merg impreuna, ca in aplicatia veche si ca in plicul 22:
         # „peste el vine coach.md SAU PERECHEA actor.md + evaluare.md, dupa mod".
@@ -457,7 +516,7 @@ def get_system_prompt_for_kind(
         # nevoie de un comutator in cod.
         return (
             f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n"
-            f"{ACTOR_PROMPT}\n\n---\n\n{EVALUARE_PROMPT}{memory_block}{comanda}"
+            f"{ACTOR_PROMPT}\n\n---\n\n{EVALUARE_PROMPT}{memory_block}{vocea}{comanda}"
         )
 
     elif kind_val == "knowledge":
@@ -478,14 +537,14 @@ def get_system_prompt_for_kind(
             )
         return (
             f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n"
-            f"{QUIZ_PROMPT}{quiz_block}{memory_block}{comanda}"
+            f"{QUIZ_PROMPT}{quiz_block}{memory_block}{vocea}{comanda}"
         )
 
     else:
         # Coaching (strategie) or default. Singurul loc unde intra regulile de coaching.
         return (
             f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n"
-            f"{REGULI_COACHING_PROMPT}\n\n---\n\n{COACHING_PROMPT}{memory_block}"
+            f"{REGULI_COACHING_PROMPT}\n\n---\n\n{COACHING_PROMPT}{memory_block}{vocea}"
         )
 
 
