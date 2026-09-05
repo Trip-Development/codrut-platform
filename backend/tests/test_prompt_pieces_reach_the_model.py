@@ -631,8 +631,11 @@ def test_vocea_lui_andrei_e_ceruta_nu_doar_prezenta():
     Stateau intr-o lista, la inceputul unui prompt de 147.000 de semne, si nimic nu-i
     cerea vreodata sa le foloseasca. Andrei, 5 septembrie: „nu foloseste mai deloc stilul
     meu de a comunica".
+
+    Plicul 58: nu i se mai da un meniu de opt miscari din care sa aleaga — i se numeste
+    UNA, cu exemplul ei, la fiecare replica.
     """
-    from codrut.modules.practice.prompts import EXPRESII_ANDREI, bloc_de_voce
+    from codrut.modules.practice.prompts import MISCARI
 
     for mod in ("roleplay", "knowledge", "coaching"):
         p = get_system_prompt_for_kind(
@@ -640,48 +643,83 @@ def test_vocea_lui_andrei_e_ceruta_nu_doar_prezenta():
             quiz_competency="mix" if mod == "knowledge" else None,
             project_competencies=["A"], profil_rol={"nr_sesiuni_anterioare": 0},
         )
-        assert "CUM VORBEȘTI, ÎN FIECARE RĂSPUNS" in p, mod
-        assert "FOLOSEȘTE CEL PUȚIN O MIȘCARE" in p, mod
-        # mișcările se cer la fiecare replică, expresia o singură dată pe sesiune
-        assert "O SINGURĂ DATĂ în sesiunea asta" in p, mod
-        assert EXPRESII_ANDREI[0] in p, mod
+        assert "CUM VORBEȘTI ÎN RĂSPUNSUL ĂSTA" in p, mod
+        assert "OBLIGATORIU, o dată: mișcarea" in p, mod
+        # o singura miscare numita, nu opt insirate
+        numite = [nume for nume, _ in MISCARI if f"mișcarea **{nume}**" in p]
+        assert len(numite) == 1, (mod, numite)
 
 
-def test_expresia_se_roteste_ca_salutul():
+def test_o_singura_miscare_pe_replica_si_se_roteste():
+    """Un meniu fara chelner nu se comanda.
+
+    Plicul 57 a dat opt miscari intr-un paragraf si a cerut „foloseste cel putin una".
+    Masurat de Andrei: una din cinci replici a folosit ceva. Aceeasi lectie ca la saluturi.
+    """
+    from codrut.modules.practice.prompts import MISCARI, bloc_de_voce
+
+    def numita(bloc):
+        return bloc.split("mișcarea **")[1].split("**")[0]
+
+    # se schimba de la o replica la alta, si se reia dupa ce se termina lista
+    alese = [
+        numita(bloc_de_voce({"nr_sesiuni_anterioare": 0}, e_roleplay=False, history_length=2 * i))
+        for i in range(len(MISCARI))
+    ]
+    assert len(set(alese)) == len(MISCARI)
+    dupa = numita(
+        bloc_de_voce({"nr_sesiuni_anterioare": 0}, e_roleplay=False, history_length=2 * len(MISCARI))
+    )
+    assert dupa == alese[0]
+
+    # si se schimba si de la o sesiune la alta
+    s0 = numita(bloc_de_voce({"nr_sesiuni_anterioare": 0}, e_roleplay=False, history_length=0))
+    s1 = numita(bloc_de_voce({"nr_sesiuni_anterioare": 1}, e_roleplay=False, history_length=0))
+    assert s0 != s1
+
+    # fara profil nu crapa
+    assert numita(bloc_de_voce(None, e_roleplay=False, history_length=0)) == s0
+
+
+def test_expresia_se_cere_o_singura_data_si_se_roteste():
     """Andrei: „ar fi bine sa construiasca in tipare. Frazele mai rar."
 
-    O lista din care alege modelul singur inseamna, la o sesiune noua fara istoric, ca ia
-    mereu primul element — masurat la plicul 54.
+    Plicul 57 o cerea „acolo unde se potriveste firesc" — o judecata pe care modelul nu o
+    face: zero din cinci replici au folosit vreo expresie. Acum se cere la o replica
+    anume, si la celelalte e interzisa.
     """
-    from codrut.modules.practice.prompts import EXPRESII_ANDREI, bloc_de_voce
+    from codrut.modules.practice.prompts import (
+        EXPRESII_ANDREI,
+        REPLICA_CU_EXPRESIE,
+        bloc_de_voce,
+    )
 
-    alese = [
-        bloc_de_voce({"nr_sesiuni_anterioare": n}, e_roleplay=False)
-        for n in range(len(EXPRESII_ANDREI))
-    ]
-    assert len(set(alese)) == len(EXPRESII_ANDREI)
-    # se reia dupa ce se termina lista
-    assert bloc_de_voce({"nr_sesiuni_anterioare": len(EXPRESII_ANDREI)}, e_roleplay=False) == alese[0]
-    # fara profil nu crapa
-    assert bloc_de_voce(None, e_roleplay=False) == alese[0]
+    # la replica ei, una singura, scrisa in clar
+    cu = bloc_de_voce({"nr_sesiuni_anterioare": 0}, e_roleplay=False, history_length=REPLICA_CU_EXPRESIE)
+    gasite = [e for e in EXPRESII_ANDREI if e in cu]
+    assert gasite == [EXPRESII_ANDREI[0]]
+    assert "spui exact fraza asta, o dată" in cu
 
-    # o singura expresie pe bloc, nu toate
-    for i, bloc in enumerate(alese):
+    # la orice alta replica, interzisa
+    for h in (0, 2, 6, 8):
+        fara = bloc_de_voce({"nr_sesiuni_anterioare": 0}, e_roleplay=False, history_length=h)
+        assert not [e for e in EXPRESII_ANDREI if e in fara], h
+        assert "NU folosi niciuna dintre expresiile lui Andrei" in fara, h
+
+    # se roteste de la o sesiune la alta, si se reia.
+    # Se compara EXPRESIA, nu blocul intreg: si miscarea se roteste, dupa alt ciclu —
+    # zece expresii, opt miscari — deci blocurile nu se repeta la fel de des.
+    def aleasa(n):
+        bloc = bloc_de_voce(
+            {"nr_sesiuni_anterioare": n}, e_roleplay=False, history_length=REPLICA_CU_EXPRESIE
+        )
         gasite = [e for e in EXPRESII_ANDREI if e in bloc]
-        assert gasite == [EXPRESII_ANDREI[i]], i
+        assert len(gasite) == 1, (n, gasite)
+        return gasite[0]
 
-
-def test_personajul_din_scena_nu_vorbeste_ca_andrei():
-    """La role-play Cody joaca seful, colegul, clientul. Daca personajul ar vorbi ca
-    Andrei, scena ar fi falsa. Vocea lui apare in feedbackul de dupa replica."""
-    from codrut.modules.practice.prompts import bloc_de_voce
-
-    rp = bloc_de_voce({"nr_sesiuni_anterioare": 0}, e_roleplay=True)
-    assert "vocea ta de PROFESOR" in rp
-    assert "NU vorbește niciodată așa" in rp
-
-    altele = bloc_de_voce({"nr_sesiuni_anterioare": 0}, e_roleplay=False)
-    assert "vocea ta de PROFESOR" not in altele
+    alese = [aleasa(n) for n in range(len(EXPRESII_ANDREI))]
+    assert len(set(alese)) == len(EXPRESII_ANDREI)
+    assert aleasa(len(EXPRESII_ANDREI)) == alese[0]
 
 
 def test_vocea_e_ultima_cand_nu_exista_comanda_de_pornire():
@@ -695,6 +733,19 @@ def test_vocea_e_ultima_cand_nu_exista_comanda_de_pornire():
             quiz_competency="mix" if mod == "knowledge" else None,
             project_competencies=["A"], profil_rol={"nr_sesiuni_anterioare": 0},
         )
-        coada = p.rstrip()[-260:]
-        assert "CUM VORBEȘTI, ÎN FIECARE RĂSPUNS" in p, mod
+        coada = p.rstrip()[-300:]
+        assert "CUM VORBEȘTI ÎN RĂSPUNSUL ĂSTA" in p, mod
         assert "spui direct." in coada or "el e altcineva." in coada, mod
+
+def test_personajul_din_scena_nu_vorbeste_ca_andrei():
+    """La role-play Cody joaca seful, colegul, clientul. Daca personajul ar vorbi ca
+    Andrei, scena ar fi falsa. Vocea lui apare in feedbackul de dupa replica."""
+    from codrut.modules.practice.prompts import bloc_de_voce
+
+    rp = bloc_de_voce({"nr_sesiuni_anterioare": 0}, e_roleplay=True, history_length=4)
+    assert "vocea ta de PROFESOR" in rp
+    assert "NU vorbește niciodată așa" in rp
+
+    altele = bloc_de_voce({"nr_sesiuni_anterioare": 0}, e_roleplay=False, history_length=4)
+    assert "vocea ta de PROFESOR" not in altele
+

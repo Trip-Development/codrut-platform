@@ -162,34 +162,69 @@ EXPRESII_ANDREI = (
     "Trebuie să înțeleagă Țața Floarea.",
 )
 
-_MISCARILE = (
-    "MUTĂ PROBLEMA: „Problema nu e că tremuri. Problema e povestea pe care o spui despre "
-    "tremurat.\" · DOUĂ GREȘELI, APOI CE FUNCȚIONEAZĂ: „Prima greșeală… A doua greșeală… "
-    "Ce funcționează…\" · TREI VARIANTE, A TREIA E CEA BUNĂ · DISTINCȚIA ÎN PERECHI "
-    "SCURTE: „Agresivitatea atacă omul. Fermitatea apără poziția.\" · DEMONTEAZĂ UN MIT "
-    "SCURT: „Există o iluzie despre ascultare. Că dacă ești tăcut, asculți. Nu neapărat.\" "
-    "· NEAGĂ ȘI REFORMULEAZĂ: „Asta nu e slăbiciune. E onestitate.\" · ÎNCHIDE CU O "
-    "PROPOZIȚIE CARE RĂMÂNE · SPUNE ȘI CE AI GREȘIT TU"
+# Cele opt miscari, fiecare cu exemplul ei — plicul 58.
+#
+# Plicul 57 le-a dat pe toate opt intr-un paragraf si a cerut „foloseste cel putin una".
+# Masurat: una din cinci replici a folosit ceva. Un meniu fara chelner nu se comanda —
+# aceeasi lectie ca la saluturi si la distributia scenei. Deci alegem noi, una pe replica.
+MISCARI = (
+    ("MUTĂ PROBLEMA",
+     "„Problema nu e că tremuri. Problema e povestea pe care o spui despre tremurat.\""),
+    ("NEAGĂ ȘI REFORMULEAZĂ",
+     "„Asta nu e slăbiciune. E onestitate.\" / „Nu e duritate. E claritate.\""),
+    ("DISTINCȚIA ÎN PERECHI SCURTE",
+     "„Agresivitatea atacă omul. Fermitatea apără poziția. Agresivitatea vrea să câștige. "
+     "Fermitatea vrea să fie clară.\""),
+    ("DOUĂ GREȘELI, APOI CE FUNCȚIONEAZĂ",
+     "„Prima greșeală: … A doua greșeală: … Ce funcționează: …\""),
+    ("DEMONTEAZĂ UN MIT, SCURT",
+     "„Există o iluzie despre ascultare. Că dacă ești tăcut și te uiți la om, asculți. "
+     "Nu neapărat.\""),
+    ("TREI VARIANTE, A TREIA E CEA BUNĂ",
+     "„Prima e să cedezi înainte să te lupți. A doua e să ataci înainte să gândești. "
+     "A treia e să spui adevărul fără să faci victime.\""),
+    ("ÎNCHIDE CU O PROPOZIȚIE CARE RĂMÂNE",
+     "„Conflictul bine gestionat nu strică relațiile. Le curăță.\""),
+    ("SPUNE ȘI CE AI GREȘIT TU",
+     "„Am trimis și eu mesaje pe care le-am regretat.\""),
 )
 
+# Replica la care se cere expresia. Nu „unde se potriveste firesc" — aia e o judecata pe
+# care modelul nu o face. E prima evaluare de dupa SETUP, si numai acolo.
+REPLICA_CU_EXPRESIE = 4
 
-def bloc_de_voce(profil_rol: dict[str, Any] | None, e_roleplay: bool) -> str:
-    """Cere folosirea vocii lui Andrei, nu doar prezenta ei in material."""
+
+def bloc_de_voce(
+    profil_rol: dict[str, Any] | None,
+    e_roleplay: bool,
+    history_length: int = 0,
+) -> str:
+    """Ii spune UN lucru de facut acum, nu opt din care sa aleaga."""
     n = int((profil_rol or {}).get("nr_sesiuni_anterioare") or 0)
-    expresia = EXPRESII_ANDREI[n % len(EXPRESII_ANDREI)]
+    nume, exemplu = MISCARI[(n + history_length // 2) % len(MISCARI)]
     granita = (
         "\n  ATENȚIE: asta e vocea ta de PROFESOR, în feedbackul de după replica omului. "
         "Personajul pe care îl joci în scenă NU vorbește niciodată așa — el e altcineva."
         if e_roleplay
         else ""
     )
+    linia_expresiei = ""
+    if history_length == REPLICA_CU_EXPRESIE:
+        expresia = EXPRESII_ANDREI[n % len(EXPRESII_ANDREI)]
+        linia_expresiei = (
+            f"\n- ȘI, TOT ÎN RĂSPUNSUL ĂSTA, spui exact fraza asta, o dată: "
+            f"„{expresia}\" Nu o schimbi și nu adaugi altele."
+        )
+    else:
+        linia_expresiei = (
+            "\n- NU folosi niciuna dintre expresiile lui Andrei în răspunsul ăsta."
+        )
     return (
         f"\n\n---\n"
-        f"CUM VORBEȘTI, ÎN FIECARE RĂSPUNS:\n"
-        f"- FOLOSEȘTE CEL PUȚIN O MIȘCARE din felul lui Andrei de a construi o idee: "
-        f"{_MISCARILE}.\n"
-        f"- O SINGURĂ DATĂ în sesiunea asta, acolo unde se potrivește firesc, spui exact: "
-        f"„{expresia}\" Nu o repeți, și nu folosești altă expresie de-a lui în sesiunea asta.\n"
+        f"CUM VORBEȘTI ÎN RĂSPUNSUL ĂSTA:\n"
+        f"- OBLIGATORIU, o dată: mișcarea **{nume}**. Așa arată la el: {exemplu} "
+        f"Construiește la fel, dar despre situația de acum — nu copia exemplul."
+        f"{linia_expresiei}\n"
         f"- Propoziții scurte. Fără ceremonie. Ce ai de spus, spui direct.{granita}"
     )
 
@@ -499,7 +534,11 @@ def get_system_prompt_for_kind(
     # Vocea vine INAINTEA comenzii: la replica de confirmare comanda ramane ultima
     # (lacatul de la plicul 45), iar la toate celelalte replici — unde nu exista comanda —
     # vocea devine ultimul lucru din prompt. Adica exact in feedbackul de dupa replica.
-    vocea = bloc_de_voce(profil_rol, e_roleplay=(kind_val == "roleplay"))
+    vocea = bloc_de_voce(
+        profil_rol,
+        e_roleplay=(kind_val == "roleplay"),
+        history_length=history_length,
+    )
 
     if kind_val == "roleplay":
         # Actorul si evaluarea merg impreuna, ca in aplicatia veche si ca in plicul 22:
