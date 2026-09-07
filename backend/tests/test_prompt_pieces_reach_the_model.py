@@ -643,12 +643,10 @@ def test_vocea_lui_andrei_e_ceruta_nu_doar_prezenta():
             quiz_competency="mix" if mod == "knowledge" else None,
             project_competencies=["A"], profil_rol={"nr_sesiuni_anterioare": 0},
         )
-        # Plicul 59: miscarea nu mai e o cerinta de stil lipita la sfarsit, e bucata 2
-        # din forma raspunsului. „Scrie asa" se executa; „scrie frumos" nu.
-        assert "FORMA RĂSPUNSULUI TĂU DE ACUM" in p, mod
-        assert "Un răspuns fără bucata 2 e un răspuns greșit." in p, mod
+        assert "CUM VORBEȘTI ÎN RĂSPUNSUL ĂSTA" in p, mod
+        assert "OBLIGATORIU, o dată: mișcarea" in p, mod
         # o singura miscare numita, nu opt insirate
-        numite = [nume for nume, _ in MISCARI if f"**{nume}**" in p]
+        numite = [nume for nume, _ in MISCARI if f"mișcarea **{nume}**" in p]
         assert len(numite) == 1, (mod, numite)
 
 
@@ -661,7 +659,7 @@ def test_o_singura_miscare_pe_replica_si_se_roteste():
     from codrut.modules.practice.prompts import MISCARI, bloc_de_voce
 
     def numita(bloc):
-        return bloc.split("2. **")[1].split("**")[0]
+        return bloc.split("mișcarea **")[1].split("**")[0]
 
     # se schimba de la o replica la alta, si se reia dupa ce se termina lista
     alese = [
@@ -736,7 +734,7 @@ def test_vocea_e_ultima_cand_nu_exista_comanda_de_pornire():
             project_competencies=["A"], profil_rol={"nr_sesiuni_anterioare": 0},
         )
         coada = p.rstrip()[-300:]
-        assert "FORMA RĂSPUNSULUI TĂU DE ACUM" in p, mod
+        assert "CUM VORBEȘTI ÎN RĂSPUNSUL ĂSTA" in p, mod
         assert "spui direct." in coada or "el e altcineva." in coada, mod
 
 def test_personajul_din_scena_nu_vorbeste_ca_andrei():
@@ -751,32 +749,3 @@ def test_personajul_din_scena_nu_vorbeste_ca_andrei():
     altele = bloc_de_voce({"nr_sesiuni_anterioare": 0}, e_roleplay=False, history_length=4)
     assert "vocea ta de PROFESOR" not in altele
 
-
-
-# ---- plicul 59 ----
-
-
-def test_miscarea_e_parte_din_forma_nu_o_podoaba():
-    """Comanda de pornire se executa in 10 din 10 de zece zile. Cererea de voce, pusa in
-    exact acelasi loc, se executa in 2 din 6.
-
-    Diferenta nu e pozitia — e felul cererii: prima spune cum trebuie sa arate mesajul, a
-    doua cerea o podoaba peste un mesaj deja definit de o pagina de reguli de continut.
-    Intre „scrie asa" si „scrie frumos", modelul face primul.
-    """
-    from codrut.modules.practice.prompts import MISCARI, bloc_de_voce
-
-    bloc = bloc_de_voce({"nr_sesiuni_anterioare": 0}, e_roleplay=False, history_length=2)
-
-    # cele trei bucati, in ordine
-    i1 = bloc.index("1. Citezi scurt ce a spus omul")
-    i2 = bloc.index("2. **")
-    i3 = bloc.index("3. O întrebare care îl pune pe el")
-    assert i1 < i2 < i3
-
-    # miscarea e bucata 2, nu o cerinta lipita la sfarsit
-    numite = [nume for nume, _ in MISCARI if f"2. **{nume}**" in bloc]
-    assert len(numite) == 1, numite
-
-    # si e obligatorie, spus pe fata
-    assert "Un răspuns fără bucata 2 e un răspuns greșit." in bloc

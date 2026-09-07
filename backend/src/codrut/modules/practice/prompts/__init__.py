@@ -221,12 +221,9 @@ def bloc_de_voce(
         )
     return (
         f"\n\n---\n"
-        f"FORMA RĂSPUNSULUI TĂU DE ACUM, în ordinea asta, trei bucăți:\n"
-        f"1. Citezi scurt ce a spus omul — cuvintele lui, între ghilimele.\n"
-        f"2. **{nume}** — mișcarea de mai jos, construită pe situația de acum. "
-        f"Așa arată la Andrei: {exemplu} Nu copia exemplul; fă la fel, cu ce e aici.\n"
-        f"3. O întrebare care îl pune pe el să gândească mai departe.\n"
-        f"Un răspuns fără bucata 2 e un răspuns greșit."
+        f"CUM VORBEȘTI ÎN RĂSPUNSUL ĂSTA:\n"
+        f"- OBLIGATORIU, o dată: mișcarea **{nume}**. Așa arată la el: {exemplu} "
+        f"Construiește la fel, dar despre situația de acum — nu copia exemplul."
         f"{linia_expresiei}\n"
         f"- Propoziții scurte. Fără ceremonie. Ce ai de spus, spui direct.{granita}"
     )
