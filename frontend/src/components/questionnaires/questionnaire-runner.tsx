@@ -436,9 +436,9 @@ export function QuestionnaireRunner({
     }
   }
 
-  async function saveDraftAndExit() {
+  async function saveDraftAndExit(destination: string = returnHref) {
     if (!assignmentId || isComplete) {
-      router.push(returnHref);
+      router.push(destination);
       return;
     }
     if (terminalOperationRef.current) return;
@@ -475,7 +475,7 @@ export function QuestionnaireRunner({
       draftDirtyRef.current = false;
       setActiveOperation(null);
       setSaveError(null);
-      router.push(returnHref);
+      router.push(destination);
     } catch (error) {
       terminalOperationRef.current = null;
       setIsExiting(false);
@@ -561,6 +561,19 @@ export function QuestionnaireRunner({
               )}
               <span aria-hidden="true">{isExiting ? "Se salvează" : "Înapoi"}</span>
             </Button>
+            {nextTaskHref && !isComplete ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void saveDraftAndExit(nextTaskHref)}
+                disabled={isExiting || activeOperation === "submit"}
+                className="text-muted-foreground hover:text-primary"
+              >
+                Sar peste, revin mai târziu
+                <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
+              </Button>
+            ) : null}
           </div>
 
           <div className="mt-5 max-w-3xl">

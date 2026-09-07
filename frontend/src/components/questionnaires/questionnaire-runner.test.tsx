@@ -971,6 +971,153 @@ describe("QuestionnaireRunner", () => {
     ).toBe("/participant/questionnaires");
   });
 
+  it("offers to skip to the next 360 review while the questionnaire is still being filled in", () => {
+    render(
+      <QuestionnaireRunner
+        definition={mockDefinition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 1 }}
+        returnHref="/participant/questionnaires"
+        nextTaskHref="/participant/questionnaires/boss_360?assignmentId=next-review"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /Sar peste, revin mai târziu/ })).toBeTruthy();
+  });
+
+  it("hides the skip action when there is no other pending review", () => {
+    render(
+      <QuestionnaireRunner
+        definition={mockDefinition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 1 }}
+        returnHref="/participant/questionnaires"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /Sar peste, revin mai târziu/ })).toBeNull();
+  });
+
+  it("hides the skip action once the questionnaire has been submitted", () => {
+    render(
+      <QuestionnaireRunner
+        definition={mockDefinition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 2 }}
+        initialStatus="submitted"
+        returnHref="/participant/questionnaires"
+        nextTaskHref="/participant/questionnaires/boss_360?assignmentId=next-review"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /Sar peste, revin mai târziu/ })).toBeNull();
+    expect(
+      screen.getByRole("link", { name: /Continuă cu următorul review/ }).getAttribute("href"),
+    ).toBe("/participant/questionnaires/boss_360?assignmentId=next-review");
+  });
+
+  it("saves the draft before navigating to the skipped review", async () => {
+    let resolveSave!: () => void;
+    const savePromise = new Promise<Awaited<ReturnType<typeof saveQuestionnaireResponse>>>((resolve) => {
+      resolveSave = () => resolve({ status: "draft" } as Awaited<ReturnType<typeof saveQuestionnaireResponse>>);
+    });
+    vi.mocked(saveQuestionnaireResponse).mockReturnValueOnce(savePromise);
+
+    render(
+      <QuestionnaireRunner
+        definition={mockDefinition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 1 }}
+        returnHref="/participant/questionnaires"
+        nextTaskHref="/participant/questionnaires/boss_360?assignmentId=next-review"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Sar peste, revin mai târziu/ }));
+
+    await waitFor(() => {
+      expect(saveQuestionnaireResponse).toHaveBeenCalledWith(
+        "test-assignment",
+        { q1: 1 },
+        { expectedUpdatedAt: null },
+      );
+    });
+    expect(routerPush).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveSave();
+      await savePromise;
+    });
+
+    await waitFor(() => {
+      expect(routerPush).toHaveBeenCalledWith(
+        "/participant/questionnaires/boss_360?assignmentId=next-review",
+      );
+    });
+  });
+
+  it("does not allow skipping while the final submission is pending", async () => {
+    let resolveSubmit!: () => void;
+    const submitPromise = new Promise<Awaited<ReturnType<typeof submitQuestionnaireResponse>>>((resolve) => {
+      resolveSubmit = () => resolve({ status: "submitted" } as Awaited<ReturnType<typeof submitQuestionnaireResponse>>);
+    });
+    vi.mocked(submitQuestionnaireResponse).mockReturnValueOnce(submitPromise);
+
+    render(
+      <QuestionnaireRunner
+        definition={mockDefinition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 2 }}
+        returnHref="/participant/questionnaires"
+        nextTaskHref="/participant/questionnaires/boss_360?assignmentId=next-review"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Trimite răspunsurile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Trimite" }));
+
+    const skipButton = await screen.findByRole("button", { name: /Sar peste, revin mai târziu/ });
+    expect((skipButton as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(skipButton);
+
+    expect(saveQuestionnaireResponse).not.toHaveBeenCalled();
+    expect(routerPush).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveSubmit();
+      await submitPromise;
+    });
+
+    expect(saveQuestionnaireResponse).not.toHaveBeenCalled();
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it("keeps the back action pointing at the task list even when a skip target exists", async () => {
+    render(
+      <QuestionnaireRunner
+        definition={mockDefinition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 1 }}
+        returnHref="/participant/questionnaires"
+        nextTaskHref="/participant/questionnaires/boss_360?assignmentId=next-review"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Înapoi la chestionare" }));
+
+    await waitFor(() => {
+      expect(routerPush).toHaveBeenCalledWith("/participant/questionnaires");
+    });
+    expect(routerPush).not.toHaveBeenCalledWith(
+      "/participant/questionnaires/boss_360?assignmentId=next-review",
+    );
+    expect(saveQuestionnaireResponse).toHaveBeenCalledWith(
+      "test-assignment",
+      { q1: 1 },
+      { expectedUpdatedAt: null },
+    );
+  });
+
   it("shows a stale-session message when another tab changes the active account", async () => {
     vi.mocked(submitQuestionnaireResponse).mockRejectedValueOnce(
       new QuestionnaireRequestError("Sesiunea activă nu este un cont de participant.", 403),
