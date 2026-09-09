@@ -626,9 +626,25 @@ class PracticeSessionService:
             await self.session.flush()
 
             # 6. Build GenerationRequest
+            # Replici ale omului lipite una de alta = urme de la generari esuate — plicul 64.
+            #
+            # Replica omului se salveaza inainte de a chema modelul si RAMANE salvata daca
+            # modelul refuza (vezi „participant turn remains saved in DB", mai jos). Omul mai
+            # apasa o data, se salveaza inca un rand identic. In sesiunea auditorului au fost
+            # SASE la rand, fara niciun raspuns intre ele.
+            #
+            # Modelul primea o conversatie stricata: aceeasi replica de mai multe ori. De aici
+            # raspunsul identic la replici diferite, si reprosul „ai ocolit «te rog»" exact
+            # cand omul spusese „te rog".
+            #
+            # Nu stergem nimic din baza — doar nu mai trimitem urmele la model. Asa se repara
+            # si sesiunile deja stricate.
             messages: list[GenerationMessage] = []
             for t in existing_turns:
                 role_str = "user" if t.role == TurnRole.participant else "model"
+                if messages and messages[-1].role == role_str == "user":
+                    messages[-1] = GenerationMessage(role="user", text=t.text)
+                    continue
                 messages.append(GenerationMessage(role=role_str, text=t.text))
             messages.append(GenerationMessage(role="user", text=text))
 
@@ -700,6 +716,12 @@ class PracticeSessionService:
             await self.session.commit()
 
             # 9. Invoke model generation provider
+            logger.info(
+                "practice_generare sesiune=%s mesaje=%s ultima_replica_om=%r",
+                session_id,
+                len(messages),
+                messages[-1].text[:80] if messages else "",
+            )
             try:
                 result = await self.generation_provider.generate(request)
             except Exception:
