@@ -224,16 +224,43 @@ class VertexGenerationProvider:
             client = httpx.AsyncClient(timeout=float(self.settings.vertex_timeout_seconds))
             owns_client = True
 
-        try:
-            response = await client.post(url, json=payload, headers=headers)
-        except Exception as exc:
+        # Cand furnizorul e aglomerat, mai incercam — plicul 63.
+        #
+        # Masurat pe 7 septembrie: sase din noua cereri au primit 429 intr-o fereastra de
+        # sase minute, iar omul a vazut „Nu am putut trimite mesajul" de fiecare data.
+        # Cererea se trimitea O SINGURA DATA. Un refuz de o secunda inseamna o replica
+        # pierduta definitiv, si o sesiune de antrenament rupta la mijloc.
+        #
+        # Pauzele sunt scurte dinadins: omul asteapta in fata ecranului.
+        PAUZE = (2.0, 5.0)
+        response = None
+        for incercare in range(len(PAUZE) + 1):
+            try:
+                response = await client.post(url, json=payload, headers=headers)
+            except Exception as exc:
+                if owns_client:
+                    await client.aclose()
+                raise GenerationError(
+                    f"Vertex AI network request failed: {type(exc).__name__}",
+                    code="vertex_network_error",
+                ) from exc
+
+            if response.status_code not in (429, 503):
+                break
+            if incercare < len(PAUZE):
+                await asyncio.sleep(PAUZE[incercare])
+
+        if owns_client:
+            await client.aclose()
+
+        if response.status_code in (429, 503):
+            # Cod separat dinadins: interfata trebuie sa poata spune „e aglomerat,
+            # incearca din nou", nu „nu am putut trimite".
             raise GenerationError(
-                f"Vertex AI network request failed: {type(exc).__name__}",
-                code="vertex_network_error",
-            ) from exc
-        finally:
-            if owns_client:
-                await client.aclose()
+                f"Vertex AI is busy (HTTP {response.status_code}) after "
+                f"{len(PAUZE) + 1} tries",
+                code="vertex_rate_limited",
+            )
 
         if response.status_code != 200:
             raise GenerationError(
