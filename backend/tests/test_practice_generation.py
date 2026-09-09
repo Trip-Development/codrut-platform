@@ -31,6 +31,7 @@ from codrut.modules.practice.budget import (
     reserve,
     settle,
 )
+from codrut.modules.practice import generation_provider as modul_furnizor
 from codrut.modules.practice.generation_provider import (
     LocalGenerationProvider,
     VertexGenerationProvider,
@@ -405,3 +406,116 @@ async def test_budget_reconciliation_refusal_on_released_or_settled_reservation(
         assert exc_release_settled.value.code == "invalid_reservation_state"
 
         await session.rollback()
+
+
+# --- plicul 63: cand furnizorul e aglomerat, mai incercam ---
+#
+# Masurat pe 7 septembrie: sase din noua cereri catre Vertex au primit 429 intr-o
+# fereastra de sase minute, iar omul a vazut „Nu am putut trimite mesajul" de fiecare
+# data, fiindca cererea se trimitea o singura data.
+
+
+def _furnizor_de_proba(client: httpx.AsyncClient) -> VertexGenerationProvider:
+    settings = Settings(
+        generation_provider="vertex",
+        vertex_project_id="test-project",
+        vertex_region="europe-west4",
+        vertex_actor_model="gemini-2.5-flash",
+    )
+    mock_credentials = MagicMock()
+    mock_credentials.valid = True
+    mock_credentials.token = "mock-token"  # noqa: S105
+    return VertexGenerationProvider(
+        settings=settings,
+        credentials=mock_credentials,
+        client=client,
+    )
+
+
+@pytest.mark.asyncio
+async def test_cand_furnizorul_e_aglomerat_replica_tot_ajunge(monkeypatch) -> None:
+    """503, apoi 429, apoi 200: generate intoarce textul, nu arunca."""
+    pauze: list[float] = []
+
+    async def fara_asteptare(secunde: float) -> None:
+        pauze.append(secunde)
+
+    monkeypatch.setattr(modul_furnizor.asyncio, "sleep", fara_asteptare)
+
+    raspuns_bun = {
+        "candidates": [
+            {
+                "content": {"role": "model", "parts": [{"text": "A ajuns."}]},
+                "finishReason": "STOP",
+            }
+        ],
+        "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5},
+    }
+    coduri = [503, 429, 200]
+    cereri: list[httpx.Request] = []
+
+    def raspunde(req: httpx.Request) -> httpx.Response:
+        cereri.append(req)
+        cod = coduri[len(cereri) - 1]
+        if cod == 200:
+            return httpx.Response(200, json=raspuns_bun)
+        return httpx.Response(cod, json={"error": "busy"})
+
+    transport = httpx.MockTransport(raspunde)
+    async with httpx.AsyncClient(transport=transport) as client:
+        rezultat = await _furnizor_de_proba(client).generate(GenerationRequest(messages=()))
+
+    assert rezultat.text == "A ajuns."
+    assert len(cereri) == 3, "cererea trebuie reincercata, nu trimisa o singura data"
+    assert pauze == [2.0, 5.0], "pauzele scurte, in ordinea din plicul 63"
+
+
+@pytest.mark.asyncio
+async def test_aglomerat_de_trei_ori_are_cod_separat(monkeypatch) -> None:
+    """429 de trei ori: cod `vertex_rate_limited`, nu `vertex_http_error`.
+
+    Interfata trebuie sa poata spune „e aglomerat acum", nu „nu am putut trimite".
+    """
+
+    async def fara_asteptare(secunde: float) -> None:
+        return None
+
+    monkeypatch.setattr(modul_furnizor.asyncio, "sleep", fara_asteptare)
+
+    cereri: list[httpx.Request] = []
+
+    def raspunde(req: httpx.Request) -> httpx.Response:
+        cereri.append(req)
+        return httpx.Response(429, json={"error": "busy"})
+
+    transport = httpx.MockTransport(raspunde)
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(GenerationError) as exc_info:
+            await _furnizor_de_proba(client).generate(GenerationRequest(messages=()))
+
+    assert exc_info.value.code == "vertex_rate_limited"
+    assert len(cereri) == 3, "trei incercari inainte de a renunta"
+
+
+@pytest.mark.asyncio
+async def test_o_eroare_adevarata_nu_se_reincearca(monkeypatch) -> None:
+    """500 nu e aglomeratie: se opreste din prima, cu `vertex_http_error`."""
+
+    async def fara_asteptare(secunde: float) -> None:
+        raise AssertionError("nu se asteapta pentru o eroare care nu e aglomeratie")
+
+    monkeypatch.setattr(modul_furnizor.asyncio, "sleep", fara_asteptare)
+
+    cereri: list[httpx.Request] = []
+
+    def raspunde(req: httpx.Request) -> httpx.Response:
+        cereri.append(req)
+        return httpx.Response(500, json={"error": "stricat"})
+
+    transport = httpx.MockTransport(raspunde)
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(GenerationError) as exc_info:
+            await _furnizor_de_proba(client).generate(GenerationRequest(messages=()))
+
+    assert exc_info.value.code == "vertex_http_error"
+    assert len(cereri) == 1
