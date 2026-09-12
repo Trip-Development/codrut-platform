@@ -193,6 +193,25 @@ CORE_SLOTS = [
     ]),
 ]
 
+# Cursurile lui Andrei, pentru QUIZ SI NUMAI PENTRU QUIZ — plicul 67.
+#
+# Alese de Andrei pe 12 septembrie: „intra cursul de asertivitate si cursul de feedback".
+# Sunt suporturile lui de curs, convertite din PDF in biblioteca:
+#   · CURS COMUNICARE ASERTIVA TRIP DEVELOPMENT — 6.763 cuvinte, 65.539 octeti
+#   · FEEDBACK LIKE A PRO, trainer Andrei Vacaru — 2.853 cuvinte, 28.041 octeti
+#
+# NU intra in role-play si nici in coaching: acolo promptul e masurat si reglat pe sase
+# sesiuni, iar 93 KB in plus la fiecare replica nu ajuta cu nimic si strica prefixul
+# constant pe care se prinde memoria de context.
+#
+# Caile sunt relative la PARINTELE lui 00-miez, nu la 00-miez.
+CURSURILE_TEMEI = [
+    ("CURS-COMUNICARE-ASERTIVA", "02-asertivitate/curs-comunicare-asertiva-trip-development.md"),
+    ("CURS-FEEDBACK", "03-feedback/feedback-training-1-zi.md"),
+]
+
+_CURS_CACHE: dict[str, tuple[str, int]] = {}
+
 _MATERIAL_CACHE: dict[str, tuple[str, int]] = {}
 
 
@@ -249,6 +268,32 @@ def get_core_material(biblioteca_path: str = "") -> tuple[str, int]:
     return combined, byte_count
 
 
+def get_material_de_curs(biblioteca_path: str = "") -> tuple[str, int]:
+    """Suporturile de curs ale lui Andrei. Se folosesc DOAR la quiz — plicul 67."""
+    cache_key = biblioteca_path or "default"
+    if cache_key in _CURS_CACHE:
+        return _CURS_CACHE[cache_key]
+
+    miez_dir = resolve_biblioteca_dir(biblioteca_path)
+    if not miez_dir:
+        logger.warning("Folderul BIBLIOTECA nu a fost gasit — quizul ramane fara curs.")
+        return "", 0
+
+    pachet_dir = miez_dir.parent
+    sections: list[str] = []
+    for label, rel in CURSURILE_TEMEI:
+        fp = pachet_dir / rel
+        if fp.exists():
+            sections.append(f"\n\n--- {label} ---\n{fp.read_text(encoding='utf-8').strip()}")
+        else:
+            logger.warning(f"Cursul {rel} lipseste din {pachet_dir}")
+
+    combined = "".join(sections)
+    byte_count = len(combined.encode("utf-8"))
+    _CURS_CACHE[cache_key] = (combined, byte_count)
+    return combined, byte_count
+
+
 def build_quiz_block(
     quiz_competency: str = "mix",
     is_first: bool = True,
@@ -275,6 +320,22 @@ def build_quiz_block(
             f'lucreze. Treci DIRECT la "Întrebarea 1/{nr}:", în aceeași replică.\n'
             f'6. SCOR FINAL: "🏆 Scor final: X/{nr} (Y%)"\n'
             f"7. INTERZIS: coaching, întrebări deschise, ieșire din quiz.\n"
+            f"8. DE UNDE IEI ÎNTREBĂRILE — regula cea mai importantă: EXCLUSIV din cele "
+            f"două cursuri de mai sus (CURS-COMUNICARE-ASERTIVA și CURS-FEEDBACK). Fiecare "
+            f"întrebare verifică ceva ce SCRIE ACOLO. Dacă un răspuns nu se poate găsi în "
+            f"cursuri, întrebarea nu e bună.\n"
+            f"9. AMESTEC: aproximativ jumătate întrebări punctuale din curs (o regulă, un "
+            f"pas, o distincție, o greșeală tipică) și jumătate întrebări care pornesc de la "
+            f"o SITUAȚIE DE LA LOCUL DE MUNCĂ, descrisă în două rânduri, și întreabă ce e de "
+            f"făcut sau de spus. Variantele A-D sunt lucruri pe care un om chiar le-ar zice "
+            f"sau le-ar face.\n"
+            f"10. INTERZIS SĂ ÎNTREBI DESPRE TINE, DESPRE ANDREI SAU DESPRE METODA TA. "
+            f"Nicio întrebare nu conține „Cody”, „Andrei”, „filozofia lui”, „abordarea ta”. "
+            f"Omul e verificat pe materia de la curs, nu pe cum ești tu construit.\n"
+            f"11. LIMBAJUL E AL OMULUI, NU AL MANUALULUI DE CONSTRUCȚIE. INTERZIS: "
+            f"„deconstrucție”, „narativ”, „trade-off”, „PCM”, „stare de Adult”. Termenii din "
+            f"curs (asertiv, pasiv, agresiv, EEC și ceilalți) se folosesc, fiindcă omul i-a "
+            f"învățat acolo — dar explicați în cuvinte simple, nu presupuși.\n"
             f"Tema: {target}.\n---"
         )
     return (
@@ -282,6 +343,9 @@ def build_quiz_block(
         f"COMPETENȚĂ: {target}\n"
         f"NR TOTAL: {nr}\n"
         f'După răspuns: "✓/✗ + explicație" → "[🏆 Scor: X pct]" → "Întrebarea [N+1]/{nr}:"\n'
+        f"ÎNTREBĂRILE IES EXCLUSIV DIN CELE DOUĂ CURSURI, amestecat: punctuale din curs și "
+        f"situații de la locul de muncă. INTERZIS întrebări despre Cody, despre Andrei sau "
+        f"despre metodă; interzis jargonul de manual.\n"
         f"INTERZIS: coaching, fraze de tranziție, ieșire din quiz.\n---"
     )
 
@@ -476,9 +540,10 @@ def get_system_prompt_for_kind(
                 is_first=(history_length <= 2),
                 project_competencies=project_competencies,
             )
+        curs, _ = get_material_de_curs(biblioteca_path)
         return (
             f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n"
-            f"{QUIZ_PROMPT}{quiz_block}{memory_block}{comanda}"
+            f"{curs}\n\n---\n\n{QUIZ_PROMPT}{quiz_block}{memory_block}{comanda}"
         )
 
     else:

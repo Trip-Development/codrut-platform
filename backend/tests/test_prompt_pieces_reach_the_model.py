@@ -637,3 +637,72 @@ def test_evaluarea_cere_replica_scrisa_nu_o_mai_interzice():
     assert "PUNCTAJUL E OBLIGATORIU LA FIECARE REPLICĂ" in prompt
     # interdictia veche nu mai are voie sa fie nicaieri in promptul trimis
     assert "fraza gata formulată" not in prompt
+
+
+# --- plicul 67: cursul ajunge la quiz, si numai la quiz ---
+#
+# Andrei a probat quizul pe 12 septembrie: „Intrebarile sunt despre Cody, nu despre situatii
+# sau comunicare." Prima intrebare primita: „Care este scopul principal al deconstructiei
+# fricii in comunicarea asertiva, conform filozofiei lui Andrei?"
+#
+# Doua cauze: blocul de quiz nu spunea DESPRE CE sunt intrebarile, si Cody nu avea cursul —
+# 34.585 de octeti de teorie fata de 112.460 despre el insusi. Daca nu-i spui de unde sa
+# intrebe, intreaba din ce are mai mult.
+
+CURS_UNU = "CURS COMUNICARE ASERTIVA TRIP DEVELOPMENT"
+CURS_DOI = "FEEDBACK LIKE A PRO"
+
+
+def test_cursurile_ajung_la_quiz():
+    """Cele doua suporturi de curs si regula care spune de unde se iau intrebarile."""
+    prompt = get_system_prompt_for_kind(
+        "knowledge", name="Andrei", history_length=3, quiz_competency="mix"
+    )
+
+    assert CURS_UNU in prompt
+    assert CURS_DOI in prompt
+    assert "ÎNTREBĂRILE IES EXCLUSIV DIN CELE DOUĂ CURSURI" in prompt
+
+
+def test_la_pornirea_quizului_regulile_de_continut_sunt_acolo():
+    """Blocul de pornire (history_length <= 2) poarta regulile 8-11, scrise intregi."""
+    prompt = get_system_prompt_for_kind(
+        "knowledge", name="Andrei", history_length=2, quiz_competency="mix"
+    )
+
+    assert "DE UNDE IEI ÎNTREBĂRILE" in prompt
+    assert "INTERZIS SĂ ÎNTREBI DESPRE TINE, DESPRE ANDREI SAU DESPRE METODA TA" in prompt
+    assert "LIMBAJUL E AL OMULUI, NU AL MANUALULUI DE CONSTRUCȚIE" in prompt
+    assert "SITUAȚIE DE LA LOCUL DE MUNCĂ" in prompt
+
+
+def test_cursul_NU_intra_la_role_play_si_nici_la_coaching():
+    """Lacatul care conteaza cel mai mult: role-play-ul nu se atinge.
+
+    Promptul de role-play e masurat si reglat pe sase sesiuni reale. 93 KB in plus la
+    fiecare replica nu ajuta cu nimic si strica prefixul constant pe care se prinde
+    memoria de context.
+    """
+    for mod in ("roleplay", "coaching"):
+        prompt = get_system_prompt_for_kind(mod, name="Andrei", history_length=3)
+        assert CURS_UNU not in prompt, f"cursul a ajuns la {mod}"
+        assert CURS_DOI not in prompt, f"cursul a ajuns la {mod}"
+
+
+def test_prefixul_dinaintea_quizului_e_acelasi_ca_la_role_play():
+    """`material` + `reguli_generale` sunt identice la quiz si la role-play.
+
+    Verificat pe text, nu pe ochi: cursul se lipeste DUPA reguli_generale, tocmai ca
+    partea dinainte sa ramana bit cu bit aceeasi si memoria de context sa se prinda pe ea.
+    """
+    quiz = get_system_prompt_for_kind(
+        "knowledge", name="Andrei", history_length=3, quiz_competency="mix"
+    )
+    roleplay = get_system_prompt_for_kind("roleplay", name="Andrei", history_length=3)
+
+    separator = "\n\n---\n\n"
+    prefix_quiz = separator.join(quiz.split(separator)[:2])
+    prefix_roleplay = separator.join(roleplay.split(separator)[:2])
+
+    assert prefix_quiz == prefix_roleplay
+    assert len(prefix_quiz) > 10000, "prefixul trebuie sa fie materialul intreg, nu o farama"
