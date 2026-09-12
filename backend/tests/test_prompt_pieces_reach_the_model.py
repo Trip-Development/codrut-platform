@@ -83,7 +83,7 @@ def test_memoria_ajunge_in_prompt_la_inceputul_sesiunii():
 
 def test_versiunea_promptului_a_urcat():
     """Compozitia s-a schimbat; fara urcare, sesiunile nu se mai pot compara."""
-    assert CODY_PROMPT_VERSION == "v3.3"
+    assert CODY_PROMPT_VERSION == "v3.4"
 
 
 def test_serviciul_chiar_trimite_cele_trei_piese():
@@ -413,7 +413,11 @@ def test_comanda_de_pornire_e_ULTIMUL_lucru_din_prompt():
     assert "DISTRIBUȚIA SCENEI" in coada
     # nimic altceva nu se strecoara intre ele
     assert coada.index(COMANDA_DE_PORNIRE["roleplay"]) < coada.index("DISTRIBUȚIA SCENEI")
-    assert rp.rstrip().endswith("se schimbă doar cu cine.")
+    # Plicul 68: blocul de distributie se termina acum cu numele personajului, ales in
+    # cod. Coada promptului e tot comanda + distributia, in ordinea asta — s-a mutat
+    # doar ultima propozitie a distributiei.
+    assert rp.rstrip().endswith("Nu-i da alt nume și nu inventa altul.")
+    assert "se schimbă doar cu cine." in coada
 
 
 def test_comanda_apare_doar_la_replica_de_confirmare():
@@ -706,3 +710,66 @@ def test_prefixul_dinaintea_quizului_e_acelasi_ca_la_role_play():
 
     assert prefix_quiz == prefix_roleplay
     assert len(prefix_quiz) > 10000, "prefixul trebuie sa fie materialul intreg, nu o farama"
+
+
+# --- plicul 68: personajul are un nume ales in cod, si pragul urca la 9 ---
+#
+# Masurat pe prima sesiune cu plicul 66 pus: punctajele au fost 8, 9, 10, 10, 8, 9, 9, 9,
+# 10. Minimul a fost 8, deci regula „sub 8" nu s-a declansat niciodata si replica model a
+# aparut de zero ori din noua. Lucrul cel mai valoros era legat de un prag care nu se
+# atinge.
+#
+# In aceeasi sesiune, personajul a fost semnat „Andrei (eu, colega ta)" — numele
+# participantului — desi setup-ul spunea ca o cheama Elena. Interdictia exista deja in
+# reguli-generale.md si nu s-a tinut. Iar „domnul Popescu" a aparut de patru ori.
+
+
+def test_personajul_primeste_un_nume_din_lista():
+    """Numele nu se mai cere modelului, se alege in cod si i se da unul singur."""
+    from codrut.modules.practice.prompts import NUME_PERSONAJ, bloc_de_distributie
+
+    bloc = bloc_de_distributie({"nr_roleplay_anterioare": 0}, "Andrei")
+
+    assert "PERSONAJUL SE NUMEȘTE" in bloc
+    gasite = [nume for nume in NUME_PERSONAJ if nume in bloc]
+    assert len(gasite) == 1, f"trebuie exact un nume, am gasit {gasite}"
+
+
+def test_personajul_nu_poarta_niciodata_numele_participantului():
+    """Lacatul care conteaza: regula tine pe TOATA lista, nu doar intr-un caz.
+
+    Pentru fiecare sesiune, daca participantul se cheama fix cum s-ar fi chemat personajul,
+    se alege altul. Asta e diferenta fata de o interdictie scrisa in prompt: aici nu are
+    cum sa nu se tina.
+    """
+    from codrut.modules.practice.prompts import NUME_PERSONAJ, _numele_personajului
+
+    for n in range(len(NUME_PERSONAJ)):
+        ar_fi_iesit = NUME_PERSONAJ[n % len(NUME_PERSONAJ)].split(" ")[0]
+        ales = _numele_personajului(n, ar_fi_iesit)
+        assert ales.split(" ")[0].lower() != ar_fi_iesit.lower(), (
+            f"la sesiunea {n}, personajul poarta numele participantului: {ales}"
+        )
+        assert ales in NUME_PERSONAJ
+
+
+def test_zece_sesiuni_zece_nume_diferite():
+    """„Domnul Popescu" de patru ori. Acum numaratorul tine varietatea, nu modelul."""
+    from codrut.modules.practice.prompts import _numele_personajului
+
+    nume = [_numele_personajului(n, "Andrei") for n in range(10)]
+
+    assert len(set(nume)) == 10, f"se repeta: {nume}"
+    assert not any("Popescu" in x for x in nume)
+
+
+def test_pragul_replicii_model_e_sub_9():
+    """Andrei, 12 septembrie: „muta punctajul la sub 9. Nici sa fim mai catolici decat papa."
+
+    Pragul vechi nu s-a atins niciodata in noua replici, deci replica model n-a aparut deloc.
+    """
+    prompt = get_system_prompt_for_kind("roleplay", name="Andrei", history_length=3)
+
+    assert "ORI DE CÂTE ORI DAI SUB 9" in prompt
+    assert "SUB 8" not in prompt
+    assert "De la 9 în sus spui ce a mers" in prompt
