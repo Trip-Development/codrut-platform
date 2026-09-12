@@ -25,8 +25,9 @@ def test_la_roleplay_evaluarea_merge_impreuna_cu_actorul():
 
     assert ACTOR_PROMPT in prompt
     assert EVALUARE_PROMPT in prompt
-    # regula pedagogica cea mai valoroasa, din evaluare.md
-    assert "INTERZIS ABSOLUT" in prompt
+    # regula pedagogica cea mai valoroasa, din evaluare.md — plicul 66: replica se SCRIE
+    assert "REPLICA SE SCRIE, NU SE DESCRIE" in prompt
+    assert "PUNCTAJUL E OBLIGATORIU LA FIECARE REPLICĂ" in prompt
     # si lista de jargon interzis, din reguli-generale.md
     assert "SENZORUL ANTI-PAPAGAL" in prompt or "ANTI-SALUT" in prompt
 
@@ -82,7 +83,7 @@ def test_memoria_ajunge_in_prompt_la_inceputul_sesiunii():
 
 def test_versiunea_promptului_a_urcat():
     """Compozitia s-a schimbat; fara urcare, sesiunile nu se mai pot compara."""
-    assert CODY_PROMPT_VERSION == "v3.1"
+    assert CODY_PROMPT_VERSION == "v3.3"
 
 
 def test_serviciul_chiar_trimite_cele_trei_piese():
@@ -620,3 +621,19 @@ def test_salutul_se_alege_in_cod_nu_la_voia_modelului():
     tarziu = get_system_prompt_for_kind("roleplay", name="Ion Popescu", history_length=4)
     assert "- SALUTUL:" not in tarziu
     assert "REGULA ANTI-SALUT" in tarziu
+
+
+def test_evaluarea_cere_replica_scrisa_nu_o_mai_interzice():
+    """Plicul 66: ce cautam doua saptamani era interzis chiar in prompt.
+
+    Masurat de Andrei pe sase sesiuni reale, pe 12 septembrie: punctajul a aparut singur
+    in 2 din 6, iar replica refacuta, scrisa cu cuvinte, in zero dintr-o sesiune de zece
+    replici. Cand a aparut, a functionat — omul a folosit-o si punctajul a urcat de la 7
+    la 8. Cauza nu era o regula lipsa, ci una care o interzicea.
+    """
+    prompt = get_system_prompt_for_kind("roleplay", name="Andrei", history_length=3)
+
+    assert "REPLICA SE SCRIE, NU SE DESCRIE" in prompt
+    assert "PUNCTAJUL E OBLIGATORIU LA FIECARE REPLICĂ" in prompt
+    # interdictia veche nu mai are voie sa fie nicaieri in promptul trimis
+    assert "fraza gata formulată" not in prompt
