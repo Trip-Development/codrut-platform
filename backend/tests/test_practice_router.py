@@ -366,7 +366,7 @@ async def test_trainer_direct_entry_succeeds_when_enabled():
 def test_cody_prompt_content_and_version():
     """Verify that prompts contain the exact SYSTEM_PROMPT_CORE without meta notes."""
     from codrut.modules.practice.prompts import get_system_prompt_for_kind
-    assert CODY_PROMPT_VERSION == "v3.3"
+    assert CODY_PROMPT_VERSION == "v3.4"
     roleplay_prompt = get_system_prompt_for_kind("roleplay")
     # Plicul 43: numele a fost inlocuit peste tot, 169 de aparitii. Textul e al lui
     # Andrei si nu se atinge — testul vine dupa el.

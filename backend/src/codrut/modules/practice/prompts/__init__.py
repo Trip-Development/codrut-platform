@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # v2.1 (plicul 37): la role-play perechea actor+evaluare a fost pusa la loc, blocul de
 # quiz si memoria chiar ajung la model. Compozitia promptului s-a schimbat, deci
 # sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
-CODY_PROMPT_VERSION = "v3.3"
+CODY_PROMPT_VERSION = "v3.4"
 
 # Comanda care declanseaza pornirea, pusa ULTIMA in prompt — plicul 45.
 #
@@ -66,8 +66,47 @@ DIRECTII_SCENA = {
 ROTATIE_CONDUCE = ("jos", "lateral", "sus", "client")
 ROTATIE_NU_CONDUCE = ("lateral", "sus", "client")
 
+# Numele personajului se alege in cod — plicul 68.
+#
+# Doua masuratori, pe sesiunile lui Andrei din 12 septembrie:
+#   · „domnul Popescu" a aparut de PATRU ori — Andrei: „sa mai variem si noi personajele"
+#   · intr-un scenariu, personajul a fost semnat „Andrei (eu, colega ta)", adica exact
+#     numele participantului, desi setup-ul spunea ca o cheama Elena. Regula impotriva
+#     exista deja in reguli-generale.md si NU s-a tinut.
+#
+# Deci nu-i mai cerem sa aleaga si nu ne mai bazam pe o interdictie. Alegem noi, dupa
+# acelasi numarator care tine rotatia scenei, si ii dam UN nume. Lista are 12 intrari iar
+# rotatia scenei are 3 sau 4 — numerele nu se divid, deci perechea nume-directie nu se
+# repeta la fiecare tura.
+#
+# Popescu lipseste dinadins: modelul se intoarce singur la el.
+NUME_PERSONAJ = (
+    "Elena Marin",
+    "Tudor Crețu",
+    "Ioana Barbu",
+    "Mihai Șerban",
+    "Carmen Dobre",
+    "Alex Pîrvu",
+    "Raluca Neagu",
+    "Sorin Moraru",
+    "Diana Ilie",
+    "Vlad Constantin",
+    "Simona Rusu",
+    "Cătălin Lungu",
+)
 
-def bloc_de_distributie(profil_rol: dict[str, Any] | None) -> str:
+
+def _numele_personajului(n: int, prenume: str) -> str:
+    """Un nume pentru personaj, diferit de al participantului."""
+    curat = (prenume or "").strip().lower()
+    for pas in range(len(NUME_PERSONAJ)):
+        nume = NUME_PERSONAJ[(n + pas) % len(NUME_PERSONAJ)]
+        if nume.split(" ")[0].lower() != curat:
+            return nume
+    return NUME_PERSONAJ[n % len(NUME_PERSONAJ)]
+
+
+def bloc_de_distributie(profil_rol: dict[str, Any] | None, prenume: str = "") -> str:
     """Spune modelului cine e celalalt din scena, si ii interzice sa mute omul din
     pozitia lui reala.
 
@@ -96,9 +135,12 @@ def bloc_de_distributie(profil_rol: dict[str, Any] | None) -> str:
         else " INTERZIS să-l pui pe participant în poziție de manager sau de șef de "
         "echipă — nu conduce pe nimeni."
     )
+    nume = _numele_personajului(n, prenume)
     return (
         f"\nDISTRIBUȚIA SCENEI: {DIRECTII_SCENA[directie]}{randul_functiei}"
         f"{interdictia} Competența exersată rămâne aceeași; se schimbă doar cu cine."
+        f"\nPERSONAJUL SE NUMEȘTE {nume}. Ăsta e numele lui în tot scenariul — în setup, "
+        f"în etichetele replicilor și în dialog. Nu-i da alt nume și nu inventa altul."
     )
 
 
@@ -504,7 +546,7 @@ def get_system_prompt_for_kind(
     )
     # Distributia se lipeste de comanda de pornire: acelasi moment, aceeasi pozitie.
     if comanda and kind_val == "roleplay":
-        comanda += bloc_de_distributie(profil_rol)
+        comanda += bloc_de_distributie(profil_rol, prenume)
 
     if kind_val == "roleplay":
         # Actorul si evaluarea merg impreuna, ca in aplicatia veche si ca in plicul 22:
