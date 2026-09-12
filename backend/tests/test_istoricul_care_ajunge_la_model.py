@@ -50,7 +50,7 @@ def _mesajele_trimise_la_model(existing_turns, text: str) -> list[GenerationMess
 
 
 def test_replicile_lipite_ale_omului_ajung_una_singura():
-    """Trei replici ale omului una dupa alta: la model pleaca UNA, si aia e ultima."""
+    """Trei replici lipite plus cea de acum: la model pleaca UNA, si aia e cea de acum."""
     istoric = [
         ReplicaDeProba(TurnRole.actor, "Salut. Esti gata sa incepem?"),
         ReplicaDeProba(TurnRole.participant, "prima incercare"),
@@ -60,14 +60,13 @@ def test_replicile_lipite_ale_omului_ajung_una_singura():
 
     mesaje = _mesajele_trimise_la_model(istoric, "replica de acum")
 
-    assert [m.role for m in mesaje] == ["model", "user", "user"]
+    assert [m.role for m in mesaje] == ["model", "user"]
     assert [m.text for m in mesaje] == [
         "Salut. Esti gata sa incepem?",
-        "a treia incercare",
         "replica de acum",
     ]
-    assert "prima incercare" not in [m.text for m in mesaje]
-    assert "a doua incercare" not in [m.text for m in mesaje]
+    for urma in ("prima incercare", "a doua incercare", "a treia incercare"):
+        assert urma not in [m.text for m in mesaje]
 
 
 def test_un_istoric_normal_ramane_neatins():
@@ -77,17 +76,19 @@ def test_un_istoric_normal_ramane_neatins():
         ReplicaDeProba(TurnRole.participant, "Buna."),
         ReplicaDeProba(TurnRole.actor, "Ce s-a intamplat vineri?"),
         ReplicaDeProba(TurnRole.participant, "Raportul a intarziat."),
+        ReplicaDeProba(TurnRole.actor, "Si tu ce ai facut?"),
     ]
 
-    mesaje = _mesajele_trimise_la_model(istoric, "Si acum ce facem?")
+    mesaje = _mesajele_trimise_la_model(istoric, "Am vorbit cu el luni dimineata.")
 
-    assert [m.role for m in mesaje] == ["model", "user", "model", "user", "user"]
+    assert [m.role for m in mesaje] == ["model", "user", "model", "user", "model", "user"]
     assert [m.text for m in mesaje] == [
         "Salut.",
         "Buna.",
         "Ce s-a intamplat vineri?",
         "Raportul a intarziat.",
-        "Si acum ce facem?",
+        "Si tu ce ai facut?",
+        "Am vorbit cu el luni dimineata.",
     ]
 
 
@@ -101,3 +102,16 @@ def test_doua_replici_ale_actorului_nu_se_string_intre_ele():
     mesaje = _mesajele_trimise_la_model(istoric, "am inteles")
 
     assert [m.text for m in mesaje] == ["Prima parte.", "A doua parte.", "am inteles"]
+
+
+def test_cazul_auditorului_sase_randuri_identice():
+    """Sase orfani identici plus retrimiterea: modelul vede replica O SINGURA DATA."""
+    intrebarea = "te rog sa imi zici cum stam"
+    istoric = [ReplicaDeProba(TurnRole.actor, "Spune-mi ce s-a intamplat.")]
+    istoric += [ReplicaDeProba(TurnRole.participant, intrebarea) for _ in range(6)]
+
+    mesaje = _mesajele_trimise_la_model(istoric, intrebarea)
+
+    assert len(mesaje) == 2
+    assert [m.role for m in mesaje] == ["model", "user"]
+    assert mesaje[-1].text == intrebarea
