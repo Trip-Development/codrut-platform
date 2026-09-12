@@ -646,7 +646,18 @@ class PracticeSessionService:
                     messages[-1] = GenerationMessage(role="user", text=t.text)
                     continue
                 messages.append(GenerationMessage(role=role_str, text=t.text))
-            messages.append(GenerationMessage(role="user", text=text))
+            # Si replica de acum trece prin aceeasi regula — plicul 65.
+            #
+            # `existing_turns` se citeste din baza INAINTE ca replica noua sa fie adaugata,
+            # deci replica de acum nu trece prin bucla de mai sus. Daca ultimul mesaj pastrat
+            # e tot al omului, e un orfan ramas de la o generare esuata, si replica noua se
+            # pune IN LOCUL lui, nu dupa el. Altfel modelul primea doua replici „user" una
+            # dupa alta — masurat pe cazul auditorului: 6 repetari inainte de plicul 64, 2
+            # dupa el, 1 de acum incolo.
+            if messages and messages[-1].role == "user":
+                messages[-1] = GenerationMessage(role="user", text=text)
+            else:
+                messages.append(GenerationMessage(role="user", text=text))
 
             history_length = len(existing_turns) + 1
 
