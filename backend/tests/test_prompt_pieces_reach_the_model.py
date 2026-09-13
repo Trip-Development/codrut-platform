@@ -83,7 +83,7 @@ def test_memoria_ajunge_in_prompt_la_inceputul_sesiunii():
 
 def test_versiunea_promptului_a_urcat():
     """Compozitia s-a schimbat; fara urcare, sesiunile nu se mai pot compara."""
-    assert CODY_PROMPT_VERSION == "v3.4"
+    assert CODY_PROMPT_VERSION == "v3.5"
 
 
 def test_serviciul_chiar_trimite_cele_trei_piese():
@@ -773,3 +773,46 @@ def test_pragul_replicii_model_e_sub_9():
     assert "ORI DE CÂTE ORI DAI SUB 9" in prompt
     assert "SUB 8" not in prompt
     assert "De la 9 în sus spui ce a mers" in prompt
+
+
+# --- plicul 69: evaluarea se sprijina pe citat si nu se razgandeste la presiune ---
+#
+# Sesiunea a opta, 13 septembrie. La 6/10, Cody i-a reprosat lui Andrei ca „nu i-a adresat
+# direct problema increderii". Replica lui o adresa, cuvant cu cuvant: „Vreau sa clarific ca
+# nu este asta. Motivele, asa cum ti-am explicat, tin de mine si de planurile mele in
+# aceasta perioada." A criticat o lipsa care nu exista — si cand Andrei i-a semnalat, nota a
+# sarit de la 6 la 10, cu „Bravo!".
+#
+# Andrei: „daca se intampla asta in interactiuni live, participantii il vor contesta imediat."
+# E primul defect care ataca increderea, nu experienta: cine-l prinde o data cu o nota
+# gresita nu-i mai crede nicio nota.
+#
+# Al doilea caz, sesiunea a saptea: „Zi faina!" — doua cuvinte de despartire — a luat 10/10,
+# cu cinci randuri de lauda. Zece puncte pe un mesaj din afara rolului.
+
+
+def test_evaluarea_se_sprijina_pe_citat_si_nu_negociaza_nota():
+    """Lacatul cerut rosu-inainte/verde-dupa: citatul si interdictia de a sari la 10."""
+    prompt = get_system_prompt_for_kind("roleplay", name="Andrei", history_length=3)
+
+    assert "CITATUL ÎNAINTE DE VERDICT" in prompt
+    assert "INTERZIS ABSOLUT să sari la 10" in prompt
+    assert "CEL MULT UN PUNCT" in prompt
+
+
+def test_nu_se_puncteaza_ce_nu_e_o_replica_din_scena():
+    """„Zi faina!" nu e o performanta si nu primeste nota."""
+    prompt = get_system_prompt_for_kind("roleplay", name="Andrei", history_length=3)
+
+    assert "NU SE PUNCTEAZĂ CE NU E O REPLICĂ DIN SCENĂ" in prompt
+    assert "Zi faină!" in prompt
+
+
+def test_ce_era_deja_in_evaluare_nu_s_a_pierdut():
+    """Fisierul s-a rescris intreg — aici se verifica ce trebuia sa ramana."""
+    prompt = get_system_prompt_for_kind("roleplay", name="Andrei", history_length=3)
+
+    assert "REPLICA SE SCRIE, NU SE DESCRIE" in prompt
+    assert "ORI DE CÂTE ORI DAI SUB 9" in prompt
+    assert "PUNCTAJUL E OBLIGATORIU" in prompt
+    assert "SUB 8" not in prompt
