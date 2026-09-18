@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import not_, or_, select
+from sqlalchemy import and_, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
@@ -56,7 +56,11 @@ class PracticeDashboardService:
         stmt_prof = select(ParticipantProfile).where(
             or_(
                 ParticipantProfile.user_id == principal.user_id,
-                ParticipantProfile.email == principal.email,
+                # plicul 79: dupa adresa, doar profilurile NELEGATE — ca la plicul 75
+                and_(
+                    ParticipantProfile.user_id.is_(None),
+                    ParticipantProfile.email == principal.email,
+                ),
             )
         )
         if project_id is not None:
