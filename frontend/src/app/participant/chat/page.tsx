@@ -70,7 +70,9 @@ export default async function ParticipantChatPage({
 
         <aside className="border-t border-border pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
           <p className="text-sm font-semibold text-foreground">{identity}</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{summary.projectName}</p>
+          {summary.projectName ? (
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{summary.projectName}</p>
+          ) : null}
           <p className="mt-6 border-t border-border pt-5 text-sm leading-6 text-muted-foreground">
             Răspunsurile individuale nu sunt afișate celorlalți participanți.
           </p>

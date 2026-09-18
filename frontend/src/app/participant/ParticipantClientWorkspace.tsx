@@ -161,9 +161,11 @@ export function ParticipantClientWorkspace({
                   <h2 id="participant-tasks-title" className="text-xl font-semibold tracking-tight text-foreground">
                     {pendingActiveTasks.length > 0 ? "De completat" : "Chestionare"}
                   </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {hasMultipleProjects ? projectCountCopy : summaryData.projectName}
-                  </p>
+                  {hasMultipleProjects || summaryData.projectName ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {hasMultipleProjects ? projectCountCopy : summaryData.projectName}
+                    </p>
+                  ) : null}
                 </div>
                 {pendingActiveTasks.length > 0 ? (
                   <div

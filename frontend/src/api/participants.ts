@@ -310,7 +310,7 @@ export function mapParticipantWorkspaceSummary(
     anonymousName: data.anonymous_name,
     pcmBase: data.pcm_base,
     pcmPhase: data.pcm_phase,
-    projectName: data.project_name ?? "Selectează programul",
+    projectName: data.project_name ?? (data.context_selection_required ? "Selectează programul" : ""),
     projectId: data.project_id,
     assessmentCycleId: data.assessment_cycle_id,
     contextSelectionRequired: data.context_selection_required ?? false,
