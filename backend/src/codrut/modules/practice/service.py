@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from redis.asyncio import Redis
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.contracts.generation import (
@@ -127,7 +127,11 @@ class PracticeSessionService:
             .where(
                 or_(
                     ParticipantProfile.user_id == principal.user_id,
-                    ParticipantProfile.email == principal.email,
+                    # plicul 79: dupa adresa, doar profilurile NELEGATE — ca la plicul 75
+                    and_(
+                        ParticipantProfile.user_id.is_(None),
+                        ParticipantProfile.email == principal.email,
+                    ),
                 )
             )
             .order_by(ParticipantProfile.user_id.is_(None), ParticipantProfile.created_at)
@@ -181,7 +185,11 @@ class PracticeSessionService:
                 ParticipantProfile.company_id == project.company_id,
                 or_(
                     ParticipantProfile.user_id == principal.user_id,
-                    ParticipantProfile.email == principal.email,
+                    # plicul 79: dupa adresa, doar profilurile NELEGATE — ca la plicul 75
+                    and_(
+                        ParticipantProfile.user_id.is_(None),
+                        ParticipantProfile.email == principal.email,
+                    ),
                 ),
             )
             .order_by(ParticipantProfile.user_id.is_(None), ParticipantProfile.created_at)
@@ -287,6 +295,12 @@ class PracticeSessionService:
                 ParticipantProfile.company_id == project.company_id,
                 or_(
                     ParticipantProfile.user_id == principal.user_id,
+                    # Plicul 79: aici ramura adresei ramane LARGA, dinadins.
+                    # Ingustata, un trainer B cu adresa folosita de profilul
+                    # altui cont A, in aceeasi companie, n-ar mai gasi profil;
+                    # ramura de mai jos ar crea unul nou cu aceeasi adresa:
+                    # incalcare de unicitate (company_id, email), deci 500.
+                    # Masurat pe proba: 0 profiluri in situatia asta.
                     ParticipantProfile.email == principal.email,
                 ),
             )
