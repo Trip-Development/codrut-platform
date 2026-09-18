@@ -130,6 +130,8 @@ export type ParticipantReopenableAssignment = {
   assignment_id: string;
   questionnaire_key: string;
   reopen_count: number;
+  target_type: "self" | "person" | "team";
+  target_name?: string | null;
 };
 
 export type ReopenAssignmentResult = {

@@ -6236,7 +6236,7 @@
         "type": "object"
       },
       "ParticipantReopenableAssignment": {
-        "description": "Un chestionar pe care trainerul il poate redeschide pentru omul asta.",
+        "description": "Un chestionar pe care trainerul il poate redeschide pentru omul asta.\n\nTrimitem fapte despre tinta, nu text de afisare: harta de denumiri sta in\nfrontend si nu o dublam aici.",
         "properties": {
           "assignment_id": {
             "format": "uuid",
@@ -6250,12 +6250,33 @@
           "reopen_count": {
             "title": "Reopen Count",
             "type": "integer"
+          },
+          "target_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Name"
+          },
+          "target_type": {
+            "enum": [
+              "self",
+              "person",
+              "team"
+            ],
+            "title": "Target Type",
+            "type": "string"
           }
         },
         "required": [
           "assignment_id",
           "questionnaire_key",
-          "reopen_count"
+          "reopen_count",
+          "target_type"
         ],
         "title": "ParticipantReopenableAssignment",
         "type": "object"

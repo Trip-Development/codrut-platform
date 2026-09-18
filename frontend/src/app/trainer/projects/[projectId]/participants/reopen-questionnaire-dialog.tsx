@@ -29,6 +29,23 @@ export function questionnaireName(key: string): string {
   return QUESTIONNAIRE_NAMES[key] ?? key;
 }
 
+/** Eticheta unui rand din fereastra.
+ *
+ * Acelasi om poate avea zeci de randuri cu aceeasi denumire — 18 evaluari
+ * boss_360 arata identic fara numele celui evaluat. Serverul ne da tipul tintei
+ * si numele ei; denumirea chestionarului o stim de aici.
+ */
+export function reopenAssignmentLabel(assignment: ParticipantReopenableAssignment): string {
+  const name = questionnaireName(assignment.questionnaire_key);
+  if (assignment.target_type === "person") {
+    return `${name} · despre ${assignment.target_name ?? "persoană"}`;
+  }
+  if (assignment.target_type === "team") {
+    return `${name} · ${assignment.target_name ?? "echipă"}`;
+  }
+  return `${name} · autoevaluare`;
+}
+
 export function formatReopenDate(value: string | null | undefined): string | null {
   if (!value) return null;
   const parsed = new Date(value);
@@ -115,7 +132,7 @@ export function ReopenQuestionnaireDialog({
                   checked={option.assignment_id === selectedId}
                   onChange={() => setSelectedId(option.assignment_id)}
                 />
-                <span className="text-foreground">{questionnaireName(option.questionnaire_key)}</span>
+                <span className="text-foreground">{reopenAssignmentLabel(option)}</span>
                 {option.reopen_count > 0 ? (
                   <span className="ml-auto text-xs text-muted-foreground">
                     redeschis {option.reopen_count === 1 ? "o dată" : `de ${option.reopen_count} ori`}
@@ -126,7 +143,7 @@ export function ReopenQuestionnaireDialog({
           </fieldset>
         ) : selected ? (
           <p className="text-foreground">
-            Chestionarul: <strong>{questionnaireName(selected.questionnaire_key)}</strong>
+            Chestionarul: <strong>{reopenAssignmentLabel(selected)}</strong>
           </p>
         ) : null}
 

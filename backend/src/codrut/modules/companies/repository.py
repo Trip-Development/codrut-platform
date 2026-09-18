@@ -1,10 +1,11 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import case, exists, func, or_, select
+from sqlalchemy import case, exists, func, nulls_first, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
-from codrut.modules.assignments.models import QuestionnaireAssignment
+from codrut.modules.assignments.models import QuestionnaireAssignment, Team
 from codrut.modules.companies.models import (
     Company,
     CompanyAccessCode,
@@ -408,35 +409,67 @@ class CompanyRepository:
         self,
         company_id: UUID,
         project_id: UUID,
-    ) -> dict[UUID, list[tuple[UUID, str, int]]]:
+    ) -> dict[UUID, list[tuple[UUID, str, int, str, str | None]]]:
         """Ce chestionare are fiecare om de redeschis.
 
         Redeschidem doar ce a fost trimis: fara raspuns trimis nu exista nimic de
         arhivat, iar butonul trebuie sa fie stins, nu sa dea eroare.
+
+        Intoarcem si tinta (tipul si numele ei) pentru ca acelasi om poate avea
+        zeci de randuri cu aceeasi denumire de chestionar — 18 evaluari boss_360
+        arata identic fara numele celui evaluat. Numele vine prin join, nu
+        printr-un al doilea apel. Compunerea etichetei ramane in frontend, unde
+        sta harta de denumiri.
         """
+        target_person = aliased(ParticipantProfile)
+        target_name_expr = func.coalesce(target_person.full_name, Team.name)
         result = await self.session.execute(
             select(
                 QuestionnaireAssignment.respondent_profile_id,
                 QuestionnaireAssignment.id,
                 QuestionnaireAssignment.questionnaire_key,
                 QuestionnaireAssignment.reopen_count,
+                QuestionnaireAssignment.target_type,
+                target_name_expr.label("target_name"),
             )
             .join(
                 QuestionnaireResponse,
                 QuestionnaireResponse.assignment_id == QuestionnaireAssignment.id,
             )
+            .outerjoin(
+                target_person,
+                target_person.id == QuestionnaireAssignment.target_person_id,
+            )
+            .outerjoin(Team, Team.id == QuestionnaireAssignment.target_team_id)
             .where(QuestionnaireAssignment.company_id == company_id)
             .where(QuestionnaireAssignment.project_id == project_id)
             .where(QuestionnaireResponse.status == QuestionnaireResponseStatus.submitted)
             .order_by(
                 QuestionnaireAssignment.questionnaire_key,
+                # Omul cauta un coleg anume printre optsprezece randuri: sortate
+                # dupa nume, se uita unde trebuie; nesortate, le citeste pe toate.
+                # Autoevaluarea n-are tinta si sta in capul grupei ei, nu la coada.
+                nulls_first(target_name_expr.asc()),
                 QuestionnaireAssignment.id,
             )
         )
-        reopenable: dict[UUID, list[tuple[UUID, str, int]]] = {}
-        for profile_id, assignment_id, questionnaire_key, reopen_count in result.all():
+        reopenable: dict[UUID, list[tuple[UUID, str, int, str, str | None]]] = {}
+        for (
+            profile_id,
+            assignment_id,
+            questionnaire_key,
+            reopen_count,
+            target_type,
+            target_name,
+        ) in result.all():
             reopenable.setdefault(profile_id, []).append(
-                (assignment_id, questionnaire_key, int(reopen_count or 0))
+                (
+                    assignment_id,
+                    questionnaire_key,
+                    int(reopen_count or 0),
+                    str(target_type),
+                    target_name,
+                )
             )
         return reopenable
 

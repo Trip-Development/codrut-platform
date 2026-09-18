@@ -3641,6 +3641,9 @@ export interface components {
         /**
          * ParticipantReopenableAssignment
          * @description Un chestionar pe care trainerul il poate redeschide pentru omul asta.
+         *
+         *     Trimitem fapte despre tinta, nu text de afisare: harta de denumiri sta in
+         *     frontend si nu o dublam aici.
          */
         ParticipantReopenableAssignment: {
             /**
@@ -3652,6 +3655,13 @@ export interface components {
             questionnaire_key: string;
             /** Reopen Count */
             reopen_count: number;
+            /** Target Name */
+            target_name?: string | null;
+            /**
+             * Target Type
+             * @enum {string}
+             */
+            target_type: "self" | "person" | "team";
         };
         /** ParticipantResponse */
         ParticipantResponse: {
