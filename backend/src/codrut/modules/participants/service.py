@@ -50,6 +50,11 @@ from codrut.modules.participants.schemas import (
     ParticipantWorkspaceResult,
     ParticipantWorkspaceSummary,
 )
+
+# Textele lui Andrei, 18 septembrie — plicul 78. Cuvant cu cuvant; nu se rescriu.
+# Omul are profil, dar nicio inscriere si nicio sarcina: n-are ce vedea inca.
+NEINSCRIS_TITLU = "Nu ești încă înscris într-un proiect."
+NEINSCRIS_DESCRIERE = "Trainerul tău te adaugă, și apoi poți începe."
 from codrut.modules.scoring.models import (
     ResultPublication,
     ResultPublicationKind,
@@ -92,6 +97,28 @@ class ParticipantWorkspaceService:
             participant_profile_id=participant_profile_id,
         )
         contexts = await self._get_authorized_contexts(profile_rows)
+
+        # Omul fara niciun context real primeste o stare, nu o eroare — plicul 78.
+        #
+        # Contextele fara legatura reala nu mai intra in lista (vezi _get_authorized_contexts).
+        # Profilurile lor ies si din `profile_rows`, ca alegerea contextului de mai jos sa nu
+        # mai poata ajunge la un profil fara context. Daca nu ramane niciunul, omul e logat,
+        # are profil, dar nu e inscris nicaieri: vede mesajul lui Andrei. Nu 500, nu un selector
+        # gol, si nu „profilul nu e legat de acest cont" — aici profilul chiar e gasit.
+        # Stare, nu exceptie: si previzualizarea trainerului cheama functia asta.
+        cu_context = {context.participant_profile_id for context in contexts}
+        toate_profilurile = profile_rows
+        profile_rows = [row for row in profile_rows if row[0].id in cu_context]
+        if not profile_rows:
+            primul = toate_profilurile[0][0]
+            return ParticipantWorkspaceSummary(
+                participant_full_name=primul.full_name,
+                anonymous_name=primul.anonymous_name,
+                empty_state=ParticipantWorkspaceCard(
+                    title=NEINSCRIS_TITLU,
+                    description=NEINSCRIS_DESCRIERE,
+                ),
+            )
         questionnaire_projects = await self._get_questionnaire_projects(
             profile_rows,
             contexts,
@@ -878,19 +905,39 @@ class ParticipantWorkspaceService:
         profile_rows: list[tuple[ParticipantProfile, Company]],
     ) -> list[ParticipantWorkspaceContext]:
         profile_ids = {profile.id for profile, _company in profile_rows}
+        # Toate inscrierile, active sau nu — plicul 78: una dezactivata e tot o legatura reala.
+        # Proiectele din context raman, ca inainte, numai din cele active.
         membership_result = await self.session.execute(
             select(ProjectMembership).where(
                 ProjectMembership.participant_profile_id.in_(profile_ids),
-                ProjectMembership.active.is_(True),
             )
         )
-        memberships = list(membership_result.scalars().all())
+        toate_inscrierile = list(membership_result.scalars().all())
+        memberships = [membership for membership in toate_inscrierile if membership.active]
         assignment_result = await self.session.execute(
             select(QuestionnaireAssignment).where(
                 QuestionnaireAssignment.respondent_profile_id.in_(profile_ids)
             )
         )
         assignments = list(assignment_result.scalars().all())
+
+        # Un context se sprijina pe ceva: o inscriere (activa sau nu), o sarcina, sau un rezultat
+        # publicat catre el si nerevocat (asa primeste omul feedbackul 360 despre el) — plicul 78.
+        #
+        # Pana la plicul 78 se adauga cate un context pentru FIECARE profil, chiar gol. Pe proba,
+        # 3 conturi din 6 aveau asa ceva: proba1 („alege un context" dintr-o lista goala), proba3
+        # (numele firmei afisat drept proiect) si proba2 — al carui context gol venise din
+        # reparatia plicului 75, care gaseste acum profilurile si dupa adresa.
+        publicari_result = await self.session.execute(
+            select(ResultPublication.participant_profile_id)
+            .where(ResultPublication.participant_profile_id.in_(profile_ids))
+            .where(ResultPublication.revoked_at.is_(None))
+        )
+        cu_legatura = (
+            {membership.participant_profile_id for membership in toate_inscrierile}
+            | {assignment.respondent_profile_id for assignment in assignments}
+            | {participant_profile_id for (participant_profile_id,) in publicari_result.all()}
+        )
 
         project_ids_by_profile: dict[UUID, set[UUID]] = {
             profile_id: set() for profile_id in profile_ids
@@ -938,6 +985,8 @@ class ParticipantWorkspaceService:
 
         contexts: list[ParticipantWorkspaceContext] = []
         for profile, company in profile_rows:
+            if profile.id not in cu_legatura:
+                continue
             context_projects: list[ParticipantWorkspaceProject] = []
             for context_project_id in sorted(
                 project_ids_by_profile[profile.id],
@@ -1140,11 +1189,20 @@ class ParticipantWorkspaceService:
                 "Participant context does not belong to this account.",
                 code="participant_context_forbidden",
             )
+        # Rezerva — plicul 78: fara ea, un profil fara context dadea StopIteration, adica 500.
         selected_context = next(
-            context
-            for context in contexts
-            if context.participant_profile_id == effective_profile_id
+            (
+                context
+                for context in contexts
+                if context.participant_profile_id == effective_profile_id
+            ),
+            None,
         )
+        if selected_context is None:
+            raise DomainError(
+                "Participant context does not belong to this account.",
+                code="participant_context_forbidden",
+            )
         if effective_project_id is None:
             if len(selected_context.projects) > 1:
                 return None, None, None, cycle_id
@@ -1542,7 +1600,7 @@ class ParticipantWorkspaceService:
         company: Company,
         assignments: list[QuestionnaireAssignment],
         projects: dict[UUID, CompanyProject],
-    ) -> tuple[UUID | None, str]:
+    ) -> tuple[UUID | None, str | None]:
         project_ids = [
             assignment.project_id
             for assignment in assignments
@@ -1554,7 +1612,10 @@ class ParticipantWorkspaceService:
             return project_id, projects[project_id].name
         if len(unique_project_ids) > 1:
             return None, "Toate proiectele active"
-        return None, company.name
+        # Fara proiect, fara rand — plicul 78. Aici se punea numele firmei in locul proiectului
+        # („proiect: Pilot Cody" la proba3, care nu e inscris nicaieri). Lipsa se trimite ca
+        # lipsa, iar ecranul nu mai deseneaza randul.
+        return None, None
 
     def _workspace_projects(
         self,

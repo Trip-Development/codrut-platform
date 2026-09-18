@@ -30,7 +30,7 @@ export function AccountWorkspace({ session, summary }: AccountWorkspaceProps) {
   ];
   const contextRows: AccountSettingsDetailRow[] = [
     { label: "Companie", value: company },
-    { label: "Proiect", value: summary.projectName },
+    ...(summary.projectName ? [{ label: "Proiect", value: summary.projectName }] : []),
     ...pcmRow("Bază PCM", summary.pcmBase),
     ...pcmRow("Fază PCM", summary.pcmPhase),
   ];
