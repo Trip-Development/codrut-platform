@@ -83,7 +83,7 @@ def test_memoria_ajunge_in_prompt_la_inceputul_sesiunii():
 
 def test_versiunea_promptului_a_urcat():
     """Compozitia s-a schimbat; fara urcare, sesiunile nu se mai pot compara."""
-    assert CODY_PROMPT_VERSION == "v3.5"
+    assert CODY_PROMPT_VERSION == "v3.6"
 
 
 def test_serviciul_chiar_trimite_cele_trei_piese():
@@ -816,3 +816,40 @@ def test_ce_era_deja_in_evaluare_nu_s_a_pierdut():
     assert "ORI DE CÂTE ORI DAI SUB 9" in prompt
     assert "PUNCTAJUL E OBLIGATORIU" in prompt
     assert "SUB 8" not in prompt
+
+
+# --- plicul 76: omul are nume si la quiz, nu doar la salut ---
+#
+# Andrei, 18 septembrie: „la role play mi-a spus pe nume, dar la quiz mi-a zis «user»".
+# Numele ajungea in prompt numai prin salut; la quiz si la coaching, dupa salut, nu mai era
+# nicaieri. Acum intra o data, ca fapt, in `reguli_generale`, care merge la toate trei modurile.
+
+
+def test_la_quiz_numele_e_in_prompt_si_in_mijlocul_conversatiei():
+    prompt = get_system_prompt_for_kind(
+        "knowledge", name="Andrei Vacaru", history_length=4, quiz_competency="mix"
+    )
+    assert "pe om îl cheamă Andrei" in prompt
+
+
+def test_la_coaching_numele_e_in_prompt_si_in_mijlocul_conversatiei():
+    prompt = get_system_prompt_for_kind("coaching", name="Andrei Vacaru", history_length=4)
+    assert "pe om îl cheamă Andrei" in prompt
+
+
+def test_la_role_play_numele_ramane_si_salutul_e_neschimbat():
+    from codrut.modules.practice.prompts import formula_de_salut
+
+    mijloc = get_system_prompt_for_kind("roleplay", name="Andrei Vacaru", history_length=4)
+    assert "pe om îl cheamă Andrei" in mijloc
+
+    # salutul: acelasi text, cuvant cu cuvant, ca inainte de plicul 76
+    inceput = get_system_prompt_for_kind("roleplay", name="Andrei Vacaru", history_length=1)
+    assert formula_de_salut("Andrei", None) in inceput
+
+
+def test_evaluarea_nu_mai_poarta_cifra_inventata():
+    from codrut.modules.practice.prompts import EVALUARE_PROMPT
+
+    assert "de trei ori din opt sesiuni" not in EVALUARE_PROMPT
+    assert "s-a întâmplat, și o dată e destul" in EVALUARE_PROMPT
