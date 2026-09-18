@@ -587,10 +587,16 @@ class CompanyService:
                         assignment_id=assignment_id,
                         questionnaire_key=questionnaire_key,
                         reopen_count=assignment_reopen_count,
+                        target_type=target_type,
+                        target_name=target_name,
                     )
-                    for assignment_id, questionnaire_key, assignment_reopen_count in reopenable.get(
-                        participant.id, []
-                    )
+                    for (
+                        assignment_id,
+                        questionnaire_key,
+                        assignment_reopen_count,
+                        target_type,
+                        target_name,
+                    ) in reopenable.get(participant.id, [])
                 ],
             )
             for membership, participant in memberships
