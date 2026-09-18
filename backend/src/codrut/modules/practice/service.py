@@ -273,6 +273,16 @@ class PracticeSessionService:
                 ParticipantProfile.email == principal.email,
             )
         )
+        # Cine porneste, chiar inainte de intrebarea care poate crapa — plicul 72.
+        #
+        # Intrebarea de mai jos cauta profilul dupa cont SAU dupa adresa, fara companie, si
+        # cere un singur rand. Masurat pe proba: un cont (proba1) are doua profiluri, in doua
+        # companii. Cand crapa la un om adevarat, randul asta spune la care cont.
+        logger.info(
+            "practice_pornire cont=%s proiect=%s",
+            principal.user_id,
+            project_id,
+        )
         profile = (await self.session.execute(stmt_profile)).scalar_one_or_none()
         if profile is not None and profile.full_name == "Trainer":
             # Plicul 49: numele-santinela pus de noi, inlocuit la prima atingere.
