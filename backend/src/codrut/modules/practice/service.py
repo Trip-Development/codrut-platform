@@ -267,33 +267,43 @@ class PracticeSessionService:
                 code="practice_not_configured",
             )
 
-        stmt_profile = select(ParticipantProfile).where(
-            or_(
-                ParticipantProfile.user_id == principal.user_id,
-                ParticipantProfile.email == principal.email,
-            )
-        )
-        # Cine porneste, chiar inainte de intrebarea care poate crapa — plicul 72.
+        # Proiectul se citeste INAINTE de profil — plicul 73 — ca profilul sa poata fi cautat
+        # in compania lui, la fel ca pe drumul participantului (plicul 30). Pana acum se citea
+        # abia mai jos, in ramura `if profile is None`.
+        stmt_proj = select(CompanyProject).where(CompanyProject.id == project_id)
+        project = (await self.session.execute(stmt_proj)).scalar_one_or_none()
+        if project is None:
+            raise DomainError(f"Project not found: {project_id}", code="project_not_found")
+
+        # Aceeasi forma ca la plicul 30, pe drumul participantului (mai sus, start_session):
+        # in compania proiectului, cu ordonare ferma, primul rand — nu exact unul.
         #
-        # Intrebarea de mai jos cauta profilul dupa cont SAU dupa adresa, fara companie, si
-        # cere un singur rand. Masurat pe proba: un cont (proba1) are doua profiluri, in doua
-        # companii. Cand crapa la un om adevarat, randul asta spune la care cont.
+        # Aici ramasese forma veche: dupa cont SAU adresa, fara companie, `scalar_one_or_none`.
+        # Un om cu profil in doua companii dadea MultipleResultsFound si pornirea crapa cu 500.
+        # Masurat pe proba la plicul 73: proba1, cu profil si in „Pilot Cody", si in „test".
+        stmt_profile = (
+            select(ParticipantProfile)
+            .where(
+                ParticipantProfile.company_id == project.company_id,
+                or_(
+                    ParticipantProfile.user_id == principal.user_id,
+                    ParticipantProfile.email == principal.email,
+                ),
+            )
+            .order_by(ParticipantProfile.user_id.is_(None), ParticipantProfile.created_at)
+        )
+        # Cine porneste, chiar inainte de intrebarea de profil — plicul 72.
         logger.info(
             "practice_pornire cont=%s proiect=%s",
             principal.user_id,
             project_id,
         )
-        profile = (await self.session.execute(stmt_profile)).scalar_one_or_none()
+        profile = (await self.session.execute(stmt_profile)).scalars().first()
         if profile is not None and profile.full_name == "Trainer":
             # Plicul 49: numele-santinela pus de noi, inlocuit la prima atingere.
             profile.full_name = _nume_din_email(principal.email)
             await self.session.flush()
         if profile is None:
-            stmt_proj = select(CompanyProject).where(CompanyProject.id == project_id)
-            project = (await self.session.execute(stmt_proj)).scalar_one_or_none()
-            if project is None:
-                raise DomainError(f"Project not found: {project_id}", code="project_not_found")
-
             stmt_user = select(User).where(User.id == principal.user_id)
             user_exists = (await self.session.execute(stmt_user)).scalar_one_or_none() is not None
 
