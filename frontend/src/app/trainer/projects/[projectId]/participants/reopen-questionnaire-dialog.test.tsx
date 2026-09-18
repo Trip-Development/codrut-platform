@@ -5,6 +5,7 @@ import { reopenErrorMessage, reopenParticipantAssignment, type CompanyParticipan
 import {
   ReopenQuestionnaireDialog,
   questionnaireName,
+  reopenAssignmentLabel,
   reopenSummaryText,
 } from "./reopen-questionnaire-dialog";
 
@@ -84,7 +85,13 @@ describe("mesajele de refuz ale serverului", () => {
 describe("fereastra de confirmare", () => {
   const cuUnChestionar = participant({
     reopenable_assignments: [
-      { assignment_id: "a-1", questionnaire_key: "lencioni", reopen_count: 0 },
+      {
+        assignment_id: "a-1",
+        questionnaire_key: "lencioni",
+        reopen_count: 0,
+        target_type: "team",
+        target_name: "Echipa Ana Popescu",
+      },
     ],
   });
 
@@ -99,7 +106,7 @@ describe("fereastra de confirmare", () => {
     );
 
     expect(screen.getByText("Ana Popescu")).toBeTruthy();
-    expect(screen.getByText("Lencioni")).toBeTruthy();
+    expect(screen.getByText("Lencioni · Echipa Ana Popescu")).toBeTruthy();
     expect(screen.getByText(/se păstrează într-o arhivă/i)).toBeTruthy();
     expect(screen.getByText(/pornește de la zero/i)).toBeTruthy();
     expect(screen.getByText(/niciun email/i)).toBeTruthy();
@@ -121,7 +128,13 @@ describe("fereastra de confirmare", () => {
   it("avertizeaza la a treia, dar lasa butonul apasabil", () => {
     const dejaDeDouaOri = participant({
       reopenable_assignments: [
-        { assignment_id: "a-1", questionnaire_key: "lencioni", reopen_count: 2 },
+        {
+          assignment_id: "a-1",
+          questionnaire_key: "lencioni",
+          reopen_count: 2,
+          target_type: "team",
+          target_name: "Echipa Ana Popescu",
+        },
       ],
     });
     render(
@@ -186,5 +199,77 @@ describe("fereastra de confirmare", () => {
       expect(reopenParticipantAssignment).toHaveBeenCalledWith("c-1", "a-1");
     });
     expect(onDone).toHaveBeenCalled();
+  });
+});
+
+describe("randurile cu aceeasi denumire se deosebesc intre ele", () => {
+  /** Un lider din conducere: autoevaluarea plus 18 evaluari despre colegi.
+   *  Toate 19 au acelasi questionnaire_key. Fara tinta, toate scriu identic. */
+  const colegi = [
+    "Barbu Craciun", "Casandra Neagu", "Dorin Pavel", "Eliza Marinescu",
+    "Filip Ardelean", "Georgeta Vlad", "Horia Nedelcu", "Irina Balan",
+    "Lucian Tomescu", "Marta Ilie", "Nicolae Barbu", "Otilia Sandu",
+    "Petru Grigore", "Raluca Dumitru", "Sorin Lupu", "Tudor Manole",
+    "Viorica Stanciu", "Zaharia Olteanu",
+  ];
+
+  const celCareAEvaluat18 = participant({
+    full_name: "Dana Muresan",
+    reopenable_assignments: colegi.map((nume, i) => ({
+      assignment_id: `a-${i}`,
+      questionnaire_key: "boss_360",
+      reopen_count: 0,
+      target_type: "person" as const,
+      target_name: nume,
+    })),
+  });
+
+  it("18 evaluari boss_360 ale aceluiasi om ies cu 18 etichete DIFERITE", () => {
+    const asignari = celCareAEvaluat18.reopenable_assignments ?? [];
+    expect(asignari).toHaveLength(18);
+    expect(new Set(asignari.map((a) => a.questionnaire_key)).size).toBe(1);
+
+    const etichete = asignari.map(reopenAssignmentLabel);
+
+    expect(new Set(etichete).size).toBe(18);
+    expect(etichete[0]).toBe("Feedback 360 · despre Barbu Craciun");
+  });
+
+  it("fereastra chiar afiseaza 18 randuri distincte, nu 18 la fel", () => {
+    render(
+      <ReopenQuestionnaireDialog
+        companyId="c-1"
+        participant={celCareAEvaluat18}
+        onClose={() => {}}
+        onDone={() => {}}
+      />,
+    );
+
+    const randuri = screen.getAllByRole("radio");
+    expect(randuri).toHaveLength(18);
+
+    const textePeEcran = randuri.map(
+      (radio) => radio.closest("label")?.textContent?.trim() ?? "",
+    );
+    expect(new Set(textePeEcran).size).toBe(18);
+
+    expect(screen.getByText("Feedback 360 · despre Viorica Stanciu")).toBeTruthy();
+    expect(screen.getByText("Feedback 360 · despre Zaharia Olteanu")).toBeTruthy();
+  });
+
+  it("acopera si celelalte doua forme de tinta", () => {
+    expect(
+      reopenAssignmentLabel({
+        assignment_id: "x", questionnaire_key: "lencioni", reopen_count: 0,
+        target_type: "team", target_name: "Echipa Florilor",
+      }),
+    ).toBe("Lencioni · Echipa Florilor");
+
+    expect(
+      reopenAssignmentLabel({
+        assignment_id: "y", questionnaire_key: "pcm_base", reopen_count: 0,
+        target_type: "self", target_name: null,
+      }),
+    ).toBe("PCM – profil de bază · autoevaluare");
   });
 });

@@ -393,7 +393,7 @@ class FakeCompanyRepository:
         self,
         company_id: uuid.UUID,
         project_id: uuid.UUID,
-    ) -> dict[uuid.UUID, list[tuple[uuid.UUID, str, int]]]:
+    ) -> dict[uuid.UUID, list[tuple[uuid.UUID, str, int, str, str | None]]]:
         return {}
 
     async def list_project_memberships_for_participant(

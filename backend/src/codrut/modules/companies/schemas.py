@@ -274,11 +274,17 @@ class ProjectMembershipResponse(BaseModel):
 
 
 class ParticipantReopenableAssignment(BaseModel):
-    """Un chestionar pe care trainerul il poate redeschide pentru omul asta."""
+    """Un chestionar pe care trainerul il poate redeschide pentru omul asta.
+
+    Trimitem fapte despre tinta, nu text de afisare: harta de denumiri sta in
+    frontend si nu o dublam aici.
+    """
 
     assignment_id: UUID
     questionnaire_key: str
     reopen_count: int
+    target_type: Literal["self", "person", "team"]
+    target_name: str | None = None
 
 
 class ProjectParticipantResponse(ParticipantResponse):
