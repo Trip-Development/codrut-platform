@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import exists, or_, select
+from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.contracts.scoring import (
@@ -35,6 +35,7 @@ from codrut.modules.forms.models import (
     QuestionnaireResponse,
     QuestionnaireResponseStatus,
 )
+from codrut.modules.identity.models import User
 from codrut.modules.identity.schemas import InviteTask
 from codrut.modules.identity.service import _invite_task_copy
 from codrut.modules.participants.schemas import (
@@ -780,6 +781,28 @@ class ParticipantWorkspaceService:
         *,
         participant_profile_id: UUID | None = None,
     ) -> list[tuple[ParticipantProfile, Company]]:
+        # Aceeasi regula ca la exersare: profilul e al omului dupa CONT sau dupa ADRESA — plicul 75.
+        #
+        # Pana acum aici se cauta numai dupa cont (`user_id`). Un profil venit din import de
+        # lista, cu adresa dar nelegat inca de cont, era GASIT de exersare si NEGASIT aici: omul
+        # vedea „profilul nu e legat de acest cont", desi profilul lui exista. Legarea automata
+        # se face doar la crearea contului si la deschiderea unei invitatii, nu la intrare —
+        # deci cine avea deja cont cand a fost importat ramanea nelegat. Masurat pe proba la
+        # plicul 75: 4 profiluri din 8 (50%), nelegate de 18 zile.
+        #
+        # Pe ramura adresei se iau doar profilurile NELEGATE: un profil legat de alt cont nu
+        # devine vizibil aici doar fiindca are aceeasi adresa.
+        al_omului = ParticipantProfile.user_id == user_id
+        if user_id is not None:
+            adresa = (
+                await self.session.execute(select(User.email).where(User.id == user_id))
+            ).scalar_one_or_none()
+            if adresa:
+                al_omului = or_(
+                    ParticipantProfile.user_id == user_id,
+                    and_(ParticipantProfile.user_id.is_(None), ParticipantProfile.email == adresa),
+                )
+
         if participant_profile_id is not None:
             stmt = (
                 select(ParticipantProfile, Company)
@@ -787,7 +810,7 @@ class ParticipantWorkspaceService:
                 .where(ParticipantProfile.id == participant_profile_id)
             )
             if user_id is not None:
-                stmt = stmt.where(ParticipantProfile.user_id == user_id)
+                stmt = stmt.where(al_omului)
             result = await self.session.execute(stmt)
             rows = list(result.all())
             if not rows:
@@ -806,8 +829,14 @@ class ParticipantWorkspaceService:
         result = await self.session.execute(
             select(ParticipantProfile, Company)
             .join(Company, Company.id == ParticipantProfile.company_id)
-            .where(ParticipantProfile.user_id == user_id)
-            .order_by(ParticipantProfile.created_at.asc(), ParticipantProfile.id.asc())
+            .where(al_omului)
+            # ordonare ferma, ca la exersare: legat de cont inaintea celui doar cu adresa,
+            # intre egali cel mai vechi; id-ul ramane ultimul departajator, ca inainte
+            .order_by(
+                ParticipantProfile.user_id.is_(None),
+                ParticipantProfile.created_at.asc(),
+                ParticipantProfile.id.asc(),
+            )
         )
         rows = list(result.all())
         if not rows:
