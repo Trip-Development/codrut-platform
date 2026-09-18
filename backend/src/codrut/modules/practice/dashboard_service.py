@@ -45,21 +45,44 @@ class PracticeDashboardService:
     ) -> dict[str, Any]:
         """Aggregate all participant metrics, competency evidence, moments, and samples for the dashboard."""
         # 1. Resolve participant profile
+        #
+        # Aceeasi forma ca la plicul 30, pe drumul participantului — plicul 73. Aici ramasese
+        # forma veche: dupa cont SAU adresa, fara companie, `scalar_one_or_none`, deci un om cu
+        # profil in doua companii dadea MultipleResultsFound si tabloul crapa cu 500.
+        #
+        # Cand vine un proiect, cautam in compania lui. Cand nu vine, n-avem companie de care sa
+        # ne legam: alegem determinist — profilul legat de cont inaintea celui doar cu adresa,
+        # iar intre egali cel mai vechi — in loc sa crapam.
         stmt_prof = select(ParticipantProfile).where(
             or_(
                 ParticipantProfile.user_id == principal.user_id,
                 ParticipantProfile.email == principal.email,
             )
         )
-        profile = (await self.session.execute(stmt_prof)).scalar_one_or_none()
-
-        stmt_u = select(User).where(
-            or_(
-                User.id == principal.user_id,
-                User.email == principal.email,
-            )
+        if project_id is not None:
+            companie = (await self.session.execute(
+                select(CompanyProject.company_id).where(CompanyProject.id == project_id)
+            )).scalar_one_or_none()
+            if companie is not None:
+                stmt_prof = stmt_prof.where(ParticipantProfile.company_id == companie)
+        stmt_prof = stmt_prof.order_by(
+            ParticipantProfile.user_id.is_(None), ParticipantProfile.created_at
         )
-        user_obj = (await self.session.execute(stmt_u)).scalar_one_or_none()
+        profile = (await self.session.execute(stmt_prof)).scalars().first()
+
+        # Contul dupa id SAU adresa — plicul 73. N-are companie de care sa se lege; primeste
+        # doar ordonare ferma si primul rand: intai contul cu id-ul exact, apoi cel mai vechi.
+        stmt_u = (
+            select(User)
+            .where(
+                or_(
+                    User.id == principal.user_id,
+                    User.email == principal.email,
+                )
+            )
+            .order_by((User.id != principal.user_id), User.created_at)
+        )
+        user_obj = (await self.session.execute(stmt_u)).scalars().first()
 
         user_ids = [principal.user_id]
         if profile and profile.user_id and profile.user_id not in user_ids:
