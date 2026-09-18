@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # v2.1 (plicul 37): la role-play perechea actor+evaluare a fost pusa la loc, blocul de
 # quiz si memoria chiar ajung la model. Compozitia promptului s-a schimbat, deci
 # sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
-CODY_PROMPT_VERSION = "v3.5"
+CODY_PROMPT_VERSION = "v3.6"
 
 # Comanda care declanseaza pornirea, pusa ULTIMA in prompt — plicul 45.
 #
@@ -531,6 +531,23 @@ def get_system_prompt_for_kind(
                 '"Cu ce crezi că ar fi cel mai util să începem discuția noastră?"\n'
                 '- SENZORUL ANTI-PAPAGAL: Verifică istoricul. Dacă ai mai folosit recent o frază de tranziție, alege obligatoriu alta.'
             )
+
+    # Numele omului, ca fapt, la FIECARE replica si in TOATE trei modurile — plicul 76.
+    #
+    # Pana acum numele ajungea in prompt numai prin salut (`formula_de_salut`, doar la
+    # `history_length <= 1`); la role-play mai ajungea o data prin blocul de distributie,
+    # la replica de confirmare. La quiz si la coaching, dupa salut, promptul nu-l mai continea
+    # nicaieri — modelul trebuia sa si-l aminteasca din istoric, iar cand nu reusea punea ce
+    # stia el. Andrei, 18 septembrie: „la role play mi-a spus pe nume, dar la quiz mi-a zis
+    # «user»".
+    #
+    # Randul spune CARE e numele, nu CAT DE DES sa-l zica: o forma impusa la fiecare replica
+    # da recitare (plicul 59). Salutul ramane cum e.
+    if prenume:
+        dyn_rules += (
+            f"\n- NUMELE OMULUI: pe om îl cheamă {prenume}. Când i te adresezi pe nume, "
+            f"folosești numele ăsta. INTERZIS „user”, „participant”, „[Nume]” sau alt nume."
+        )
 
     reguli_generale = REGULI_GENERALE_TEMPLATE.replace("{dynamic_rules}", dyn_rules)
 
