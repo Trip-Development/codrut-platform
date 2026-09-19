@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -117,6 +118,13 @@ class SessionSampleItem(BaseModel):
     created_at: str
 
 
+class DashboardEmptyState(BaseModel):
+    # plicul 98: de ce e gol tabloul omului fara nicio nota
+    kind: Literal["neinscris", "neexersat"]
+    title: str
+    description: str
+
+
 class PracticeDashboardResponse(BaseModel):
     participant_name: str
     xp_today: int
@@ -128,6 +136,7 @@ class PracticeDashboardResponse(BaseModel):
     competencies: list[CompetencyDashboardItem]
     insight_moments: list[InsightMomentItem]
     session_samples: list[SessionSampleItem]
+    empty_state: DashboardEmptyState | None = None
 
 
 

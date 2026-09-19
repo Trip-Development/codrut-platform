@@ -70,6 +70,29 @@ export function PracticeParticipantDashboard({ projectId }: PracticeParticipantD
     );
   }
 
+  // Omul fara nicio nota afla de ce e gol tabloul — plicul 98. Textele sunt ale lui Andrei si
+  // vin de la server; aici nu se scrie niciunul. Cine e inscris pastreaza butonul de exersare.
+  if (data.emptyState) {
+    return (
+      <Card className="border-border bg-surface shadow-xs">
+        <CardHeader>
+          <CardTitle className="text-base">{data.emptyState.title}</CardTitle>
+          <CardDescription>{data.emptyState.description}</CardDescription>
+        </CardHeader>
+        {data.emptyState.kind === "neexersat" && (
+          <CardContent className="pt-0">
+            <Link href="/participant/practice">
+              <Button size="sm" className="gap-1.5 text-xs">
+                <span>Exersează acum</span>
+                <ArrowRightIcon className="size-3.5" />
+              </Button>
+            </Link>
+          </CardContent>
+        )}
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6 py-2">
       {/* Top Banner: XP, Streak, Badges */}

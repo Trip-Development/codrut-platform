@@ -259,6 +259,14 @@ export type PracticeDashboardData = {
   competencies: CompetencyDashboardItem[];
   insightMoments: InsightMomentItem[];
   sessionSamples: SessionSampleItem[];
+  // plicul 98: de ce e gol tabloul omului fara nicio nota; lipseste la cine are note
+  emptyState: DashboardEmptyState | null;
+};
+
+export type DashboardEmptyState = {
+  kind: "neinscris" | "neexersat";
+  title: string;
+  description: string;
 };
 
 export async function endPracticeSession(
@@ -412,6 +420,13 @@ export async function getPracticeDashboard(
       inventedImproved: s.invented_improved,
       createdAt: s.created_at,
     })),
+    emptyState: data.empty_state
+      ? {
+          kind: data.empty_state.kind,
+          title: data.empty_state.title,
+          description: data.empty_state.description,
+        }
+      : null,
   };
 }
 
