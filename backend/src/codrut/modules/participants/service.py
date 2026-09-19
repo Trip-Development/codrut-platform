@@ -1481,13 +1481,10 @@ class ParticipantWorkspaceService:
             if isinstance(value, str) and value.strip()
         }
         labels = _definition_score_labels(definition)
-        feedback_by_dimension = _definition_score_feedback(definition)
-        feedback_by_dimension.update(
-            get_settings().protected_result_guidance.get(
-                assignment.questionnaire_key,
-                {},
-            )
-        )
+        feedback_by_dimension = {
+            **get_settings().protected_result_guidance.get(assignment.questionnaire_key, {}),
+            **_definition_score_feedback(definition),
+        }
         public_scores: dict[str, dict[str, float | str]] = {}
         for dimension_id in visible_dimension_ids:
             value = result.scores.get(dimension_id)
@@ -1505,7 +1502,6 @@ class ParticipantWorkspaceService:
             feedback = feedback_by_dimension.get(dimension_id)
             if (
                 assignment.questionnaire_key in {"distress_drivers", "distress_drivers_en"}
-                and score > 50
                 and feedback
             ):
                 public_value["feedback"] = feedback
