@@ -26,6 +26,14 @@ from codrut.modules.practice.scoring import (
     streak_bonus_pct,
 )
 
+# Textele lui Andrei, copiate ca atare — plicul 98. Cel pentru omul neinscris e cel de la
+# plicul 78 (participants/service.py); cel pentru omul inscris care n-a exersat e din 19 sept.
+NEEXERSAT_TITLU = "Încă nu ai exersat."
+NEEXERSAT_DESCRIERE = (
+    "După prima sesiune vei vedea aici cum cresc competențele tale în funcție de cât și cum "
+    "ai exersat."
+)
+
 
 class PracticeDashboardService:
     def __init__(self, session: AsyncSession) -> None:
@@ -201,7 +209,7 @@ class PracticeDashboardService:
         )
         samples = list((await self.session.execute(stmt_samples)).scalars().all())
 
-        return {
+        rezultat = {
             "participant_name": profile.full_name if profile else (principal.email.split("@")[0]),
             "xp_today": xp_today,
             "xp_daily_cap": 100,
@@ -232,3 +240,30 @@ class PracticeDashboardService:
                 if s.real_weak or s.real_improved or s.invented_weak or s.invented_improved
             ],
         }
+
+        # Omul fara nicio nota afla DE CE e gol tabloul — plicul 98. Sunt doua situatii si un
+        # singur text ar minti pe unul dintre ei: neinscris nicaieri, sau inscris dar fara
+        # exersare. „Inscris" e definitia de la plicul 78, luata chiar de acolo. Cheia apare
+        # numai la omul fara note: la cine are note, raspunsul ramane exact cum era.
+        if not all_scores:
+            from codrut.modules.participants.service import (
+                NEINSCRIS_DESCRIERE,
+                NEINSCRIS_TITLU,
+                ParticipantWorkspaceService,
+            )
+
+            if await ParticipantWorkspaceService(self.session).are_legatura_reala(
+                principal.user_id
+            ):
+                rezultat["empty_state"] = {
+                    "kind": "neexersat",
+                    "title": NEEXERSAT_TITLU,
+                    "description": NEEXERSAT_DESCRIERE,
+                }
+            else:
+                rezultat["empty_state"] = {
+                    "kind": "neinscris",
+                    "title": NEINSCRIS_TITLU,
+                    "description": NEINSCRIS_DESCRIERE,
+                }
+        return rezultat

@@ -943,6 +943,20 @@ class ParticipantWorkspaceService:
             )
         return rows[0]
 
+    async def are_legatura_reala(self, user_id: UUID) -> bool:
+        """Omul e „inscris" in sensul plicului 78: are cel putin un context real.
+
+        Un context real se sprijina pe o inscriere (activa sau nu), o sarcina sau un rezultat
+        publicat nerevocat — vezi `_get_authorized_contexts`. Tabloul exersarii foloseste
+        aceeasi definitie (plicul 98), ca sa nu existe doua raspunsuri la aceeasi intrebare.
+        Fara niciun profil, omul nu e inscris nicaieri.
+        """
+        try:
+            randuri = await self._list_profiles_and_companies(user_id)
+        except DomainError:
+            return False
+        return bool(await self._get_authorized_contexts(randuri))
+
     async def _get_authorized_contexts(
         self,
         profile_rows: list[tuple[ParticipantProfile, Company]],

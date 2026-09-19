@@ -3784,6 +3784,33 @@
         "title": "CycleQuestionnaireCompatibilityResponse",
         "type": "object"
       },
+      "DashboardEmptyState": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "neinscris",
+              "neexersat"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "title",
+          "description"
+        ],
+        "title": "DashboardEmptyState",
+        "type": "object"
+      },
       "DriverRankSummaryResponse": {
         "properties": {
           "first_rank": {
@@ -7661,6 +7688,16 @@
             },
             "title": "Competencies",
             "type": "array"
+          },
+          "empty_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DashboardEmptyState"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "evidence_ceiling": {
             "title": "Evidence Ceiling",
