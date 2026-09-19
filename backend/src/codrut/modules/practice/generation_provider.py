@@ -376,7 +376,7 @@ class VertexGenerationProvider:
 
         # Rezervele nu se mai scriu de mana — plicul 89 (punctul 2b din plicul 70).
         #
-        # Aici erau "gemini-2.5-flash" si "gemini-2.5-pro", scrise in cod: se retrag pe 16
+        # Aici erau doua modele din familia 2.5, scrise in cod: se retrag pe 16
         # octombrie si nu raspund la destinatia `eu`, pe care rulam. Acum rezerva e tot o
         # setare, goala implicit — adica fara rezerva, nu un model pus de altcineva.
         models_to_try = [
