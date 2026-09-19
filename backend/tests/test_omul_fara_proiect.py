@@ -33,14 +33,22 @@ NEINSCRIS_DESCRIERE = "Trainerul tău te adaugă, și apoi poți începe."
 async def _cont_cu_profiluri(session, *, inscris_in_a_doua: bool):
     """Un cont cu profil legat in doua companii; inscris (optional) doar in a doua."""
     sufix = uuid.uuid4().hex[:8]
-    cont = User(email=f"om-{sufix}@exemplu-cody.ro", password_hash="x", role=UserRole.participant)
+    cont = User(
+        email=f"om-{sufix}@exemplu-cody.ro",
+        password_hash="x",  # noqa: S106
+        role=UserRole.participant,
+    )
     prima = Company(name=f"Prima {sufix}")
     a_doua = Company(name=f"A doua {sufix}")
     session.add_all([cont, prima, a_doua])
     await session.flush()
 
-    in_prima = ParticipantProfile(company_id=prima.id, user_id=cont.id, full_name="Om Test", email=cont.email)
-    in_a_doua = ParticipantProfile(company_id=a_doua.id, user_id=cont.id, full_name="Om Test", email=cont.email)
+    in_prima = ParticipantProfile(
+        company_id=prima.id, user_id=cont.id, full_name="Om Test", email=cont.email
+    )
+    in_a_doua = ParticipantProfile(
+        company_id=a_doua.id, user_id=cont.id, full_name="Om Test", email=cont.email
+    )
     session.add_all([in_prima, in_a_doua])
     await session.flush()
 

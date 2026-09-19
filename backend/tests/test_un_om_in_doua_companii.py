@@ -99,7 +99,7 @@ def _principal(adresa: str, rol: UserRole, user_id: uuid.UUID | None = None) -> 
         role=rol,
         available_workspaces=(rol,),
         default_workspace=rol,
-        session_token="test",
+        session_token="test",  # noqa: S106
     )
 
 
@@ -138,8 +138,16 @@ async def test_contul_cautat_dupa_id_sau_adresa_nu_mai_poate_crapa() -> None:
     """Id-ul principalului e al unui cont, adresa e a altuia: se ia contul cu id-ul exact."""
     async with SessionLocal() as session:
         sufix = uuid.uuid4().hex[:8]
-        unu = User(email=f"unu-{sufix}@exemplu-cody.ro", password_hash="x", role=UserRole.participant)
-        doi = User(email=f"doi-{sufix}@exemplu-cody.ro", password_hash="x", role=UserRole.participant)
+        unu = User(
+            email=f"unu-{sufix}@exemplu-cody.ro",
+            password_hash="x",  # noqa: S106
+            role=UserRole.participant,
+        )
+        doi = User(
+            email=f"doi-{sufix}@exemplu-cody.ro",
+            password_hash="x",  # noqa: S106
+            role=UserRole.participant,
+        )
         session.add_all([unu, doi])
         await session.flush()
 
