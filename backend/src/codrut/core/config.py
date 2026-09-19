@@ -104,6 +104,9 @@ class Settings(BaseSettings):
     vertex_credentials_path: str = "/etc/codrut/cody-vertex.json"
     vertex_actor_model: str = "gemini-2.5-flash"
     vertex_evaluator_model: str = "gemini-2.5-flash"
+    # Rezerva pentru transcriere, daca modelul principal nu o poate face — plicul 89.
+    # Gol inseamna „fara rezerva", nu „modelul vechi".
+    vertex_transcribe_fallback: str = ""
     vertex_timeout_seconds: int = Field(default=60, ge=5, le=300)
     vertex_max_output_tokens: int = Field(default=1024, ge=64, le=8192)
     # Evaluatorul are nevoie de mai mult decat actorul: pe langa concluzie si

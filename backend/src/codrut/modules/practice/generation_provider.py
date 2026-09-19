@@ -374,7 +374,16 @@ class VertexGenerationProvider:
             "Content-Type": "application/json",
         }
 
-        models_to_try = [self.settings.vertex_actor_model, "gemini-2.5-flash", "gemini-2.5-pro"]
+        # Rezervele nu se mai scriu de mana — plicul 89 (punctul 2b din plicul 70).
+        #
+        # Aici erau "gemini-2.5-flash" si "gemini-2.5-pro", scrise in cod: se retrag pe 16
+        # octombrie si nu raspund la destinatia `eu`, pe care rulam. Acum rezerva e tot o
+        # setare, goala implicit — adica fara rezerva, nu un model pus de altcineva.
+        models_to_try = [
+            m
+            for m in (self.settings.vertex_actor_model, self.settings.vertex_transcribe_fallback)
+            if m
+        ]
         seen: set[str] = set()
         candidate_models = [m for m in models_to_try if not (m in seen or seen.add(m))]
 
