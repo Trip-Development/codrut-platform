@@ -170,11 +170,30 @@ class VertexGenerationProvider:
             return self.settings.vertex_evaluator_model
         return self.settings.vertex_actor_model
 
+    # Adresa se construieste dupa FELUL destinatiei — plicul 86.
+    #
+    #   regiune punctuala (europe-west4 ...): https://<regiune>-aiplatform.googleapis.com
+    #   multi-regiune (eu, us):               https://aiplatform.<loc>.rep.googleapis.com
+    #
+    # Partea `locations/<loc>` din cale e aceeasi la amandoua. Sursa: documentatia Google
+    # „Deployments and endpoints", citata in SPEC-CODY/RAPOARTE/plic-84-raport.md. Pana la
+    # plicul 86 exista doar prima forma: cu `eu` iesea `eu-aiplatform.googleapis.com`, iar
+    # Google raspundea 400, „Invalid hostname" (masurat la plicul 85).
+    #
+    # Multi-regiunile sunt scrise explicit, nu ghicite. O destinatie necunoscuta pastreaza
+    # forma veche: daca e gresita, cade zgomotos, nu merge tacut in alta parte.
+    _MULTI_REGIUNI = ("eu", "us")
+
     def _build_url(self, model: str) -> str:
         region = self.settings.vertex_region
         project = self.settings.vertex_project_id
+        gazda = (
+            f"https://aiplatform.{region}.rep.googleapis.com"
+            if region in self._MULTI_REGIUNI
+            else f"https://{region}-aiplatform.googleapis.com"
+        )
         return (
-            f"https://{region}-aiplatform.googleapis.com/v1/projects/{project}/"
+            f"{gazda}/v1/projects/{project}/"
             f"locations/{region}/publishers/google/models/{model}:generateContent"
         )
 
