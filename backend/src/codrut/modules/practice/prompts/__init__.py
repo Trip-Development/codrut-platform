@@ -99,11 +99,11 @@ NUME_PERSONAJ = (
 def _numele_personajului(n: int, prenume: str) -> str:
     """Un nume pentru personaj, diferit de al participantului."""
     curat = (prenume or "").strip().lower()
-    for pas in range(len(NUME_PERSONAJ)):
-        nume = NUME_PERSONAJ[(n + pas) % len(NUME_PERSONAJ)]
-        if nume.split(" ")[0].lower() != curat:
-            return nume
-    return NUME_PERSONAJ[n % len(NUME_PERSONAJ)]
+    # Numele interzis iese din lista, apoi se roteste pe ce ramane — plicul 97. Pana acum se
+    # sarea la urmatorul, iar sesiunea de dupa ajungea la acelasi urmator: pe Mihai il juca de
+    # doua ori la rand Carmen Dobre. Interdictia de la plicul 48 ramane aceeasi.
+    lista = [x for x in NUME_PERSONAJ if x.split(" ")[0].lower() != curat] or list(NUME_PERSONAJ)
+    return lista[n % len(lista)]
 
 
 def bloc_de_distributie(profil_rol: dict[str, Any] | None, prenume: str = "") -> str:
