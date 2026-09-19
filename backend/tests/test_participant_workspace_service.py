@@ -47,6 +47,7 @@ from codrut.modules.scoring.publication import (
     ResultPublicationService,
     required_feedback_count,
 )
+from codrut.modules.scoring.service import _driver_feedback_by_dimension
 
 
 def _feedback_definition() -> QuestionnaireDefinition:
@@ -303,7 +304,7 @@ def test_driver_feedback_is_read_from_the_pinned_questionnaire_definition() -> N
     }
 
 
-def test_protected_guidance_overrides_copy_without_changing_the_driver_threshold(
+def test_driver_explanation_reaches_the_participant_at_every_score(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     definition_id = uuid.uuid4()
@@ -323,16 +324,9 @@ def test_protected_guidance_overrides_copy_without_changing_the_driver_threshold
                     "method": "sum_statement_scores_by_driver",
                     "normalize_to": 100,
                     "drivers": [
-                        {
-                            "id": "be_perfect",
-                            "label": "Fii perfect",
-                            "feedback_above_50": "Text vechi.",
-                        },
-                        {
-                            "id": "be_strong",
-                            "label": "Fii puternic",
-                            "feedback_above_50": "Text vechi.",
-                        },
+                        {"id": "be_perfect", "label": "Fii perfect"},
+                        {"id": "be_strong", "label": "Fii puternic"},
+                        {"id": "please_others", "label": "Fă-le pe plac"},
                     ],
                 }
             }
@@ -355,6 +349,7 @@ def test_protected_guidance_overrides_copy_without_changing_the_driver_threshold
         scores={
             "be_perfect": {"score": 65},
             "be_strong": {"score": 50},
+            "please_others": {"score": 38},
         },
         primary_result="be_perfect",
     )
@@ -371,7 +366,7 @@ def test_protected_guidance_overrides_copy_without_changing_the_driver_threshold
         definition_checksum=definition.content_checksum,
         policy_snapshot={
             "publication": "scores",
-            "dimension_ids": ["be_perfect", "be_strong"],
+            "dimension_ids": ["be_perfect", "be_strong", "please_others"],
             "target_types": ["self"],
             "include_primary_result": True,
         },
@@ -384,7 +379,8 @@ def test_protected_guidance_overrides_copy_without_changing_the_driver_threshold
             protected_result_guidance={
                 "distress_drivers": {
                     "be_perfect": "Pe scurt\nText complet.",
-                    "be_strong": "Pe scurt\nText care rămâne ascuns la prag.",
+                    "be_strong": "Pe scurt\nText care apare și la prag.",
+                    "please_others": "Pe scurt\nText sub prag.",
                 }
             }
         ),
@@ -402,7 +398,202 @@ def test_protected_guidance_overrides_copy_without_changing_the_driver_threshold
 
     assert workspace_result is not None
     assert workspace_result.scores["be_perfect"]["feedback"] == "Pe scurt\nText complet."
-    assert "feedback" not in workspace_result.scores["be_strong"]
+    assert workspace_result.scores["be_strong"]["feedback"] == (
+        "Pe scurt\nText care apare și la prag."
+    )
+    assert workspace_result.scores["please_others"]["feedback"] == "Pe scurt\nText sub prag."
+
+
+def test_participant_gets_the_same_driver_text_as_the_trainer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    approved_text = (
+        "Cum se manifestă\nÎți pui standarde înalte.\n\n"
+        "Ce te stresează\nPericolul de a pierde controlul."
+    )
+    definition_id = uuid.uuid4()
+    assignment_id = uuid.uuid4()
+    assignment_round_id = uuid.uuid4()
+    profile_id = uuid.uuid4()
+    company_id = uuid.uuid4()
+    definition = QuestionnaireDefinition(
+        id=definition_id,
+        key="distress_drivers",
+        version=1,
+        title="TA",
+        schema={"schema_version": "questionnaire.v1"},
+        private_config={
+            "schema": {
+                "scoring": {
+                    "method": "sum_statement_scores_by_driver",
+                    "normalize_to": 100,
+                    "drivers": [
+                        {
+                            "id": "be_perfect",
+                            "label": "Fii perfect",
+                            "feedback_above_50": approved_text,
+                        },
+                    ],
+                }
+            }
+        },
+        content_checksum="c" * 64,
+        active=True,
+    )
+    assignment = QuestionnaireAssignment(
+        id=assignment_id,
+        company_id=company_id,
+        assignment_round_id=assignment_round_id,
+        respondent_profile_id=profile_id,
+        questionnaire_key="distress_drivers",
+        questionnaire_definition_id=definition_id,
+        target_type=AssignmentTargetType.self_assessment,
+        status=AssignmentStatus.scored,
+    )
+    result = ScoringResult(
+        assignment_id=assignment_id,
+        scores={"be_perfect": {"score": 72}},
+        primary_result="be_perfect",
+    )
+    publication = ResultPublication(
+        publication_key=f"individual:{assignment_id}",
+        participant_profile_id=profile_id,
+        company_id=company_id,
+        assignment_round_id=assignment_round_id,
+        questionnaire_definition_id=definition_id,
+        questionnaire_key="distress_drivers",
+        source_assignment_id=assignment_id,
+        kind=ResultPublicationKind.individual,
+        source_count=1,
+        definition_checksum=definition.content_checksum,
+        policy_snapshot={
+            "publication": "scores",
+            "dimension_ids": ["be_perfect"],
+            "target_types": ["self"],
+            "include_primary_result": True,
+        },
+        published_at=datetime.now(UTC),
+    )
+    monkeypatch.setattr(
+        participant_service_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            protected_result_guidance={
+                "distress_drivers": {"be_perfect": "Pe scurt\nText vechi din setare."}
+            }
+        ),
+    )
+
+    workspace_result = ParticipantWorkspaceService(None)._assignment_to_result(  # type: ignore[arg-type]
+        assignment=assignment,
+        result=result,
+        definition=definition,
+        publication=publication,
+        teams={},
+        people={},
+        projects={},
+    )
+    trainer_feedback = _driver_feedback_by_dimension([(assignment, result, definition)])
+
+    assert workspace_result is not None
+    assert workspace_result.scores["be_perfect"]["feedback"] == approved_text
+    assert workspace_result.scores["be_perfect"]["feedback"] == trainer_feedback["be_perfect"]
+
+
+def test_non_driver_questionnaire_never_gets_driver_feedback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    definition_id = uuid.uuid4()
+    assignment_id = uuid.uuid4()
+    assignment_round_id = uuid.uuid4()
+    profile_id = uuid.uuid4()
+    company_id = uuid.uuid4()
+    definition = QuestionnaireDefinition(
+        id=definition_id,
+        key="lencioni",
+        version=1,
+        title="Lencioni",
+        schema={"schema_version": "questionnaire.v1"},
+        private_config={
+            "schema": {
+                "scoring": {
+                    "drivers": [
+                        {"id": "trust", "feedback_above_50": "Text din definiție."},
+                        {"id": "conflict", "feedback_above_50": "Text din definiție."},
+                        {"id": "commitment", "feedback_above_50": "Text din definiție."},
+                    ],
+                }
+            }
+        },
+        content_checksum="b" * 64,
+        active=True,
+    )
+    assignment = QuestionnaireAssignment(
+        id=assignment_id,
+        company_id=company_id,
+        assignment_round_id=assignment_round_id,
+        respondent_profile_id=profile_id,
+        questionnaire_key="lencioni",
+        questionnaire_definition_id=definition_id,
+        target_type=AssignmentTargetType.self_assessment,
+        status=AssignmentStatus.scored,
+    )
+    result = ScoringResult(
+        assignment_id=assignment_id,
+        scores={
+            "trust": {"score": 20},
+            "conflict": {"score": 50},
+            "commitment": {"score": 85},
+        },
+        primary_result="commitment",
+    )
+    publication = ResultPublication(
+        publication_key=f"individual:{assignment_id}",
+        participant_profile_id=profile_id,
+        company_id=company_id,
+        assignment_round_id=assignment_round_id,
+        questionnaire_definition_id=definition_id,
+        questionnaire_key="lencioni",
+        source_assignment_id=assignment_id,
+        kind=ResultPublicationKind.individual,
+        source_count=1,
+        definition_checksum=definition.content_checksum,
+        policy_snapshot={
+            "publication": "scores",
+            "dimension_ids": ["trust", "conflict", "commitment"],
+            "target_types": ["self"],
+            "include_primary_result": True,
+        },
+        published_at=datetime.now(UTC),
+    )
+    monkeypatch.setattr(
+        participant_service_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            protected_result_guidance={
+                "lencioni": {
+                    "trust": "Text protejat.",
+                    "conflict": "Text protejat.",
+                    "commitment": "Text protejat.",
+                }
+            }
+        ),
+    )
+
+    workspace_result = ParticipantWorkspaceService(None)._assignment_to_result(  # type: ignore[arg-type]
+        assignment=assignment,
+        result=result,
+        definition=definition,
+        publication=publication,
+        teams={},
+        people={},
+        projects={},
+    )
+
+    assert workspace_result is not None
+    assert set(workspace_result.scores) == {"trust", "conflict", "commitment"}
+    for score in workspace_result.scores.values():
+        assert "feedback" not in score
 
 
 def test_result_labels_prefer_participant_schema_copy() -> None:

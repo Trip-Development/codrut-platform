@@ -8,6 +8,10 @@ const INTERPRETATION_SECTION_TITLES = new Set([
   "Factori de presiune",
   "Comportament sub stres",
   "Permisiuni utile",
+  "Cum se manifestă",
+  "Ce te stresează",
+  "Ce faci sub presiune",
+  "Ce te ajută să ieși din tipar",
 ]);
 
 type InterpretationSection = {

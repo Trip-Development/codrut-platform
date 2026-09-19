@@ -491,6 +491,33 @@ describe("ParticipantResultsPanel", () => {
     expect(screen.queryByText("work_signal_a")).toBeNull();
   });
 
+  it("shows the driver explanation below 50 and keeps the watch signal above 50", () => {
+    render(
+      <ParticipantResultsPanel
+        results={[
+          {
+            assignmentId: "drivers",
+            questionnaireKey: "distress_drivers",
+            title: "Driveri de stres TA",
+            targetLabel: "Autoevaluare",
+            scores: {
+              be_perfect: { score: 76, label: "Fii perfect", feedback: "Explicația de peste prag." },
+              be_strong: { score: 42, label: "Fii puternic", feedback: "Explicația de sub prag." },
+            },
+          },
+        ]}
+      />,
+    );
+
+    const row = '[aria-label="Scoruri detaliate"] > div';
+    const above = screen.getByText("Explicația de peste prag.").closest(row);
+    const below = screen.getByText("Explicația de sub prag.").closest(row);
+    expect(above?.textContent).toContain("De urmărit");
+    expect(below?.textContent).toContain("Fii puternic");
+    expect(below?.textContent).not.toContain("De urmărit");
+    expect(below?.querySelector(".bg-destructive")).toBeNull();
+  });
+
   it("uses participant-facing labels from the protected result contract", () => {
     render(
       <ParticipantResultsPanel
@@ -914,7 +941,7 @@ describe("ParticipantResultsHistory", () => {
                 scaleMax: 100,
                 scores: {
                   perfect: { score: 62, label: "Fii perfect", feedback: "Acceptă și o variantă suficient de bună." },
-                  strong: { score: 50, label: "Fii puternic", feedback: "Acest text nu trebuie afișat la prag." },
+                  strong: { score: 50, label: "Fii puternic", feedback: "Explicația apare și la prag." },
                 },
               },
               {
@@ -979,7 +1006,7 @@ describe("ParticipantResultsHistory", () => {
     expect(screen.getByRole("group", { name: /Cum te văd colegii din leadership/ })).toBeTruthy();
     expect(screen.getByRole("group", { name: /Cum te evaluezi/ })).toBeTruthy();
     expect(screen.getByText("Acceptă și o variantă suficient de bună.")).toBeTruthy();
-    expect(screen.queryByText("Acest text nu trebuie afișat la prag.")).toBeNull();
+    expect(screen.getByText("Explicația apare și la prag.")).toBeTruthy();
   });
 
   it("uses raw points instead of percentage points for a 1-to-5 iCARE scale", () => {

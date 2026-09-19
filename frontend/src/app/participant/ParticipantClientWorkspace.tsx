@@ -563,7 +563,7 @@ function participantResultComparisonRows(
       const item = result ? scoreItemsForResult(result).find((candidate) => candidate.id === id) : null;
       if (!result || !item) return [];
       const scale = resultScoreScale(result, kind);
-      if (kind === "drivers" && item.score > 50 && item.explanation) guidance = item.explanation;
+      if (kind === "drivers" && item.explanation) guidance = item.explanation;
       return [{
         cycleId: cycle.id,
         cycleLabel: cycle.name,
@@ -1063,7 +1063,7 @@ function ScoreRow({
             />
           </div>
         </div>
-        {showSignal && item.explanation ? (
+        {showStatus && item.explanation ? (
           <InterpretationDisclosure>{item.explanation}</InterpretationDisclosure>
         ) : null}
       </div>
