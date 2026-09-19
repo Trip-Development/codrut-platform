@@ -314,7 +314,7 @@ function memberComparisonRows(
       const item = select(report).find((candidate) => candidate.id === id);
       const cycle = cycles[index];
       if (!item || !cycle) return [];
-      if (isDriver && item.avg > 50 && item.feedback) note = item.feedback;
+      if (isDriver && item.feedback) note = item.feedback;
       return [{
         cycleId: cycle.id,
         cycleLabel: cycle.name,
@@ -465,7 +465,7 @@ function AverageList({
                 max={max}
                 colorClassName={isDanger ? "bg-destructive" : undefined}
               />
-              {showFeedback && isDanger && item.feedback ? (
+              {showFeedback && item.feedback ? (
                 <InterpretationDisclosure>{item.feedback}</InterpretationDisclosure>
               ) : null}
             </div>
