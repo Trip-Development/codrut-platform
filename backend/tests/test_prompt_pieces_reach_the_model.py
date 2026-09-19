@@ -83,7 +83,7 @@ def test_memoria_ajunge_in_prompt_la_inceputul_sesiunii():
 
 def test_versiunea_promptului_a_urcat():
     """Compozitia s-a schimbat; fara urcare, sesiunile nu se mai pot compara."""
-    assert CODY_PROMPT_VERSION == "v3.6"
+    assert CODY_PROMPT_VERSION == "v3.7"
 
 
 def test_serviciul_chiar_trimite_cele_trei_piese():
@@ -853,3 +853,38 @@ def test_evaluarea_nu_mai_poarta_cifra_inventata():
 
     assert "de trei ori din opt sesiuni" not in EVALUARE_PROMPT
     assert "s-a întâmplat, și o dată e destul" in EVALUARE_PROMPT
+
+
+# --- plicul 91: o replica din scena ramane in scena ---
+#
+# Plicul 88 a pus regula de ordine singura: ordinea a prins (6 din 6), dar personajul a disparut la
+# 3 pasi din 9, fiindca Cody a citit replici neutre drept contestarea notei sau intrebari catre el
+# (regula de la plicul 69). Ideea lui Andrei: contestarea se face cu o comanda, /feedback — nu se
+# mai ghiceste din cuvinte.
+
+BUCATILE_91 = (
+    "ORDINEA, LA FIECARE REPLICĂ DIN JOC: întâi răspunde personajul, în rol",
+    "TOT CE SCRIE OMUL E REPLICĂ DIN SCENĂ",
+    "SINGURA IEȘIRE DIN SCENĂ E COMANDA /feedback",
+)
+
+
+def test_cele_trei_reguli_de_scena_sunt_primele_din_evaluare():
+    prompt = get_system_prompt_for_kind("roleplay", name="Andrei Vacaru", history_length=4)
+
+    for bucata in BUCATILE_91:
+        assert bucata in prompt, bucata
+        assert prompt.index(bucata) < prompt.index("EVALUAREA CA CODY"), bucata
+
+
+def test_regula_contestarii_ramane_si_ce_era_deja_nu_s_a_pierdut():
+    prompt = get_system_prompt_for_kind("roleplay", name="Andrei Vacaru", history_length=4)
+
+    for bucata in (
+        "CÂND OMUL CONTESTĂ NOTA SAU OBSERVAȚIA",
+        "CITATUL ÎNAINTE DE VERDICT",
+        "PUNCTAJUL E OBLIGATORIU",
+        "REPLICA SE SCRIE, NU SE DESCRIE",
+        "ORI DE CÂTE ORI DAI SUB 9",
+    ):
+        assert bucata in prompt, bucata
