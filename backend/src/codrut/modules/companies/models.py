@@ -19,7 +19,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from codrut.core.database import Base, TimestampMixin
 
@@ -223,6 +223,18 @@ class ParticipantProfile(TimestampMixin, Base):
     )
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+
+    # Adresa se scrie cu litere mici AICI, o singura data — plicul 81.
+    #
+    # Pana la plicul 81, regula era respectata in sapte locuri (fiecare cale facea `.lower()`)
+    # si tinuta in niciunul: o cale noua care uita `.lower()` strica fara sa se vada, fiindca
+    # legarea automata compara fara majuscule iar exersarea si spatiul participantului exact.
+    # Vezi SPEC-CODY/RAPOARTE/plic-80-raport.md. Cu normalizarea pe model, uitarea nu mai
+    # are cum sa strice nimic. `None` ramane `None`.
+    @validates("email")
+    def _adresa_cu_litere_mici(self, _key: str, value: str | None) -> str | None:
+        return value.strip().lower() if value is not None else None
+
     reports_to_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     position: Mapped[str | None] = mapped_column(String(255), nullable=True)
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
