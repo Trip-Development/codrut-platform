@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
-import sys
-import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -11,9 +8,7 @@ from sqlalchemy import select
 from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
 from codrut.modules.companies.models import (
-    Company,
     CompanyProject,
-    CompanyProjectStatus,
     ParticipantProfile,
     ProjectMembership,
 )
@@ -21,11 +16,7 @@ from codrut.modules.identity.models import User, UserAccountType, UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.identity.terms import CURRENT_TERMS_VERSION
 from codrut.modules.practice.models import (
-    PracticeKnowledgePack,
     PracticeProgramSettings,
-    PracticeScenario,
-    PracticeTheme,
-    ProgramMode,
     SessionKind,
 )
 from codrut.modules.practice.service import PracticeSessionService
@@ -60,7 +51,7 @@ async def run_dialog_probe() -> None:
         if not user:
             user = User(
                 email=email,
-                password_hash="not-used",
+                password_hash="not-used",  # noqa: S106
                 role=UserRole.participant,
                 account_type=UserAccountType.registered,
                 terms_version=CURRENT_TERMS_VERSION,
@@ -118,7 +109,7 @@ async def run_dialog_probe() -> None:
             terms_version=CURRENT_TERMS_VERSION,
             terms_accepted_at=datetime.now(UTC),
             consent_current=True,
-            session_token="probe_session_token_32bytes_valid",
+            session_token="probe_session_token_32bytes_valid",  # noqa: S106
         )
 
         service = PracticeSessionService(session=db, settings=settings)
@@ -133,15 +124,17 @@ async def run_dialog_probe() -> None:
             kind=SessionKind.roleplay,
         )
         await db.commit()
-        print(f"Sesiune Role-Play creată cu ID: {rp_session.id} (prompt_version={rp_session.prompt_version})\n")
+        print(
+            f"Sesiune Role-Play creată cu ID: {rp_session.id} (prompt_version={rp_session.prompt_version})\n"  # noqa: E501
+        )
 
         rp_turns = [
-            "Am un coleg care întârzie de trei luni cu partea lui din proiect. De fiecare dată are un motiv. Eu îmi refac planurile în jurul lui și nu i-am spus niciodată nimic direct. Nu vreau să îl pun la zid.",
-            "Nu e vorba de scuze, pur și simplu nu am vrut să creez tensiune în echipă când oricum aveam mult de lucru.",
-            "Ai dreptate, am evitat discuția crezând că e mai simplu să fac eu. Dar acum mă încarcă prea mult.",
-            "Vreau să stabilim un termen clar pentru fiecare etapă și să mă anunțe cu 24h înainte dacă apare un blocaj.",
-            "Înțeleg că ai avut urgențe, dar când întârzii fără să anunți, eu trebuie să stau peste program ca să acopăr livrabilele.",
-            "De luni vreau să avem un check-in de 5 minute dimineața ca să fim aliniați pe priorități.",
+            "Am un coleg care întârzie de trei luni cu partea lui din proiect. De fiecare dată are un motiv. Eu îmi refac planurile în jurul lui și nu i-am spus niciodată nimic direct. Nu vreau să îl pun la zid.",  # noqa: E501
+            "Nu e vorba de scuze, pur și simplu nu am vrut să creez tensiune în echipă când oricum aveam mult de lucru.",  # noqa: E501
+            "Ai dreptate, am evitat discuția crezând că e mai simplu să fac eu. Dar acum mă încarcă prea mult.",  # noqa: E501
+            "Vreau să stabilim un termen clar pentru fiecare etapă și să mă anunțe cu 24h înainte dacă apare un blocaj.",  # noqa: E501
+            "Înțeleg că ai avut urgențe, dar când întârzii fără să anunți, eu trebuie să stau peste program ca să acopăr livrabilele.",  # noqa: E501
+            "De luni vreau să avem un check-in de 5 minute dimineața ca să fim aliniați pe priorități.",  # noqa: E501
         ]
 
         for idx, text in enumerate(rp_turns, 1):
@@ -169,13 +162,15 @@ async def run_dialog_probe() -> None:
             kind=SessionKind.coaching,
         )
         await db.commit()
-        print(f"Sesiune Strategie creată cu ID: {strat_session.id} (prompt_version={strat_session.prompt_version})\n")
+        print(
+            f"Sesiune Strategie creată cu ID: {strat_session.id} (prompt_version={strat_session.prompt_version})\n"  # noqa: E501
+        )
 
         strat_turns = [
-            "Vreau să îi spun unuia din echipă să fie mai implicat. Am tot amânat. Cum îi zic fără să îl demotivez?",
+            "Vreau să îi spun unuia din echipă să fie mai implicat. Am tot amânat. Cum îi zic fără să îl demotivez?",  # noqa: E501
             "Păi nu vine la timp la ședințe și când vine, stă pe telefon și nu propune nicio idee.",
             "I-am zis data trecută «hai să fim mai activi», dar n-a schimbat nimic.",
-            "O să îi spun concret că la ședința de analiză am nevoie de 2 propuneri scrise de la el cu o oră înainte.",
+            "O să îi spun concret că la ședința de analiză am nevoie de 2 propuneri scrise de la el cu o oră înainte.",  # noqa: E501
         ]
 
         for idx, text in enumerate(strat_turns, 1):

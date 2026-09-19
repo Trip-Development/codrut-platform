@@ -28,7 +28,7 @@ from codrut.modules.practice.models import (
     PracticeTheme,
     ProgramMode,
 )
-from codrut.modules.practice.prompts import CODY_PROMPT_VERSION, CODY_SYSTEM_PROMPT
+from codrut.modules.practice.prompts import CODY_PROMPT_VERSION
 
 
 async def setup_practice_context(

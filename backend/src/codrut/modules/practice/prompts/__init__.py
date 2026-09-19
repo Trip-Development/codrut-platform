@@ -346,17 +346,24 @@ def build_quiz_block(
     # de zece puncte la finalul quiz-ului", deci scorul se citeste direct in procente.
     # Erau 7 la mix si 5 altfel, copiate din aplicatia veche.
     nr = 10
-    comps = ", ".join(project_competencies) if project_competencies else "toate competentele de comunicare"
+    comps = (
+        ", ".join(project_competencies) if project_competencies
+        else "toate competentele de comunicare"
+    )
     target = f"toate competențele: {comps}" if is_mix else f'competența "{quiz_competency}"'
 
     if is_first:
         return (
             f"\n\n---\nMOD QUIZ ACTIV — {('Mix complet' if is_mix else quiz_competency)}\n\n"
             f"REGULI ABSOLUTE:\n"
-            f"1. NUMĂR FIX: Generezi EXACT {nr} întrebări numerotate 1-{nr}. La a {nr}-a întrebare, după răspuns, afișezi scorul și te oprești.\n"
+            f"1. NUMĂR FIX: Generezi EXACT {nr} întrebări numerotate 1-{nr}. "
+            f"La a {nr}-a întrebare, "
+            f"după răspuns, afișezi scorul și te oprești.\n"
             f'2. FORMAT: "Întrebarea N/{nr}: [întrebare]\\nA. ...\\nB. ...\\nC. ...\\nD. ..."\n'
-            f"3. DISTRIBUȚIE VARIANTE CORECTE: Distribuie răspunsurile corecte între A, B, C, D. Max 2 la aceeași literă.\n"
-            f'4. DUPĂ FIECARE RĂSPUNS: corect/greșit + 1 frază explicație. Apoi IMEDIAT "Întrebarea [N+1]/{nr}:".\n'
+            f"3. DISTRIBUȚIE VARIANTE CORECTE: Distribuie răspunsurile corecte între A, B, C, D. "
+            f"Max 2 la aceeași literă.\n"
+            f'4. DUPĂ FIECARE RĂSPUNS: corect/greșit + 1 frază explicație. '
+            f'Apoi IMEDIAT "Întrebarea [N+1]/{nr}:".\n'
             f"5. DUPĂ PRIMUL SCHIMB DE REPLICI (small talk): anunți scurt și începi — "
             f"„Hai să vedem ce-ai reținut.” Nu aștepți răspuns, nu întrebi ce vrea să "
             f'lucreze. Treci DIRECT la "Întrebarea 1/{nr}:", în aceeași replică.\n'
@@ -488,22 +495,22 @@ def get_system_prompt_for_kind(
         # devine semnalul — vezi `COMANDA_DE_PORNIRE` mai jos.
         if kind_val == "roleplay":
             dyn_rules = (
-                f'- REGULA PRIMULUI MESAJ: după salut îl întrebi dacă e gata să înceapă '
-                f'un joc de rol. O SINGURĂ întrebare în '
-                f'mesaj. INTERZIS orice frază de tranziție și INTERZIS să întrebi ce '
-                f'situație sau ce temă vrea — situația o alegi tu, la pasul următor.'
+                '- REGULA PRIMULUI MESAJ: după salut îl întrebi dacă e gata să înceapă '
+                'un joc de rol. O SINGURĂ întrebare în '
+                'mesaj. INTERZIS orice frază de tranziție și INTERZIS să întrebi ce '
+                'situație sau ce temă vrea — situația o alegi tu, la pasul următor.'
             )
         elif kind_val == "knowledge":
             dyn_rules = (
-                f'- REGULA PRIMULUI MESAJ: după salut îl întrebi dacă e gata să-și '
-                f'verifice cunoștințele. O SINGURĂ întrebare în '
-                f'mesaj. INTERZIS orice frază de tranziție și INTERZIS să întrebi ce temă '
-                f'vrea.'
+                '- REGULA PRIMULUI MESAJ: după salut îl întrebi dacă e gata să-și '
+                'verifice cunoștințele. O SINGURĂ întrebare în '
+                'mesaj. INTERZIS orice frază de tranziție și INTERZIS să întrebi ce temă '
+                'vrea.'
             )
         else:
             dyn_rules = (
-                f'- REGULA PRIMULUI MESAJ: DOAR saluți și îl întrebi '
-                f'"Cum îți merge ziua până acum?". INTERZIS orice frază de tranziție la subiect.'
+                '- REGULA PRIMULUI MESAJ: DOAR saluți și îl întrebi '
+                '"Cum îți merge ziua până acum?". INTERZIS orice frază de tranziție la subiect.'
             )
         # Toate trei modurile saluta, deci variatia merge la toate trei. Mai tarziu in
         # conversatie nu se aplica — acolo ramane regula anti-salut, neatinsa.
@@ -523,13 +530,16 @@ def get_system_prompt_for_kind(
         # `reguli_generale` nu se trimitea in alta parte.
         if e_coaching:
             dyn_rules += (
-                '\n- BIBLIOTECA DE TRANZIȚII (ROTAȚIE RANDOM): Folosește OBLIGATORIU o singură dată una din: '
+                '\n- BIBLIOTECA DE TRANZIȚII (ROTAȚIE RANDOM): '
+                'Folosește OBLIGATORIU o singură dată una din: '
                 '"Ce ai zice să trecem la subiectul principal de azi?" / '
                 '"Spre ce provocare vrei să ne îndreptăm atenția acum?" / '
                 '"Ce este cel mai important pentru tine să explorăm în această sesiune?" / '
                 '"Hai să vedem, ce situație concretă vrei să abordăm împreună astăzi?" / '
                 '"Cu ce crezi că ar fi cel mai util să începem discuția noastră?"\n'
-                '- SENZORUL ANTI-PAPAGAL: Verifică istoricul. Dacă ai mai folosit recent o frază de tranziție, alege obligatoriu alta.'
+                '- SENZORUL ANTI-PAPAGAL: Verifică istoricul. '
+                'Dacă ai mai folosit recent o frază de '
+                'tranziție, alege obligatoriu alta.'
             )
 
     # Numele omului, ca fapt, la FIECARE replica si in TOATE trei modurile — plicul 76.

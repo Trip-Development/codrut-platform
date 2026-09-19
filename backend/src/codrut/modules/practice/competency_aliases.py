@@ -119,7 +119,16 @@ def match_comp(raw_name: str | None) -> str | None:
 
     # Excludere explicită a non-competențelor
     norm_low = raw_clean.lower()
-    if norm_low in ("quiz", "cunostinte", "cunoștințe", "test", "test in", "test out", "test-in", "test-out"):
+    if norm_low in (
+        "quiz",
+        "cunostinte",
+        "cunoștințe",
+        "test",
+        "test in",
+        "test out",
+        "test-in",
+        "test-out",
+    ):
         return None
 
     # 1. Potrivire exactă cu o competență canonică

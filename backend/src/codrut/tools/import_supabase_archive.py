@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import re
 import uuid
-from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import select
@@ -14,8 +12,6 @@ from codrut.core.database import SessionLocal
 from codrut.core.security import hash_password
 from codrut.modules.companies.models import (
     Company,
-    CompanyMembership,
-    CompanyMembershipRole,
     CompanyProject,
     CompanyProjectStatus,
     ParticipantProfile,
@@ -28,7 +24,6 @@ from codrut.modules.practice.models import (
     EvolutionLog,
     InsightMoment,
     ParticipantMemory,
-    PracticeCompetency,
     PracticeProgramSettings,
     PracticeTheme,
     ProgramMode,
@@ -49,7 +44,9 @@ def find_archive_dir() -> Path:
         if c.is_dir() and (c / "04-DATE-PERSONALE.json").is_file():
             return c
     # Fallback to local workspace path if on mac
-    mac_path = Path("/Users/andreivacaru/Library/Mobile Documents/com~apple~CloudDocs/Work/PROIECT AI NOU/codrut-campaign/ARHIVA-SUPABASE")
+    mac_path = Path(
+        "/Users/andreivacaru/Library/Mobile Documents/com~apple~CloudDocs/Work/PROIECT AI NOU/codrut-campaign/ARHIVA-SUPABASE"  # noqa: E501
+    )
     if mac_path.is_dir():
         return mac_path
     raise FileNotFoundError("ARHIVA-SUPABASE folder not found")
@@ -97,13 +94,41 @@ async def import_supabase_archive() -> dict[str, int]:
 
         # 2. Template Competencies (7 competencies)
         standard_competencies = [
-            ("Ascultare activă", "Capacitatea de a asculta pentru a înțelege perspectiva celuilalt, fără a întrerupe sau judeca.", 1),
-            ("Exprimarea asertivă a nevoilor și limitelor", "Formularea clară a poziției proprii fără agresivitate sau pasivitate.", 2),
-            ("Feedback constructiv", "Oferirea de feedback specific, orientat pe comportament și impact (model SBI).", 3),
-            ("Gestionarea propriilor reacții emoționale", "Păstrarea calmului și a stării de adult în situații tensionate.", 4),
-            ("Gestionarea reacțiilor celorlalți", "De-escaladarea rezistenței și a defensivității interlocutorului.", 5),
-            ("Rezolvarea colaborativă a conflictelor", "Găsirea de opțiuni reciproc acceptabile și acorduri concrete.", 6),
-            ("Verificarea înțelegerii și a alinierii", "Confirmarea reciprocă a mesajelor și a pașilor următori.", 7),
+            (
+                "Ascultare activă",
+                "Capacitatea de a asculta pentru a înțelege perspectiva celuilalt, fără a întrerupe sau judeca.",  # noqa: E501
+                1,
+            ),
+            (
+                "Exprimarea asertivă a nevoilor și limitelor",
+                "Formularea clară a poziției proprii fără agresivitate sau pasivitate.",
+                2,
+            ),
+            (
+                "Feedback constructiv",
+                "Oferirea de feedback specific, orientat pe comportament și impact (model SBI).",
+                3,
+            ),
+            (
+                "Gestionarea propriilor reacții emoționale",
+                "Păstrarea calmului și a stării de adult în situații tensionate.",
+                4,
+            ),
+            (
+                "Gestionarea reacțiilor celorlalți",
+                "De-escaladarea rezistenței și a defensivității interlocutorului.",
+                5,
+            ),
+            (
+                "Rezolvarea colaborativă a conflictelor",
+                "Găsirea de opțiuni reciproc acceptabile și acorduri concrete.",
+                6,
+            ),
+            (
+                "Verificarea înțelegerii și a alinierii",
+                "Confirmarea reciprocă a mesajelor și a pașilor următori.",
+                7,
+            ),
         ]
 
         for name, desc, order in standard_competencies:
@@ -323,16 +348,22 @@ async def import_supabase_archive() -> dict[str, int]:
                 inv_weak = ""
                 inv_improved = ""
 
-                m_rw = re.search(r"-\s*\*\*slab(?:\s*\(real\))?:\*\*\s*[„\"]?([^„\"\n]+)[”\"]?", sec)
+                m_rw = re.search(
+                    r"-\s*\*\*slab(?:\s*\(real\))?:\*\*\s*[„\"]?([^„\"\n]+)[”\"]?", sec
+                )
                 if m_rw:
                     real_weak = m_rw.group(1).strip()
-                m_ri = re.search(r"-\s*\*\*îmbunătățit(?:\s*\(real\))?:\*\*\s*[„\"]?([^„\"\n]+)[”\"]?", sec)
+                m_ri = re.search(
+                    r"-\s*\*\*îmbunătățit(?:\s*\(real\))?:\*\*\s*[„\"]?([^„\"\n]+)[”\"]?", sec
+                )
                 if m_ri:
                     real_improved = m_ri.group(1).strip()
                 m_iw = re.search(r"-\s*\*\*slab\s*\(inventat\):\*\*\s*[„\"]?([^„\"\n]+)[”\"]?", sec)
                 if m_iw:
                     inv_weak = m_iw.group(1).strip()
-                m_ii = re.search(r"-\s*\*\*îmbunătățit\s*\(inventat\):\*\*\s*[„\"]?([^„\"\n]+)[”\"]?", sec)
+                m_ii = re.search(
+                    r"-\s*\*\*îmbunătățit\s*\(inventat\):\*\*\s*[„\"]?([^„\"\n]+)[”\"]?", sec
+                )
                 if m_ii:
                     inv_improved = m_ii.group(1).strip()
 
