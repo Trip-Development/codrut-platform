@@ -371,6 +371,9 @@ describe("PracticeWorkspace — raspunsul omului ramane pe ecran (plicul 83)", (
     await act(async () => amanat.respinge(new Error("Serverul nu raspunde.")));
 
     await waitFor(() => expect((caseta as HTMLTextAreaElement).value).toBe("Text care nu pleaca."));
-    expect(screen.queryAllByText("Text care nu pleaca.")).toHaveLength(0);
+    // in fir nu mai e; singurul loc unde se vede e caseta, unde s-a intors
+    expect(
+      screen.queryAllByText("Text care nu pleaca.", { ignore: "script, style, textarea" }),
+    ).toHaveLength(0);
   });
 });
