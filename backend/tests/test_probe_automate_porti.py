@@ -82,4 +82,15 @@ def test_portile_prind_numele_lipsa_si_metodele_scoase() -> None:
     assert p["1"]["picate"] == ["pas 2: vertex_rate_limited"]
     assert p["7"]["picate"] == ["pas 1: SANDWICH"]
     assert "salutul nu contine numele omului" in p["5"]["picate"]
+
+
+def test_adkar_si_oils_se_numara_dar_nu_pica_poarta() -> None:
+    """Plicul 95: raman in quizurile intermediare, cu voia lui Andrei (19 septembrie)."""
+    pasi = [_pas(1, "raspuns", "Întrebarea 3/10: În modelul ADKAR, ce urmează după Awareness? "
+                               "Și în OILS, ce înseamnă O? Și încă o dată: ADKAR.")]
+
+    p = portile("knowledge", pasi, 1)
+
+    assert p["7"]["picate"] == [] and p["7"]["trecute"] == p["7"]["instante"] == 1
+    assert p["7"]["numarate"] == {"ADKAR": 2, "OILS": 1}
     assert not p["2"]["aplicabila"] and p["2"]["instante"] == 0
