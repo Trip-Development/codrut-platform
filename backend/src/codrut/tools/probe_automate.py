@@ -59,7 +59,8 @@ REPLICA_MODEL = re.compile(
     r"(ai fi putut (spune|zice|formula|încerca|întreba)|ai putea (spune|zice|formula)"
     r"|puteai (spune|zice)|(o )?variant[ăa] mai (bun[ăa]|clar[ăa])|ar fi sunat"
     r"|mai bine ar fi fost s[ăa] spui|încearc[ăa] (așa|ceva de genul))"
-    r"[^\n]{0,200}?[«„\"“]",
+    # replica vine des pe randul urmator („Ai fi putut spune:\n„...”") — plicul 82
+    r"[\s\S]{0,200}?[«„\"“]",
     re.IGNORECASE,
 )
 NUME_INTERZISE = re.compile(
@@ -160,6 +161,30 @@ def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
 # ---------------------------------------------------------------- rularea
 
 
+def reevalueaza(cale: Path) -> int:
+    """Recalculeaza portile pe textele salvate, cu regulile de acum. Niciun apel la model.
+
+    Originalul ramane langa, cu sufixul `.inainte-de-reevaluare`; se scrie si ce s-a schimbat.
+    """
+    linii = cale.read_text(encoding="utf-8").splitlines()
+    copie = cale.with_suffix(".inainte-de-reevaluare.jsonl")
+    if not copie.exists():
+        copie.write_text("\n".join(linii) + "\n", encoding="utf-8")
+    noi = []
+    for linie in linii:
+        d = json.loads(linie)
+        if d.get("tip") == "sesiune":
+            vechi = {k: v["trecute"] for k, v in d["porti"].items()}
+            d["porti"] = portile(d["mod"], d["pasi"], d["rulare"])
+            dif = {k: (vechi[k], v["trecute"]) for k, v in d["porti"].items()
+                   if vechi.get(k) != v["trecute"]}
+            if dif:
+                print(f"{d['id']}: poarta -> (trecute inainte, trecute acum) {dif}")
+        noi.append(json.dumps(d, ensure_ascii=False))
+    cale.write_text("\n".join(noi) + "\n", encoding="utf-8")
+    return 0
+
+
 class Numarator:
     """Numara fiecare raspuns HTTP de la Vertex, inclusiv reincercarile facute de aplicatie."""
 
@@ -223,6 +248,11 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int) -> dict:
             rand["eroare"] = getattr(err, "code", None) or type(err).__name__
         rand["secunde"] = round(time.monotonic() - t0, 2)
         pasi.append(rand)
+        # Ca aplicatia (service.py, plicurile 64-65): o replica a omului ramasa fara raspuns
+        # nu ajunge la model; urmatoarea ii ia locul. Deci dupa o eroare istoricul ramane
+        # cum era — fara replica goala a lui Cody, care ar fi rupt conversatia.
+        if rand["eroare"] or not rand["raspuns"]:
+            continue
         if pas.text is not None:
             istoric.append(GenerationMessage(role="user", text=pas.text))
         istoric.append(GenerationMessage(role="model", text=rand["raspuns"]))
@@ -266,14 +296,20 @@ class Iesire:
 async def main(argv: list[str] | None = None) -> int:
     reale = get_settings()
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--sesiuni", required=True, help="lista ordonata, ex. roleplay:1,knowledge:1")
+    ap.add_argument("--sesiuni", help="lista ordonata, ex. roleplay:1,knowledge:1")
     ap.add_argument("--model", default=reale.vertex_actor_model)
     ap.add_argument("--destinatie", default=reale.vertex_region)
     ap.add_argument("--plafon-apeluri", type=int, default=260)
     ap.add_argument("--plafon-minute", type=float, default=90)
-    ap.add_argument("--jurnal", type=Path, required=True,
+    ap.add_argument("--jurnal", type=Path,
                     help="fisierul din container unde se scrie fiecare sesiune terminata")
+    ap.add_argument("--reevalueaza", type=Path, metavar="STARE.jsonl",
+                    help="doar recalculeaza portile din textele salvate; niciun apel la model")
     a = ap.parse_args(argv)
+    if a.reevalueaza:
+        return reevalueaza(a.reevalueaza)
+    if not (a.sesiuni and a.jurnal):
+        ap.error("--sesiuni si --jurnal sunt obligatorii pentru o rulare")
     scrie = Iesire(a.jurnal)
 
     sesiuni = []
