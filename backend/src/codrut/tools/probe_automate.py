@@ -6,9 +6,15 @@ sapte porti si numara 429-urile, erorile, durata si textul care intra si iese.
 
 Se cheama din containerul backendului de proba; o comanda locala o porneste si tine socoteala
 (`SPEC-CODY/UNELTE/probe-automate.py`). Scrie pe iesire UN RAND JSON pe sesiune terminata,
-imediat — cine citeste poate fi oprit oricand fara sa piarda ce s-a terminat.
+imediat, si acelasi rand in jurnalul din container (`--jurnal`).
+
+Daca cine citeste dispare (laptop inchis, legatura cazuta), rularea NU se opreste: merge mai
+departe pe server, in limita plafoanelor, si scrie in jurnal. Comanda de pe calculator strange
+din jurnal, la urmatoarea pornire, tot ce s-a terminat intre timp. Masurat la plicul 82: cand
+legatura se taie, iesirea procesului din container nu se inchide, deci procesul nu afla singur.
 
     python -m codrut.tools.probe_automate --sesiuni roleplay:1,knowledge:1,coaching:1 \
+        --jurnal /tmp/probe_automate/X.jsonl \
         [--model M] [--destinatie D] [--plafon-apeluri 260] [--plafon-minute 90]
 
 Regulile de rulare: `SPEC-CODY/UNELTE/REGULI-PROBE-AUTOMATE.md`.
@@ -19,11 +25,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import re
 import sys
 import time
 from collections import Counter
 from datetime import UTC, datetime
+from pathlib import Path
 
 import httpx
 
@@ -233,9 +241,26 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int) -> dict:
     }
 
 
-def scrie(obiect: dict) -> None:
-    sys.stdout.write(json.dumps(obiect, ensure_ascii=False) + "\n")
-    sys.stdout.flush()
+class Iesire:
+    """Un rand pe iesire si acelasi rand in jurnal. Iesirea poate muri; jurnalul, nu."""
+
+    def __init__(self, jurnal: Path) -> None:
+        jurnal.parent.mkdir(parents=True, exist_ok=True)
+        self.jurnal = jurnal
+        self.iesirea_traieste = True
+
+    def __call__(self, obiect: dict) -> None:
+        rand = json.dumps(obiect, ensure_ascii=False) + "\n"
+        with self.jurnal.open("a", encoding="utf-8") as f:
+            f.write(rand)
+            f.flush()
+            os.fsync(f.fileno())
+        if self.iesirea_traieste:
+            try:
+                sys.stdout.write(rand)
+                sys.stdout.flush()
+            except (BrokenPipeError, OSError):
+                self.iesirea_traieste = False  # continua doar in jurnal
 
 
 async def main(argv: list[str] | None = None) -> int:
@@ -246,7 +271,10 @@ async def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--destinatie", default=reale.vertex_region)
     ap.add_argument("--plafon-apeluri", type=int, default=260)
     ap.add_argument("--plafon-minute", type=float, default=90)
+    ap.add_argument("--jurnal", type=Path, required=True,
+                    help="fisierul din container unde se scrie fiecare sesiune terminata")
     a = ap.parse_args(argv)
+    scrie = Iesire(a.jurnal)
 
     sesiuni = []
     for bucata in a.sesiuni.split(","):
@@ -265,11 +293,12 @@ async def main(argv: list[str] | None = None) -> int:
         timeout=float(setari.vertex_timeout_seconds), event_hooks={"response": [numarator]}
     )
     furnizor = build_generation_provider(setari, client=client)
+    inceput = datetime.now(UTC).isoformat(timespec="seconds")
     scrie({"tip": "cap", "model": a.model, "destinatie": a.destinatie,
            "furnizor": setari.generation_provider, "versiune_prompt": CODY_PROMPT_VERSION,
            "plafon_apeluri": a.plafon_apeluri, "plafon_minute": a.plafon_minute,
            "sesiuni_cerute": len(sesiuni),
-           "inceput": datetime.now(UTC).isoformat(timespec="seconds")})
+           "inceput": inceput})
 
     termen = time.monotonic() + a.plafon_minute * 60
     apeluri = 0
@@ -289,16 +318,12 @@ async def main(argv: list[str] | None = None) -> int:
             scrie(rezultat)
     finally:
         await client.aclose()
-    scrie({"tip": "sfarsit", "motiv": motiv, "sesiuni_facute": facute,
+    scrie({"tip": "sfarsit", "motiv": motiv, "sesiuni_facute": facute, "inceput": inceput,
+           "sfarsit_la": datetime.now(UTC).isoformat(timespec="seconds"),
            "sesiuni_cerute": len(sesiuni), "apeluri": apeluri,
            "http": {str(k): v for k, v in sorted(numarator.coduri.items())}})
     return 0
 
 
 if __name__ == "__main__":
-    try:
-        sys.exit(asyncio.run(main()))
-    except BrokenPipeError:
-        # Cine citea a fost oprit (laptop inchis, legatura cazuta). Sesiunile terminate sunt
-        # deja scrise la el; aici nu mai e nimic de salvat.
-        sys.exit(0)
+    sys.exit(asyncio.run(main()))
