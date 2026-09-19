@@ -42,7 +42,6 @@ from codrut.modules.practice.policies import ensure_participant_may_practice
 from codrut.modules.practice.pricing import estimate_pessimistic_cost
 from codrut.modules.practice.prompts import (
     CODY_PROMPT_VERSION,
-    CODY_SYSTEM_PROMPT,
     get_system_prompt_for_kind,
 )
 from codrut.modules.practice.quotas import (
@@ -832,7 +831,7 @@ class PracticeSessionService:
         outcome_kind: OutcomeKind = OutcomeKind.good,
         note: str | None = None,
     ) -> tuple[PracticeSession, str | None]:
-        """Explicitly end a practice session, generate summary using SUMMARY_PROMPT, record outcome and persist evaluation data."""
+        """Explicitly end a practice session, generate summary using SUMMARY_PROMPT, record outcome and persist evaluation data."""  # noqa: E501
         import json
         import logging
         import re
@@ -917,33 +916,52 @@ class PracticeSessionService:
                             if isinstance(v, (int, float)):
                                 c_name = score_name_map.get(k, k)
                                 normalized_score = int(round(float(v) * 10))
-                                level = 1 if normalized_score < 50 else (2 if normalized_score < 80 else 3)
+                                level = (
+                                    1 if normalized_score < 50
+                                    else (2 if normalized_score < 80 else 3)
+                                )
                                 cs = CompetencyScore(
                                     user_id=profile.user_id or principal.user_id,
                                     project_id=proiect_id,
                                     score=min(100, max(0, normalized_score)),
                                     level=level,
-                                    justification=f"Scor evaluat automat în modul {session_obj.kind.value}: {v}/10.",
+                                    justification=(
+                                        f"Scor evaluat automat în modul "
+                                        f"{session_obj.kind.value}: {v}/10."
+                                    ),
                                     conversation_id=str(session_id),
                                     competency_name=c_name,
                                     source_type="session",
                                 )
                                 self.session.add(cs)
 
-                        conclusion_part = summary_text.split("##Recomandări")[0].replace("##Concluzie", "").strip()
+                        conclusion_part = (
+                            summary_text.split("##Recomandări")[0]
+                            .replace("##Concluzie", "")
+                            .strip()
+                        )
                         im = InsightMoment(
                             user_id=profile.user_id or principal.user_id,
                             conversation_id=str(session_id),
-                            summary=conclusion_part[:500] if conclusion_part else "Sesiune finalizată.",
+                            summary=(
+                                conclusion_part[:500] if conclusion_part else "Sesiune finalizată."
+                            ),
                         )
                         self.session.add(im)
 
-                        numeric_scores = [float(x) for x in scores_dict.values() if isinstance(x, (int, float))]
-                        avg_score = int(round(sum(numeric_scores) / max(1, len(numeric_scores)) * 10)) if numeric_scores else 50
+                        numeric_scores = [
+                            float(x) for x in scores_dict.values() if isinstance(x, (int, float))
+                        ]
+                        avg_score = (
+                            int(round(sum(numeric_scores) / max(1, len(numeric_scores)) * 10))
+                            if numeric_scores else 50
+                        )
                         pm = ParticipantMemory(
                             user_id=profile.user_id or principal.user_id,
                             session_id=str(session_id),
-                            summary=conclusion_part[:1000] if conclusion_part else summary_text[:1000],
+                            summary=(
+                                conclusion_part[:1000] if conclusion_part else summary_text[:1000]
+                            ),
                             key_quotes=[],
                             evolution_signals=scores_dict,
                             personal_context={"topic": topic, "characters": characters},
@@ -955,14 +973,18 @@ class PracticeSessionService:
 
                         profile.xp = (profile.xp or 0) + 10
                         profile.streak = (profile.streak or 0) + 1
-                        stmt_u = select(User).where(User.id == (profile.user_id or principal.user_id))
+                        stmt_u = select(User).where(
+                            User.id == (profile.user_id or principal.user_id)
+                        )
                         user_obj = (await self.session.execute(stmt_u)).scalar_one_or_none()
                         if user_obj:
                             user_obj.xp = (user_obj.xp or 0) + 10
                             user_obj.streak = (user_obj.streak or 0) + 1
 
                     except Exception as parse_err:
-                        logging.getLogger(__name__).warning(f"Failed to parse evaluation JSON in end_session: {parse_err}")
+                        logging.getLogger(__name__).warning(
+                            f"Failed to parse evaluation JSON in end_session: {parse_err}"
+                        )
                 else:
                     # Fara randul asta defectul e invizibil: raspunsul vine 200 OK,
                     # sesiunea se inchide, si tabloul ramane pe zero fara ca nimic
@@ -1049,10 +1071,14 @@ class PracticeSessionService:
         now = datetime.now(UTC)
         today_start = datetime(now.year, now.month, now.day, tzinfo=UTC)
 
-        stmt_sess = select(func.count(PracticeSession.id)).where(PracticeSession.started_at >= today_start)
+        stmt_sess = select(func.count(PracticeSession.id)).where(
+            PracticeSession.started_at >= today_start
+        )
         sessions_today = (await self.session.execute(stmt_sess)).scalar_one() or 0
 
-        stmt_turns = select(func.count(PracticeTurn.id)).where(PracticeTurn.created_at >= today_start)
+        stmt_turns = select(func.count(PracticeTurn.id)).where(
+            PracticeTurn.created_at >= today_start
+        )
         turns_today = (await self.session.execute(stmt_turns)).scalar_one() or 0
 
         stmt_cached_turns = select(func.count(PracticeTurn.id)).where(
@@ -1074,7 +1100,9 @@ class PracticeSessionService:
         output_t = row[2] or 0
         thought_t = row[3] or 0
 
-        cache_percent = float(round((Decimal(cached_t) / Decimal(prompt_t) * 100), 1)) if prompt_t > 0 else 0.0
+        cache_percent = (
+            float(round((Decimal(cached_t) / Decimal(prompt_t) * 100), 1)) if prompt_t > 0 else 0.0
+        )
 
         usage_today = TokenUsage(
             prompt_tokens=prompt_t,

@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 
 from codrut.modules.practice.scoring import (
-    CompetencyEvidence,
     ScoreEntry,
     compute_competency_evidence,
     compute_daily_xp,
@@ -131,7 +130,7 @@ def test_competency_evidence_pedagogy_rules():
     assert ev_app.level == "APLICARE"
     assert ev_app.color == "#BA7517"
 
-    # 4. 10 role-plays in a SINGLE DAY with score >= 70% -> only APLICARE (does not reach Consolidare because distinct days < 2)
+    # 4. 10 role-plays in a SINGLE DAY with score >= 70% -> only APLICARE (does not reach Consolidare because distinct days < 2)  # noqa: E501
     single_day_entries = [
         ScoreEntry(score=85, created_at=base_date + timedelta(hours=i), source_type="session")
         for i in range(10)

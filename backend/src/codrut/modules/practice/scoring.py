@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Sequence
 
 COMPETENCY_LEVEL_DESCRIPTIONS = {
     "INTEGRARE": "E reflex automat — apare și sub stres, fără efort conștient.",
@@ -127,7 +127,7 @@ def compute_daily_xp(entries: Sequence[tuple[str, int | float, datetime]]) -> in
 
 
 def compute_streak(activity_dates: Sequence[date], reference_date: date | None = None) -> int:
-    """Calculează numărul de zile consecutive cu activitate până la reference_date (implicit azi)."""
+    """Calculează numărul de zile consecutive cu activitate până la reference_date (implicit azi)."""  # noqa: E501
     if not activity_dates:
         return 0
 
@@ -161,10 +161,12 @@ def compute_competency_evidence(entries: Sequence[ScoreEntry]) -> CompetencyEvid
     CONȘTIENTIZARE  competența apare în sesiuni, dar fără dovezile de sus
 
     Quiz-ul (source_type='cunostinte') NU contribuie la nivel. Test IN/OUT idem.
-    """
+    """  # noqa: E501
     valid_roleplays = [
-        e for e in entries
-        if e.source_type.lower() not in ("cunostinte", "quiz", "knowledge", "test_in", "test_out", "test-in", "test-out")
+        e
+        for e in entries
+        if e.source_type.lower()
+        not in ("cunostinte", "quiz", "knowledge", "test_in", "test_out", "test-in", "test-out")
     ]
 
     if not valid_roleplays:
@@ -177,7 +179,7 @@ def compute_competency_evidence(entries: Sequence[ScoreEntry]) -> CompetencyEvid
             days_span_70=0,
             distinct_days_70=0,
             average_score=0.0,
-            why_not_higher="Exersează primul role-play pentru a debloca nivelul Aplicare (scor ≥50%).",
+            why_not_higher="Exersează primul role-play pentru a debloca nivelul Aplicare (scor ≥50%).",  # noqa: E501
         )
 
     avg_score = round(sum(e.score for e in valid_roleplays) / len(valid_roleplays), 1)
@@ -198,13 +200,13 @@ def compute_competency_evidence(entries: Sequence[ScoreEntry]) -> CompetencyEvid
     elif len(scores_70) >= 2 and distinct_days_70 >= 2:
         level = "CONSOLIDARE"
         if len(scores_70) < 3:
-            why_not_higher = "Pentru Integrare: ai nevoie de cel puțin 3 simulări cu scor ≥70% întinse pe minim 14 zile."
+            why_not_higher = "Pentru Integrare: ai nevoie de cel puțin 3 simulări cu scor ≥70% întinse pe minim 14 zile."  # noqa: E501
         else:
             days_needed = 14 - days_span_70
-            why_not_higher = f"Pentru Integrare: ai cele 3 scoruri ≥70%, dar intervalul actual este de {days_span_70} zile (necesar ≥14 zile, mai sunt ~{days_needed} zile de consistență)."
+            why_not_higher = f"Pentru Integrare: ai cele 3 scoruri ≥70%, dar intervalul actual este de {days_span_70} zile (necesar ≥14 zile, mai sunt ~{days_needed} zile de consistență)."  # noqa: E501
     elif len(scores_50) >= 1:
         level = "APLICARE"
-        why_not_higher = "Pentru Consolidare: ai nevoie de minim 2 simulări cu scor ≥70% în cel puțin 2 zile diferite."
+        why_not_higher = "Pentru Consolidare: ai nevoie de minim 2 simulări cu scor ≥70% în cel puțin 2 zile diferite."  # noqa: E501
     else:
         level = "CONȘTIENTIZARE"
         why_not_higher = "Pentru Aplicare: ai nevoie de cel puțin o simulare cu scor ≥50%."

@@ -55,13 +55,13 @@ from codrut.modules.participants.schemas import (
 # Omul are profil, dar nicio inscriere si nicio sarcina: n-are ce vedea inca.
 NEINSCRIS_TITLU = "Nu ești încă înscris într-un proiect."
 NEINSCRIS_DESCRIERE = "Trainerul tău te adaugă, și apoi poți începe."
-from codrut.modules.scoring.models import (
+from codrut.modules.scoring.models import (  # noqa: E402
     ResultPublication,
     ResultPublicationKind,
     ScoringResult,
 )
-from codrut.modules.scoring.publication import definition_publication_checksum
-from codrut.modules.scoring.scale import derive_definition_score_scale
+from codrut.modules.scoring.publication import definition_publication_checksum  # noqa: E402
+from codrut.modules.scoring.scale import derive_definition_score_scale  # noqa: E402
 
 COMPLETED_ASSIGNMENT_STATUSES = {
     AssignmentStatus.submitted,

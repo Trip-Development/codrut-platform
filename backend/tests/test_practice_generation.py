@@ -25,13 +25,13 @@ from codrut.modules.companies.models import (
     CompanyProjectStatus,
 )
 from codrut.modules.identity.models import User  # noqa: F401
+from codrut.modules.practice import generation_provider as modul_furnizor
 from codrut.modules.practice.budget import (
     BudgetExceeded,
     release,
     reserve,
     settle,
 )
-from codrut.modules.practice import generation_provider as modul_furnizor
 from codrut.modules.practice.generation_provider import (
     LocalGenerationProvider,
     VertexGenerationProvider,

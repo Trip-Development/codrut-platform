@@ -1,30 +1,23 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, date, datetime
+from datetime import date
 from typing import Any
 
 from sqlalchemy import and_, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from codrut.core.errors import DomainError
-from codrut.modules.companies.models import CompanyProject, ParticipantProfile, ProjectMembership
+from codrut.modules.companies.models import CompanyProject, ParticipantProfile
 from codrut.modules.identity.models import User
 from codrut.modules.identity.schemas import SessionPrincipal
+from codrut.modules.practice.competency_aliases import CANONICAL_COMPETENCIES, match_comp
+from codrut.modules.practice.evaluator import TRAINER_PREFIX
 from codrut.modules.practice.models import (
     CompetencyScore,
     InsightMoment,
-    ParticipantMemory,
-    PracticeCompetency,
-    PracticeProgramSettings,
-    PracticeSession,
-    PracticeTheme,
     SessionSample,
 )
-from codrut.modules.practice.competency_aliases import CANONICAL_COMPETENCIES, match_comp
-from codrut.modules.practice.evaluator import TRAINER_PREFIX
 from codrut.modules.practice.scoring import (
-    CompetencyEvidence,
     ScoreEntry,
     compute_competency_evidence,
     compute_daily_xp,
@@ -43,7 +36,7 @@ class PracticeDashboardService:
         principal: SessionPrincipal,
         project_id: uuid.UUID | None = None,
     ) -> dict[str, Any]:
-        """Aggregate all participant metrics, competency evidence, moments, and samples for the dashboard."""
+        """Aggregate all participant metrics, competency evidence, moments, and samples for the dashboard."""  # noqa: E501
         # 1. Resolve participant profile
         #
         # Aceeasi forma ca la plicul 30, pe drumul participantului — plicul 73. Aici ramasese

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol
@@ -68,15 +69,16 @@ class HttpxAuthRequest(GoogleAuthRequest):
             raise TransportError(f"HTTP auth request failed: {exc}") from exc
 
 
-import base64
 
 
 TRANSCRIBE_PROMPT = (
     "Ești un asistent specializat în transcrierea audio în text pentru limba română.\n"
     "Transcrie înregistrarea audio cu acuratețe maximă în limba română.\n"
     "Punctuația trebuie dedusă din intonație și pauze.\n"
-    "Elimină bâlbele, repetițiile involuntare și sunetele de ezitare („ăăă\", „îîî\", „mda\", „păi\").\n"
-    "Păstrează doar textul curat și inteligibil. Nu adăuga comentarii, explicații sau note proprii. Returnează doar transcrierea."
+    "Elimină bâlbele, repetițiile involuntare și sunetele de ezitare "
+    "(„ăăă\", „îîî\", „mda\", „păi\").\n"
+    "Păstrează doar textul curat și inteligibil. Nu adăuga comentarii, explicații sau "
+    "note proprii. Returnează doar transcrierea."
 )
 
 
@@ -407,7 +409,9 @@ class VertexGenerationProvider:
                     if not candidates:
                         continue
                     parts = candidates[0].get("content", {}).get("parts", [])
-                    text = "".join(part.get("text", "") for part in parts if isinstance(part, dict)).strip()
+                    text = "".join(
+                        part.get("text", "") for part in parts if isinstance(part, dict)
+                    ).strip()
 
                     usage_metadata = data.get("usageMetadata", {})
                     prompt_tokens = usage_metadata.get("promptTokenCount", 0)

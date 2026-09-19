@@ -3,19 +3,19 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import select
 
-from codrut.contracts.generation import GenerationMessage, GenerationPurpose, GenerationRequest, TokenUsage
+from codrut.contracts.generation import (
+    TokenUsage,
+)
 from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
 from codrut.modules.companies.models import (
     Company,
     CompanyProject,
-    CompanyProjectStatus,
     ParticipantProfile,
     ProjectMembership,
 )
@@ -23,9 +23,7 @@ from codrut.modules.identity.models import User, UserAccountType, UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.identity.terms import CURRENT_TERMS_VERSION
 from codrut.modules.practice.models import (
-    PracticeProgramSettings,
     PracticeTurn,
-    ProgramMode,
     SessionKind,
     TurnRole,
 )
@@ -86,7 +84,7 @@ async def run_5turn_cost_probe() -> dict:
             account_type=UserAccountType.registered,
             terms_accepted_at=datetime.now(UTC),
             terms_version=CURRENT_TERMS_VERSION,
-            session_token="probe-test-session-token",
+            session_token="probe-test-session-token",  # noqa: S106
         )
 
         service = PracticeSessionService(session=db, settings=settings)
@@ -152,17 +150,21 @@ async def run_5turn_cost_probe() -> dict:
             total_thought_tokens += thought_tok
             total_session_cost += turn_cost
 
-            turn_results.append({
-                "turn": i,
-                "user_text": user_text,
-                "actor_reply": (act_turn.text[:80] + "...") if len(act_turn.text) > 80 else act_turn.text,
-                "duration_s": round(dur, 3),
-                "prompt_tokens": prompt_tok,
-                "cached_tokens": cached_tok,
-                "output_tokens": out_tok,
-                "thought_tokens": thought_tok,
-                "turn_cost_usd": float(turn_cost),
-            })
+            turn_results.append(
+                {
+                    "turn": i,
+                    "user_text": user_text,
+                    "actor_reply": (act_turn.text[:80] + "...")
+                    if len(act_turn.text) > 80
+                    else act_turn.text,
+                    "duration_s": round(dur, 3),
+                    "prompt_tokens": prompt_tok,
+                    "cached_tokens": cached_tok,
+                    "output_tokens": out_tok,
+                    "thought_tokens": thought_tok,
+                    "turn_cost_usd": float(turn_cost),
+                }
+            )
 
     # End session to run complete closing flow
     async with SessionLocal() as db:
@@ -189,7 +191,7 @@ async def run_5turn_cost_probe() -> dict:
         "summary_text": summary_text,
     }
 
-    with open("/tmp/02-session-5turns-cost.json", "w") as f:
+    with open("/tmp/02-session-5turns-cost.json", "w") as f:  # noqa: S108
         json.dump(probe_summary, f, indent=2, ensure_ascii=False)
 
     print("=== 5-TURN PROBE COMPLETED ===")

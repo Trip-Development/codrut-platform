@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
-import sys
-import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -13,9 +10,7 @@ from codrut.contracts.generation import GenerationMessage, GenerationPurpose, Ge
 from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
 from codrut.modules.companies.models import (
-    Company,
     CompanyProject,
-    CompanyProjectStatus,
     ParticipantProfile,
     ProjectMembership,
 )
@@ -26,15 +21,11 @@ from codrut.modules.practice.generation_provider import build_generation_provide
 from codrut.modules.practice.models import (
     OutcomeKind,
     PracticeProgramSettings,
-    PracticeTurn,
-    ProgramMode,
     SessionKind,
-    TurnRole,
 )
 from codrut.modules.practice.prompts import (
     CODY_PROMPT_VERSION,
     get_core_material,
-    get_summary_prompt,
     get_system_prompt_for_kind,
 )
 from codrut.modules.practice.service import PracticeSessionService
@@ -72,7 +63,7 @@ async def run_dialog_probe_v4() -> None:
         if not user:
             user = User(
                 email=email,
-                password_hash="not-used",
+                password_hash="not-used",  # noqa: S106
                 role=UserRole.participant,
                 account_type=UserAccountType.registered,
                 terms_version=CURRENT_TERMS_VERSION,
@@ -129,7 +120,7 @@ async def run_dialog_probe_v4() -> None:
             terms_version=CURRENT_TERMS_VERSION,
             terms_accepted_at=datetime.now(UTC),
             consent_current=True,
-            session_token="probe_v4_session_token_32bytes_ok",
+            session_token="probe_v4_session_token_32bytes_ok",  # noqa: S106
         )
 
         service = PracticeSessionService(session=db, settings=settings)
@@ -144,16 +135,18 @@ async def run_dialog_probe_v4() -> None:
             kind=SessionKind.roleplay,
         )
         await db.commit()
-        print(f"Sesiune Role-Play creată: ID={rp_session.id} (prompt_version={rp_session.prompt_version})\n")
+        print(
+            f"Sesiune Role-Play creată: ID={rp_session.id} (prompt_version={rp_session.prompt_version})\n"  # noqa: E501
+        )
 
         rp_turns = [
             "Salut Cody, sunt gata să facem o simulare.",
             "Păi nu știu ce vrei de la mine, eu am trimis ce trebuia.",
             "Tu mereu găsești ceva să critici. Dacă nu-ți convine, fă-o tu!",
-            "Nu mă interesează regulile tale. Eu lucrez cum vreau eu și nimeni nu s-a plâns până acum.",
+            "Nu mă interesează regulile tale. Eu lucrez cum vreau eu și nimeni nu s-a plâns până acum.",  # noqa: E501
             "Bine, dar problema e că tu nu știi să ceri clar ce vrei.",
-            "Înțeleg că ești frustrat de întârziere, dar când îmi vorbești pe tonul ăsta nu putem colabora. Hai să stabilim exact ce lipsește din raport.",
-            "Propun să ne uităm acum pe secțiunea 3 și să îți predau completările mâine până la ora 14:00. Ești de acord?",
+            "Înțeleg că ești frustrat de întârziere, dar când îmi vorbești pe tonul ăsta nu putem colabora. Hai să stabilim exact ce lipsește din raport.",  # noqa: E501
+            "Propun să ne uităm acum pe secțiunea 3 și să îți predau completările mâine până la ora 14:00. Ești de acord?",  # noqa: E501
             "Perfect, notez ora 14:00 și îți trimit pe email confirmarea termenului agreat.",
         ]
 
@@ -170,7 +163,9 @@ async def run_dialog_probe_v4() -> None:
             dur = (datetime.now(UTC) - start_t).total_seconds()
             tokens_in = actor_turn.prompt_tokens if actor_turn else 0
             tokens_out = actor_turn.output_tokens if actor_turn else 0
-            print(f"\n--- [Role-Play Replica {idx}/8] Cody ({dur:.2f}s | in:{tokens_in} out:{tokens_out}) ---")
+            print(
+                f"\n--- [Role-Play Replica {idx}/8] Cody ({dur:.2f}s | in:{tokens_in} out:{tokens_out}) ---"  # noqa: E501
+            )
             print(actor_turn.text if actor_turn else "[FĂRĂ RĂSPUNS]")
             print("-" * 65 + "\n")
 
@@ -220,7 +215,9 @@ async def run_dialog_probe_v4() -> None:
             override_settings = Settings(
                 vertex_actor_model=mod,
                 vertex_region=settings.vertex_region,
-                generation_provider="vertex" if settings.generation_provider == "vertex" else "local",
+                generation_provider="vertex"
+                if settings.generation_provider == "vertex"
+                else "local",
             )
             provider = build_generation_provider(override_settings)
 
@@ -239,7 +236,9 @@ async def run_dialog_probe_v4() -> None:
                     Decimal(res.usage.output_tokens) * Decimal("2.50") / Decimal(1_000_000)
                 )
                 print(f"  Status: SUCCES ({dur_m:.2f}s)")
-                print(f"  Prompt tokens: {res.usage.prompt_tokens} | Output tokens: {res.usage.output_tokens}")
+                print(
+                    f"  Prompt tokens: {res.usage.prompt_tokens} | Output tokens: {res.usage.output_tokens}"  # noqa: E501
+                )
                 print(f"  Cost estimat replică: ${float(cost):.6f}")
                 print(f"  Text replica: {res.text[:150]}...")
             except Exception as e:

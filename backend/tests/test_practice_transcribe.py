@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import io
 import uuid
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from codrut.main import create_app
 from codrut.core.config import Settings
+from codrut.main import create_app
 from codrut.modules.identity.schemas import SessionPrincipal
 
 
@@ -14,7 +15,7 @@ from codrut.modules.identity.schemas import SessionPrincipal
 async def test_transcribe_endpoint(test_db_session):
     settings = Settings(
         generation_provider="local",
-        jwt_secret="test-secret-key-1234567890",
+        jwt_secret="test-secret-key-1234567890",  # noqa: S106
     )
     app = create_app(settings=settings)
 
@@ -44,7 +45,7 @@ async def test_transcribe_endpoint(test_db_session):
 async def test_dashboard_endpoint(test_db_session):
     settings = Settings(
         generation_provider="local",
-        jwt_secret="test-secret-key-1234567890",
+        jwt_secret="test-secret-key-1234567890",  # noqa: S106
     )
     app = create_app(settings=settings)
 

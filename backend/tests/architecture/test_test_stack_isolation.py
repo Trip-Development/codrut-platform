@@ -1,5 +1,5 @@
 from pathlib import Path
-import pytest
+
 import yaml
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -10,7 +10,7 @@ TEST_COMPOSE_PATH = PROJECT_ROOT / "infra" / "test" / "compose.test.yaml"
 
 def load_yaml(path: Path) -> dict:
     assert path.exists(), f"Compose file does not exist: {path}"
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
@@ -27,12 +27,12 @@ def test_test_stack_service_names_do_not_collide_with_production():
     colliding_services = prod_services.intersection(test_services)
     assert not colliding_services, (
         f"Test compose services collide with production services: {colliding_services}. "
-        "Test services must use unique names (e.g. testbackend, testfrontend, testworker, testdb, testredis)."
+        "Test services must use unique names (e.g. testbackend, testfrontend, testworker, testdb, testredis)."  # noqa: E501
     )
     # NOTA / EXCEPTIE EXPLICITA:
     # Serviciul `testbackend` defineste pe reteaua interna aliasul `backend` (aliases: [backend]).
     # Acest alias este STRICT INTERN retelei izolate a casei de proba si este necesar pentru ca
-    # apelurile de proxy/SSR din testfrontend (Next.js server-side) sa rezolve `backend` fara EAI_AGAIN.
+    # apelurile de proxy/SSR din testfrontend (Next.js server-side) sa rezolve `backend` fara EAI_AGAIN.  # noqa: E501
     # Numele serviciului ramane `testbackend` (fara coliziune de container/serviciu compose).
 
 
@@ -61,8 +61,8 @@ def test_test_stack_traefik_routers_prefixed_with_codytest():
                     parts = label_key.split(".")
                     router_name = parts[3]
                     assert router_name.startswith("codytest-"), (
-                        f"Traefik router '{router_name}' in service '{service_name}' does not start with 'codytest-'. "
-                        "All test stack routers must start with 'codytest-' to avoid production route conflicts."
+                        f"Traefik router '{router_name}' in service '{service_name}' does not start with 'codytest-'. "  # noqa: E501
+                        "All test stack routers must start with 'codytest-' to avoid production route conflicts."  # noqa: E501
                     )
         elif isinstance(labels, list):
             for label in labels:
@@ -70,7 +70,7 @@ def test_test_stack_traefik_routers_prefixed_with_codytest():
                     parts = label.split("=")[0].split(".")
                     router_name = parts[3]
                     assert router_name.startswith("codytest-"), (
-                        f"Traefik router '{router_name}' in service '{service_name}' does not start with 'codytest-'."
+                        f"Traefik router '{router_name}' in service '{service_name}' does not start with 'codytest-'."  # noqa: E501
                     )
 
 
@@ -101,9 +101,11 @@ def test_test_stack_declares_no_published_ports():
 
 def test_test_stack_frontend_configures_internal_api_base_url():
     test_compose = load_yaml(TEST_COMPOSE_PATH)
-    testfrontend_env = test_compose.get("services", {}).get("testfrontend", {}).get("environment", {})
+    testfrontend_env = (
+        test_compose.get("services", {}).get("testfrontend", {}).get("environment", {})
+    )
     assert "INTERNAL_API_BASE_URL" in testfrontend_env, (
-        "testfrontend must define INTERNAL_API_BASE_URL so server-side page rendering calls testbackend instead of backend"
+        "testfrontend must define INTERNAL_API_BASE_URL so server-side page rendering calls testbackend instead of backend"  # noqa: E501
     )
     val = testfrontend_env["INTERNAL_API_BASE_URL"]
     assert "testbackend" in str(val), (

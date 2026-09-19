@@ -28,8 +28,8 @@ from codrut.modules.identity.models import User
 from codrut.modules.practice.competency_aliases import match_comp
 from codrut.modules.practice.models import (
     CompetencyScore,
-    PracticeSession,
     PracticeProgramSettings,
+    PracticeSession,
     SessionState,
 )
 from codrut.modules.practice.scoring import (
