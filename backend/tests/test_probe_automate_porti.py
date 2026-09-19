@@ -37,6 +37,9 @@ def test_citatul_trebuie_sa_fie_din_cuvintele_omului() -> None:
 
 def test_replica_model_cere_si_formularea_si_ghilimelele() -> None:
     assert are_replica_model(EVALUARE_SUB_9)
+    # forma cea mai des intalnita la masuratoarea de referinta: replica pe randul urmator
+    assert are_replica_model("Ai fi putut spune:\n„Carmen, hai să vedem ce lipsește.”")
+    assert are_replica_model("Ai fi putut spune:  \n„Radu, înțeleg graba.”")
     assert not are_replica_model("Ai fi putut fi mai orientat spre soluții.")
 
 
