@@ -40,8 +40,16 @@ NUMELE_PROFILULUI_LUI_A = "Profilul Contului A"
 
 async def _profil_al_lui_a_cu_adresa_lui_b(session):
     sufix = uuid.uuid4().hex[:8]
-    a = User(email=f"a-{sufix}@exemplu-cody.ro", password_hash="x", role=UserRole.participant)
-    b = User(email=f"b-{sufix}@exemplu-cody.ro", password_hash="x", role=UserRole.participant)
+    a = User(
+        email=f"a-{sufix}@exemplu-cody.ro",
+        password_hash="x",  # noqa: S106
+        role=UserRole.participant,
+    )
+    b = User(
+        email=f"b-{sufix}@exemplu-cody.ro",
+        password_hash="x",  # noqa: S106
+        role=UserRole.participant,
+    )
     companie = Company(name=f"Companie {sufix}")
     session.add_all([a, b, companie])
     await session.flush()
@@ -70,7 +78,8 @@ async def _profil_al_lui_a_cu_adresa_lui_b(session):
     session.add(profil)
     await session.flush()
     session.add(ProjectMembership(
-        company_id=companie.id, project_id=proiect.id, participant_profile_id=profil.id, active=True,
+        company_id=companie.id, project_id=proiect.id,
+        participant_profile_id=profil.id, active=True,
     ))
     await session.flush()
     return b, proiect, profil
@@ -81,7 +90,7 @@ def _principal(cont: User, rol: UserRole) -> SessionPrincipal:
         user_id=cont.id, email=cont.email, role=rol,
         available_workspaces=(rol,), default_workspace=rol,
         consent_current=True, terms_accepted_at=datetime.now(UTC),
-        terms_version=CURRENT_TERMS_VERSION, session_token="test",
+        terms_version=CURRENT_TERMS_VERSION, session_token="test",  # noqa: S106
     )
 
 
@@ -106,7 +115,9 @@ async def test_pornirea_participantului_nu_foloseste_profilul_altui_cont() -> No
         svc._prima_replica = AsyncMock(return_value=None)
 
         with pytest.raises(DomainError):
-            await svc.start_session(_principal(b, UserRole.participant), proiect.id, SessionKind.roleplay)
+            await svc.start_session(
+                _principal(b, UserRole.participant), proiect.id, SessionKind.roleplay
+            )
         await session.rollback()
 
 

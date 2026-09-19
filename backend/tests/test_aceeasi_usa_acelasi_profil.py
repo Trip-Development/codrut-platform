@@ -41,7 +41,7 @@ async def _cont_si_profil_nelegat(session):
     """Un cont existent si, in compania proiectului, un profil cu aceeasi adresa, nelegat."""
     sufix = uuid.uuid4().hex[:8]
     adresa = f"om-{sufix}@exemplu-cody.ro"
-    cont = User(email=adresa, password_hash="x", role=UserRole.participant)
+    cont = User(email=adresa, password_hash="x", role=UserRole.participant)  # noqa: S106
     companie = Company(name=f"Companie {sufix}")
     session.add_all([cont, companie])
     await session.flush()
@@ -100,7 +100,7 @@ async def test_exersarea_gaseste_acelasi_profil() -> None:
             user_id=cont.id, email=cont.email, role=UserRole.participant,
             available_workspaces=(UserRole.participant,), default_workspace=UserRole.participant,
             consent_current=True, terms_accepted_at=datetime.now(UTC),
-            terms_version=CURRENT_TERMS_VERSION, session_token="test",
+            terms_version=CURRENT_TERMS_VERSION, session_token="test",  # noqa: S106
         )
         svc = PracticeSessionService(session=session)
         svc._prima_replica = AsyncMock(return_value=None)  # fara model in test
@@ -117,7 +117,7 @@ async def test_un_profil_legat_de_alt_cont_nu_apare_doar_fiindca_are_aceeasi_adr
         cont, _proiect, profil = await _cont_si_profil_nelegat(session)
         altcineva = User(
             email=f"altul-{uuid.uuid4().hex[:8]}@exemplu-cody.ro",
-            password_hash="x", role=UserRole.participant,
+            password_hash="x", role=UserRole.participant,  # noqa: S106
         )
         session.add(altcineva)
         await session.flush()
