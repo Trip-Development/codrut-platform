@@ -112,13 +112,10 @@ class PracticeDashboardService:
         )
         all_scores = list((await self.session.execute(stmt_scores)).scalars().all())
 
-        # If user has no scores, but archive has scores under other users or null,
-        # fallback to all scores if this is the sole training participant in local preview
-        if not all_scores:
-            stmt_fallback = select(CompetencyScore).order_by(CompetencyScore.created_at.desc()).limit(150)
-            fallback_scores = list((await self.session.execute(stmt_fallback)).scalars().all())
-            if fallback_scores:
-                all_scores = fallback_scores
+        # Plicul 93: aici era o rezerva „daca omul n-are note, ia ultimele 150 din toata baza",
+        # pusa pentru previzualizarea locala. Cine n-are note e fiecare om la prima intrare, deci
+        # primul lui tablou era facut din notele altora. Fara note, tabloul ramane gol — ca la
+        # momente si mostre, unde aceeasi rezerva a fost scoasa la plicul 29.
 
         # 4. Activity dates and Streak calculation
         activity_dates = [s.created_at.date() for s in all_scores]
