@@ -18,6 +18,25 @@ import { MicIcon, MicOffIcon, Loader2Icon } from "lucide-react";
 import { useVoiceToText } from "@/hooks/useVoiceToText";
 import { LoadingStatus } from "@/components/shell/route-loading";
 
+// Replica omului intra in fir IMEDIAT ce apasa trimite — plicul 83, cerinta lui Andrei.
+//
+// Pana acum caseta se golea la trimitere, dar replica aparea in fir abia dupa raspunsul
+// serverului: cat se astepta replica lui Cody, textul omului nu era nicaieri pe ecran — nici
+// la scris, nici la microfon. Acum sta in fir de la inceput; la raspuns e inlocuita cu replica
+// salvata, iar la eroare e scoasa si textul se intoarce in caseta, ca inainte.
+function replicaInAsteptare(sessionId: string, text: string): PracticeTurn {
+  const acum = new Date().toISOString();
+  return {
+    id: `in-asteptare-${acum}`,
+    sessionId,
+    ordinal: 0,
+    role: "participant",
+    text,
+    createdAt: acum,
+    expiresAt: acum,
+  };
+}
+
 const PRACTICE_OPTIONS: {
   kind: SessionKind;
   title: string;
@@ -251,11 +270,13 @@ export function PracticeWorkspace({
     setInputText("");
     setIsLoading(true);
     setErrorMsg(null);
+    const provizorie = replicaInAsteptare(session.id, textToSend.trim());
+    setTurns((prev) => [...prev, provizorie]);
 
     try {
       const turnRes = await submitPracticeTurn(session.id, textToSend);
       setTurns((prev) => {
-        const next = [...prev, turnRes.participantTurn];
+        const next = [...prev.filter((turn) => turn.id !== provizorie.id), turnRes.participantTurn];
         if (turnRes.actorTurn) {
           next.push(turnRes.actorTurn);
         }
@@ -272,6 +293,7 @@ export function PracticeWorkspace({
       );
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Eroare la trimiterea mesajului");
+      setTurns((prev) => prev.filter((turn) => turn.id !== provizorie.id));
       setInputText(textToSend); // restabilim textul pentru retrimitere
     } finally {
       setIsLoading(false);
@@ -333,11 +355,13 @@ export function PracticeWorkspace({
 
     setIsLoading(true);
     setErrorMsg(null);
+    const provizorie = replicaInAsteptare(session.id, textToSend.trim());
+    setTurns((prev) => [...prev, provizorie]);
 
     try {
       const turnRes = await submitPracticeTurn(session.id, textToSend.trim());
       setTurns((prev) => {
-        const next = [...prev, turnRes.participantTurn];
+        const next = [...prev.filter((turn) => turn.id !== provizorie.id), turnRes.participantTurn];
         if (turnRes.actorTurn) {
           next.push(turnRes.actorTurn);
         }
@@ -354,6 +378,7 @@ export function PracticeWorkspace({
       );
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Eroare la trimiterea mesajului");
+      setTurns((prev) => prev.filter((turn) => turn.id !== provizorie.id));
       setInputText(textToSend);
     } finally {
       setIsLoading(false);

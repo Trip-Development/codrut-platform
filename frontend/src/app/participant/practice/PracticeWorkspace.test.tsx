@@ -1,16 +1,22 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PracticeWorkspace } from "./PracticeWorkspace";
 
+// Plicul 83: pastram optiunile primite de hook, ca testul sa poata simula o trimitere prin voce.
+const voce = vi.hoisted(() => ({ optiuni: null as null | { onAutoSubmit: (text: string) => void } }));
+
 vi.mock("@/hooks/useVoiceToText", () => ({
-  useVoiceToText: () => ({
+  useVoiceToText: (optiuni: { onAutoSubmit: (text: string) => void }) => {
+    voce.optiuni = optiuni;
+    return {
     isListening: false,
     isTranscribing: false,
     startListening: vi.fn(),
     stopListening: vi.fn(),
     error: null,
-  }),
+    };
+  },
 }));
 
 const api = vi.hoisted(() => ({
@@ -286,5 +292,85 @@ describe("PracticeWorkspace — pornirea în doi pași", () => {
       expect(screen.queryByRole("button", { name: "Da, hai" })).toBeNull();
       expect(screen.queryByRole("button", { name: "Vreau să spun eu tema" })).toBeNull();
     }
+  });
+});
+
+
+// --- plicul 83: raspunsul participantului ramane pe ecran ---
+//
+// Pana acum caseta se golea la trimitere, iar replica aparea in fir abia dupa raspunsul
+// serverului. Cat se astepta replica lui Cody, textul omului nu era nicaieri pe ecran.
+
+function raspunsAmanat() {
+  let rezolva!: (valoare: unknown) => void;
+  let respinge!: (motiv: unknown) => void;
+  const promisiune = new Promise((ok, eroare) => {
+    rezolva = ok;
+    respinge = eroare;
+  });
+  return { promisiune, rezolva, respinge };
+}
+
+function raspunsCu(text: string) {
+  return {
+    participantTurn: {
+      id: "om-salvat", sessionId: "sesiune-1", ordinal: 1, role: "participant" as const,
+      text, createdAt: "2026-09-19T10:00:00Z", expiresAt: "2026-10-19T10:00:00Z",
+    },
+    actorTurn: {
+      id: "cody-1", sessionId: "sesiune-1", ordinal: 2, role: "actor" as const,
+      text: "Replica lui Cody.", createdAt: "2026-09-19T10:00:05Z", expiresAt: "2026-10-19T10:00:05Z",
+    },
+    sessionState: "open" as const,
+  };
+}
+
+describe("PracticeWorkspace — raspunsul omului ramane pe ecran (plicul 83)", () => {
+  it("textul scris sta in fir cat se asteapta raspunsul, si nu se dubleaza dupa", async () => {
+    await porneste();
+    const amanat = raspunsAmanat();
+    api.submitPracticeTurn.mockReturnValue(amanat.promisiune);
+    const caseta = await screen.findByPlaceholderText(/Scrie un mesaj/);
+
+    fireEvent.change(caseta, { target: { value: "Am nevoie de raportul pana vineri." } });
+    fireEvent.click(screen.getByRole("button", { name: "Trimite" }));
+
+    // cat se asteapta: textul e in fir, caseta e goala
+    expect(await screen.findByText("Am nevoie de raportul pana vineri.")).toBeTruthy();
+    expect((caseta as HTMLTextAreaElement).value).toBe("");
+
+    await act(async () => amanat.rezolva(raspunsCu("Am nevoie de raportul pana vineri.")));
+
+    expect(await screen.findByText("Replica lui Cody.")).toBeTruthy();
+    expect(screen.getAllByText("Am nevoie de raportul pana vineri.")).toHaveLength(1);
+  });
+
+  it("textul venit prin microfon sta la fel in fir cat se asteapta", async () => {
+    await porneste();
+    const amanat = raspunsAmanat();
+    api.submitPracticeTurn.mockReturnValue(amanat.promisiune);
+    await screen.findByPlaceholderText(/Scrie un mesaj/);
+
+    await act(async () => voce.optiuni?.onAutoSubmit("Vorbit la microfon."));
+
+    expect(await screen.findByText("Vorbit la microfon.")).toBeTruthy();
+    await act(async () => amanat.rezolva(raspunsCu("Vorbit la microfon.")));
+    expect(screen.getAllByText("Vorbit la microfon.")).toHaveLength(1);
+  });
+
+  it("la eroare, replica iese din fir si textul se intoarce in caseta, ca inainte", async () => {
+    await porneste();
+    const amanat = raspunsAmanat();
+    api.submitPracticeTurn.mockReturnValue(amanat.promisiune);
+    const caseta = await screen.findByPlaceholderText(/Scrie un mesaj/);
+
+    fireEvent.change(caseta, { target: { value: "Text care nu pleaca." } });
+    fireEvent.click(screen.getByRole("button", { name: "Trimite" }));
+    expect(await screen.findByText("Text care nu pleaca.")).toBeTruthy();
+
+    await act(async () => amanat.respinge(new Error("Serverul nu raspunde.")));
+
+    await waitFor(() => expect((caseta as HTMLTextAreaElement).value).toBe("Text care nu pleaca."));
+    expect(screen.queryAllByText("Text care nu pleaca.")).toHaveLength(0);
   });
 });
