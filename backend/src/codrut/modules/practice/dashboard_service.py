@@ -196,18 +196,16 @@ class PracticeDashboardService:
         moments = list((await self.session.execute(stmt_moments)).scalars().all())
 
         # 8. Session samples (real_weak / real_improved)
+        #
+        # Fara rezerva de la altcineva, din acelasi motiv ca la momente. Pana la plicul 94
+        # intrau aici si mostrele fara stapan (`user_id` gol) — replici adevarate ale unui om,
+        # pe tabloul oricui. Pe proba erau zero; le poate scrie doar importul arhivei.
         stmt_samples = (
             select(SessionSample)
-            .where(
-                or_(
-                    SessionSample.user_id.in_(user_ids),
-                    SessionSample.user_id.is_(None),
-                )
-            )
+            .where(SessionSample.user_id.in_(user_ids))
             .order_by(SessionSample.created_at.desc())
             .limit(10)
         )
-        # Fara rezerva de la altcineva, din acelasi motiv ca la momente.
         samples = list((await self.session.execute(stmt_samples)).scalars().all())
 
         return {
