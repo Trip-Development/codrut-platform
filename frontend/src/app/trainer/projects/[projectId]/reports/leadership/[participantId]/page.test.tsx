@@ -132,6 +132,50 @@ describe("leadership member report", () => {
     ).toBe("/trainer/projects/project-1/reports?cycle=cycle-2");
   });
 
+  it("shows every driver explanation but keeps the watch signal above 50", async () => {
+    const report = await api.getLeadershipMemberReport();
+    api.getLeadershipMemberReport.mockResolvedValueOnce({
+      ...report,
+      driver_averages: [
+        { id: "perfect", label: "Fii perfect", avg: 62, feedback: "Explicația de peste prag." },
+        { id: "strong", label: "Fii puternic", avg: 38, feedback: "Explicația de sub prag." },
+      ],
+    });
+
+    const ui = await LeadershipMemberReportPage({
+      params: Promise.resolve({ projectId: "project-1", participantId: "leader-1" }),
+      searchParams: Promise.resolve({ cycle: "cycle-2" }),
+    });
+    render(ui);
+
+    const above = screen.getByText("Explicația de peste prag.");
+    const below = screen.getByText("Explicația de sub prag.");
+    expect(above.closest("[data-tone]")?.getAttribute("data-tone")).toBe("danger");
+    expect(below.closest("[data-tone]")?.getAttribute("data-tone")).toBe("default");
+    expect(screen.getByText("De urmărit")).toBeTruthy();
+  });
+
+  it("keeps the driver explanation below 50 in the cycle comparison", async () => {
+    const report = await api.getLeadershipMemberReport();
+    const lowDriverReport = {
+      ...report,
+      driver_averages: [{ id: "strong", label: "Fii puternic", avg: 38, feedback: "Explicația în comparație." }],
+    };
+    api.getLeadershipMemberReport
+      .mockResolvedValueOnce(lowDriverReport)
+      .mockResolvedValueOnce(lowDriverReport);
+
+    const ui = await LeadershipMemberReportPage({
+      params: Promise.resolve({ projectId: "project-1", participantId: "leader-1" }),
+      searchParams: Promise.resolve({}),
+    });
+    render(ui);
+
+    expect(screen.getByRole("heading", { name: "Evoluția driverilor de stres" })).toBeTruthy();
+    expect(screen.getAllByText("Explicația în comparație.").length).toBeGreaterThan(0);
+    expect(screen.queryByText("De urmărit")).toBeNull();
+  });
+
   it("explains a valid minimum iCARE score on the individual report", async () => {
     const report = await api.getLeadershipMemberReport();
     api.getLeadershipMemberReport.mockResolvedValueOnce({
