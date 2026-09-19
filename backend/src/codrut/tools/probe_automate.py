@@ -45,7 +45,7 @@ from codrut.modules.practice.prompts import (
     get_system_prompt_for_kind,
 )
 from codrut.modules.practice.service import DESCHIDE_SESIUNEA
-from codrut.tools.probe_metode_scoase import METODE_SCOASE
+from codrut.tools.probe_metode_scoase import METODE_INTERZISE, METODE_NUMARATE
 from codrut.tools.probe_scenarii import COMPETENTE_PROIECT, PARTICIPANT, SCENARII
 
 MODURI = ("roleplay", "knowledge", "coaching")
@@ -66,7 +66,11 @@ REPLICA_MODEL = re.compile(
 NUME_INTERZISE = re.compile(
     r"\[\s*nume\s*\]|\buser\b|\bparticipant\b|\butilizator(ul)?\b", re.IGNORECASE
 )
-METODE = re.compile(r"\b(" + "|".join(map(re.escape, METODE_SCOASE)) + r")\b", re.IGNORECASE)
+METODE = re.compile(r"\b(" + "|".join(map(re.escape, METODE_INTERZISE)) + r")\b", re.IGNORECASE)
+# se numara, nu se pedepsesc — hotararea lui Andrei din 19 septembrie (probe_metode_scoase.py)
+NUMARATE = re.compile(
+    r"\b(" + "|".join(map(re.escape, METODE_NUMARATE)) + r")\b", re.IGNORECASE
+)
 
 
 def scorul(text: str) -> float | None:
@@ -115,6 +119,7 @@ def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
         return {"aplicabila": aplicabila, "instante": 0, "trecute": 0, "picate": []}
 
     p = {str(i): poarta() for i in range(1, 8)}
+    p["7"]["numarate"] = {m: 0 for m in METODE_NUMARATE}
     for i in ("2", "3", "4", "6"):
         p[i]["aplicabila"] = mod == "roleplay"
 
@@ -131,6 +136,8 @@ def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
             continue
         metode = sorted({m.upper() for m in METODE.findall(r)})
         bifa("7", not metode, f"pas {nr_pas}: {', '.join(metode)}")
+        for m in NUMARATE.findall(r):
+            p["7"]["numarate"][m.upper()] += 1
         interzise = sorted({m.group(0) for m in NUME_INTERZISE.finditer(r)})
         bifa("5", not interzise, f"pas {nr_pas}: {', '.join(interzise)}")
         if mod == "roleplay":

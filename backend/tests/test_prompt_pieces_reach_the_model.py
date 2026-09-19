@@ -83,7 +83,7 @@ def test_memoria_ajunge_in_prompt_la_inceputul_sesiunii():
 
 def test_versiunea_promptului_a_urcat():
     """Compozitia s-a schimbat; fara urcare, sesiunile nu se mai pot compara."""
-    assert CODY_PROMPT_VERSION == "v3.7"
+    assert CODY_PROMPT_VERSION == "v3.8"
 
 
 def test_serviciul_chiar_trimite_cele_trei_piese():
