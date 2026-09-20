@@ -1,3 +1,16 @@
+import os
+
+# Modelul, spus pe fata, INAINTE de orice import de-al aplicatiei — plicul 114, pasul 2.
+#
+# `core/database.py` construieste setarile LA IMPORT, iar acest conftest il trage dupa el prin
+# `codrut.modules.forms.models`. Deci, in ziua in care modelul devine obligatoriu (pasul 3), o
+# valoare lipsa nu pica un test: omoara COLECTAREA, si nu porneste niciunul din cele 1.242.
+# Aici e singurul loc din care se poate spune inainte sa fie prea tarziu.
+#
+# `setdefault`: cine ruleaza suita cu alt model in mediu isi pastreaza alegerea.
+os.environ.setdefault("CODRUT_VERTEX_ACTOR_MODEL", "gemini-3.8-flash")
+os.environ.setdefault("CODRUT_VERTEX_EVALUATOR_MODEL", "gemini-3.8-flash")
+
 import uuid
 from collections.abc import Callable
 
