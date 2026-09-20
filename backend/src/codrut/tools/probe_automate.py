@@ -249,9 +249,19 @@ def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
         for pas in pasi:
             if pas["fel"] not in ("pornire", "joc") or not pas["raspuns"].strip():
                 continue
-            # numai partea ACTORULUI: la doua apeluri e separata, la unul singur e ce sta
-            # inaintea despartitorului `***`
-            text = pas.get("text_actor") or pas["raspuns"].split("***")[0]
+            # Partea ACTORULUI. La doua apeluri e salvata separat. La un singur apel se ia
+            # TOT raspunsul — plicul 117, partea A.
+            #
+            # Pana azi se lua `raspuns.split("***")[0]`, si asta taia tot ce urma dupa primul
+            # despartitor: la un apel poarta ramanea cu UN SINGUR pas pe sedinta, in loc de cinci.
+            # Asa s-a scris in raportul 115 „un apel 10/10, doua apeluri 2/10" — adevarat ca
+            # rezultat, dar pus alaturi un pas masurat intr-o parte si cinci in cealalta.
+            #
+            # De ce tot textul, si nu o taiere mai destepta: la un apel exista un singur autor,
+            # deci orice replica de scena de acolo e a lui. Masurat pe fisierul salvat
+            # (`2026-09-20-fraza-andrei`): 44 de instante, toate trecute — nicio alarma falsa
+            # din partea de evaluare.
+            text = pas.get("text_actor") or pas["raspuns"]
             vorbitori = replicile_de_scena(text)
             if not vorbitori:
                 continue
