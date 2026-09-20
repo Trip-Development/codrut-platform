@@ -11,8 +11,8 @@ import {
 import { BrandMark } from "@/components/brand/brand-mark";
 import { AppShell } from "@/components/shell/app-shell";
 import {
+  participantNavItems,
   participantNavItemsForType,
-  participantTrainingNavItems,
   trainerNavItems,
 } from "@/components/shell/nav";
 import { Button } from "@/components/ui/button";
@@ -115,11 +115,11 @@ export function ParticipantRouteError({
       title="Pagina nu s-a încărcat"
       description=""
       navItems={
-        // Acelasi motiv ca la ecranul de incarcare: cand tipul nu se stie, meniul
-        // de training. La training e submultime, deci nu arata ecrane de coaching
-        // unui om care n-are ce cauta in ele.
+        // Acelasi motiv ca la ecranul de incarcare (plicul 116): cand tipul nu se
+        // stie, meniul FARA exersare. De la plicul 113, cel de training nu mai e o
+        // submultime a celuilalt — are tabloul si exersarea, pe care celalalt nu le are.
         projectType == null
-          ? participantTrainingNavItems
+          ? participantNavItems
           : participantNavItemsForType(projectType)
       }
       activeHref="/participant"
