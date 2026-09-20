@@ -102,6 +102,11 @@ class Settings(BaseSettings):
     vertex_project_id: str = "codrut-cody"
     vertex_region: str = "europe-west4"
     vertex_credentials_path: str = "/etc/codrut/cody-vertex.json"
+    # MODELUL SI PRETURILE MERG IMPREUNA. Cine schimba modelul schimba si cele patru preturi
+    # de mai jos, si trece prin SPEC-CODY/UNELTE/LISTA-LA-SCHIMBAREA-MODELULUI.md, toate punctele.
+    # Plicul 101: la comutarea din 19 septembrie preturile au ramas ale modelului vechi, iar
+    # aplicatia a socotit de ~2,4 ori mai putin decat adevarul — inclusiv la plafonul care
+    # opreste generarea.
     vertex_actor_model: str = "gemini-2.5-flash"
     vertex_evaluator_model: str = "gemini-2.5-flash"
     # Rezerva pentru transcriere, daca modelul principal nu o poate face — plicul 89.
@@ -116,10 +121,15 @@ class Settings(BaseSettings):
     vertex_max_output_tokens_evaluator: int = Field(default=3072, ge=64, le=8192)
     thinking_budget_actor: int = Field(default=0, ge=0, le=8192)
     thinking_budget_evaluator: int = Field(default=1024, ge=0, le=8192)
-    price_input_per_million_usd: Decimal = Decimal("0.30")
-    price_cached_per_million_usd: Decimal = Decimal("0.03")
-    price_output_per_million_usd: Decimal = Decimal("2.50")
-    price_thought_per_million_usd: Decimal = Decimal("2.50")
+    # Preturile modelului pe care rulam, gemini-3.8-flash, in dolari pe milion de unitati
+    # (pret public, verificat 20 septembrie 2026). Se dau si din mediu, cu prefixul CODRUT_,
+    # ca sa nu ceara o comitere cand furnizorul schimba pretul — plicul 101.
+    # MERG IMPREUNA CU MODELUL de mai sus: vezi
+    # SPEC-CODY/UNELTE/LISTA-LA-SCHIMBAREA-MODELULUI.md.
+    price_input_per_million_usd: Decimal = Decimal("0.75")
+    price_cached_per_million_usd: Decimal = Decimal("0.075")
+    price_output_per_million_usd: Decimal = Decimal("3.75")
+    price_thought_per_million_usd: Decimal = Decimal("3.75")
     practice_trainer_direct_entry: bool = False
     biblioteca_path: str = Field(
         default="/opt/codrut-platform/BIBLIOTECA",

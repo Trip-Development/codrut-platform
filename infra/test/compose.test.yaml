@@ -135,6 +135,12 @@ services:
       # Cat asteapta aplicatia o replica — plicul 96. Implicit ca in cod (60); pe proba
       # .env il ridica la 120: cea mai lenta replica buna masurata a venit la 80,5 s.
       CODRUT_VERTEX_TIMEOUT_SECONDS: ${CODRUT_VERTEX_TIMEOUT_SECONDS:-60}
+      # Preturile modelului, in dolari pe milion de unitati — plicul 101. Implicit ca in cod
+      # (gemini-3.8-flash). Se schimba odata cu modelul.
+      CODRUT_PRICE_INPUT_PER_MILLION_USD: ${CODRUT_PRICE_INPUT_PER_MILLION_USD:-0.75}
+      CODRUT_PRICE_CACHED_PER_MILLION_USD: ${CODRUT_PRICE_CACHED_PER_MILLION_USD:-0.075}
+      CODRUT_PRICE_OUTPUT_PER_MILLION_USD: ${CODRUT_PRICE_OUTPUT_PER_MILLION_USD:-3.75}
+      CODRUT_PRICE_THOUGHT_PER_MILLION_USD: ${CODRUT_PRICE_THOUGHT_PER_MILLION_USD:-3.75}
       CODRUT_PRACTICE_TRAINER_DIRECT_ENTRY: ${CODRUT_PRACTICE_TRAINER_DIRECT_ENTRY:-false}
       CODRUT_BIBLIOTECA_PATH: /app/BIBLIOTECA
     volumes:
@@ -218,6 +224,12 @@ services:
       # Cat asteapta aplicatia o replica — plicul 96. Implicit ca in cod (60); pe proba
       # .env il ridica la 120: cea mai lenta replica buna masurata a venit la 80,5 s.
       CODRUT_VERTEX_TIMEOUT_SECONDS: ${CODRUT_VERTEX_TIMEOUT_SECONDS:-60}
+      # Preturile modelului, in dolari pe milion de unitati — plicul 101. Implicit ca in cod
+      # (gemini-3.8-flash). Se schimba odata cu modelul.
+      CODRUT_PRICE_INPUT_PER_MILLION_USD: ${CODRUT_PRICE_INPUT_PER_MILLION_USD:-0.75}
+      CODRUT_PRICE_CACHED_PER_MILLION_USD: ${CODRUT_PRICE_CACHED_PER_MILLION_USD:-0.075}
+      CODRUT_PRICE_OUTPUT_PER_MILLION_USD: ${CODRUT_PRICE_OUTPUT_PER_MILLION_USD:-3.75}
+      CODRUT_PRICE_THOUGHT_PER_MILLION_USD: ${CODRUT_PRICE_THOUGHT_PER_MILLION_USD:-3.75}
     volumes:
       - cody_test_campaign_assets:/app/var/campaign-assets
       - /etc/codrut/cody-vertex.json:/etc/codrut/cody-vertex.json:ro
