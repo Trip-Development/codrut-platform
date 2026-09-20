@@ -464,7 +464,8 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
         t0 = time.monotonic()
         rand = {"pas": i, "fel": pas.fel, "om": pas.text, "raspuns": "", "eroare": None,
                 "oprire": None, "model": None, "intrat": 0, "iesit": 0, "gandit": 0,
-                "din_cache": 0, "text_actor": "", "text_evaluator": "", "apeluri": 1}
+                "din_cache": 0, "text_actor": "", "text_evaluator": "", "apeluri": 1,
+                "apel_actor": None, "apel_evaluator": None}
         try:
             if not doua_apeluri:
                 rez = await furnizor.generate(cerere)
@@ -489,6 +490,17 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
                     iesit=u.output_tokens + ue.output_tokens,
                     gandit=u.thought_tokens + ue.thought_tokens,
                     din_cache=u.cached_tokens + ue.cached_tokens,
+                    # Fiecare apel, separat — plicul 120. Cu doua modele diferite, sumele de mai
+                    # sus nu se mai pot pune la pret: nu se stie care unitati sunt ale cui.
+                    # Si costul, asa cum l-a socotit furnizorul de generare, fiecare la pretul
+                    # modelului lui (tabelul de la partea A).
+                    apel_actor={"model": rez.model, "intrat": u.prompt_tokens,
+                                "din_cache": u.cached_tokens, "iesit": u.output_tokens,
+                                "gandit": u.thought_tokens, "cost": str(rez.estimated_usd)},
+                    apel_evaluator={"model": rez_e.model, "intrat": ue.prompt_tokens,
+                                    "din_cache": ue.cached_tokens, "iesit": ue.output_tokens,
+                                    "gandit": ue.thought_tokens,
+                                    "cost": str(rez_e.estimated_usd)},
                 )
         except Exception as err:
             # orice eroare se numara ca replica pierduta; nu opreste rularea
