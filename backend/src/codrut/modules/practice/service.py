@@ -44,6 +44,7 @@ from codrut.modules.practice.policies import ensure_participant_may_practice
 from codrut.modules.practice.pricing import estimate_pessimistic_cost
 from codrut.modules.practice.prompts import (
     CODY_PROMPT_VERSION,
+    REPLICA_DE_CONFIRMARE,
     get_prompts_pe_meserii,
     get_system_prompt_for_kind,
 )
@@ -796,6 +797,16 @@ class PracticeSessionService:
             doua_apeluri = (
                 self.settings.practice_two_calls and session_obj.kind == SessionKind.roleplay
             )
+            # La pasul de pornire NU se cheama evaluatorul — plicul 119, partea A.
+            #
+            # Acolo omul doar a confirmat („Da, hai"); n-a exersat inca nimic, deci n-are ce
+            # evalua. Si tot de acolo veneau TOATE cele cinci picaturi ale rularii de la 118:
+            # trei sedinte in care evaluatorul si-a inventat un context (n-avea de unde sa-l ia,
+            # scena se naste chiar atunci, in paralel) si doua in care a dat nota confirmarii.
+            #
+            # Hotaraste aplicatia, dupa numaratoarea pe care o stie deja, NU modelul si nu textul.
+            if history_length == REPLICA_DE_CONFIRMARE:
+                doua_apeluri = False
             system_instruction = get_system_prompt_for_kind(
                 kind=session_obj.kind,
                 name=profile.full_name,
