@@ -147,6 +147,18 @@ class Settings(BaseSettings):
     # Aprins: doua apeluri in paralel, fiecare cu materialul meseriei lui. Intoarcerea e
     # randul asta, nu o operatie.
     practice_two_calls: bool = False
+
+    # Tabelul de preturi PE MODEL — plicul 120.
+    #
+    # Pana azi exista o singura pereche de patru preturi. Cu doua modele in aceeasi replica
+    # (actorul ieftin, evaluatorul scump) paza ar fi numarat gresit: cu preturile celui scump,
+    # economia nu s-ar fi vazut deloc; cu ale celui ieftin, evaluatorul ar fi fost socotit de
+    # trei ori mai ieftin decat e — chiar accidentul din 19 septembrie, cand plafonul Google
+    # s-a atins intr-o zi.
+    #
+    # Forma: JSON, model -> [intrare, din cache, iesire, gandire], in dolari pe milion.
+    # Se da din mediu, ca sa nu ceara o comitere cand furnizorul schimba pretul — lectia 101.
+    prices_by_model: str = ""
     biblioteca_path: str = Field(
         default="/opt/codrut-platform/BIBLIOTECA",
         validation_alias=AliasChoices("BIBLIOTECA_PATH", "biblioteca_path"),
