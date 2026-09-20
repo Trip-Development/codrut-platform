@@ -51,29 +51,29 @@ from codrut.modules.practice.pricing import (
 
 
 def test_estimate_cost_with_thinking_measured_case() -> None:
-    """Test cost calculation with thinking: 54 input, 34 output, 902 thinking.
+    """Costul cu gândire: 54 intrate, 34 ieșite, 902 gândite.
 
-    Expected: 0.0024 USD
-    (54 / 1_000_000 * 0.30 + (34 + 902) / 1_000_000 * 2.50 = 0.0023562 -> 0.0024 USD)
+    Prețurile sunt ale modelului pe care rulăm, `gemini-3.8-flash` (plicul 101; până atunci
+    testul ăsta cerea 0,0024, prețurile lui `gemini-2.5-flash`, care se retrage pe 16 octombrie):
+    54 / 1M * 0,75 + (34 + 902) / 1M * 3,75 = 0,0035505 -> 0,003551 USD.
     """
     settings = Settings()
     usage = TokenUsage(prompt_tokens=54, output_tokens=34, thought_tokens=902)
     cost = estimate_cost(usage, settings)
 
-    assert cost == Decimal("0.0024")
+    assert cost == Decimal("0.003551")
 
 
 def test_estimate_cost_without_thinking_measured_case() -> None:
-    """Test cost calculation without thinking: 54 input, 34 output, 0 thinking.
+    """Costul fără gândire: 54 intrate, 34 ieșite.
 
-    Expected: 0.0001 USD
-    (54 / 1_000_000 * 0.30 + 34 / 1_000_000 * 2.50 = 0.0001012 -> 0.0001 USD)
+    Tot pe prețurile de azi: 54 / 1M * 0,75 + 34 / 1M * 3,75 = 0,0001680 USD.
     """
     settings = Settings()
     usage = TokenUsage(prompt_tokens=54, output_tokens=34, thought_tokens=0)
     cost = estimate_cost(usage, settings)
 
-    assert cost == Decimal("0.0001")
+    assert cost == Decimal("0.000168")
 
 
 def test_estimate_pessimistic_cost() -> None:
@@ -84,7 +84,8 @@ def test_estimate_pessimistic_cost() -> None:
         thinking_budget=1024,
         settings=settings,
     )
-    assert cost == Decimal("0.0052")
+    # 100 / 1M * 0,75 + (1024 + 1024) / 1M * 3,75, pe prețurile de azi (plicul 101)
+    assert cost == Decimal("0.007755")
 
 
 @pytest.mark.asyncio
@@ -132,7 +133,9 @@ async def test_vertex_generation_provider_with_mock_client() -> None:
         generation_provider="vertex",
         vertex_project_id="test-project",
         vertex_region="europe-west4",
-        vertex_actor_model="gemini-2.5-flash",
+        # Modelul pe care rulăm. Era `gemini-2.5-flash` — se retrage pe 16 octombrie, nu mai e
+        # în tabelul de prețuri (plicul 120) și de aceea ar fi plătit la cel mai scump preț știut.
+        vertex_actor_model="gemini-3.8-flash",
     )
 
     mock_credentials = MagicMock()
@@ -184,14 +187,15 @@ async def test_vertex_generation_provider_with_mock_client() -> None:
         result = await provider.generate(request)
 
         assert result.provider == GenerationProviderKey.vertex
-        assert result.model == "gemini-2.5-flash"
+        assert result.model == "gemini-3.8-flash"
         assert result.region == "europe-west4"
         assert result.finish_reason == "STOP"
         assert result.text == "Răspuns generat de test."
         assert result.usage.prompt_tokens == 54
         assert result.usage.output_tokens == 34
         assert result.usage.thought_tokens == 902
-        assert result.estimated_usd == Decimal("0.0024")
+        # aceleași 54/34/902, pe prețurile de azi
+        assert result.estimated_usd == Decimal("0.003551")
 
         assert len(captured_requests) == 1
         http_req = captured_requests[0]
@@ -420,7 +424,7 @@ def _furnizor_de_proba(client: httpx.AsyncClient) -> VertexGenerationProvider:
         generation_provider="vertex",
         vertex_project_id="test-project",
         vertex_region="europe-west4",
-        vertex_actor_model="gemini-2.5-flash",
+        vertex_actor_model="gemini-3.8-flash",
     )
     mock_credentials = MagicMock()
     mock_credentials.valid = True
