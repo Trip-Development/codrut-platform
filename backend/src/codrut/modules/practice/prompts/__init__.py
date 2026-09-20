@@ -281,8 +281,26 @@ def resolve_biblioteca_dir(configured_path: str = "") -> Path | None:
     return None
 
 
-def get_core_material(biblioteca_path: str = "") -> tuple[str, int]:
-    cache_key = biblioteca_path or "default"
+# Care felie a materialului tine de care meserie — plicul 112.
+#
+# Actorul joaca un personaj si trebuie sa sune ca Cody: profilul, filozofia, tonul, mostrele de
+# voce, conversatiile si regulile de comportament. Evaluatorul judeca o replica: ii trebuie
+# teoria temei. Impartirea nu dubleaza nimic: 105.213 caractere la actor, 32.378 la evaluator,
+# exact cele 137.591 care se trimiteau intr-un singur apel.
+#
+# Ce n-a fost limpede a ramas la ACTOR, cum cere plicul: `REGULI-COMPORTAMENT` — sunt reguli de
+# purtare (actorul), dar sectiunea 12A e si locul unde Sandwich e dat ca exemplu (evaluatorul).
+FELII = {
+    "actor": (
+        "PROFIL-ANDREI", "FILOZOFIE", "TON-SI-COMPORTAMENT", "MOSTRE-DE-VOCE",
+        "FILOZOFIE-CONVERSATII", "REGULI-COMPORTAMENT",
+    ),
+    "evaluator": ("TEORIA-TEMEI",),
+}
+
+
+def get_core_material(biblioteca_path: str = "", felie: str | None = None) -> tuple[str, int]:
+    cache_key = f"{biblioteca_path or 'default'}|{felie or 'tot'}"
     if cache_key in _MATERIAL_CACHE:
         return _MATERIAL_CACHE[cache_key]
 
@@ -291,8 +309,11 @@ def get_core_material(biblioteca_path: str = "") -> tuple[str, int]:
         logger.warning("Folderul BIBLIOTECA 00-miez nu a fost gasit.")
         return "", 0
 
+    cerute = FELII.get(felie) if felie else None
     sections: list[str] = []
     for label, fnames in CORE_SLOTS:
+        if cerute is not None and label not in cerute:
+            continue
         parts: list[str] = []
         for fn in fnames:
             fp = miez_dir / fn
@@ -461,19 +482,38 @@ def format_participant_memory(memories: list[dict[str, Any]]) -> str:
     )
 
 
-def get_system_prompt_for_kind(
-    kind: SessionKind | str,
-    name: str = "Participant",
-    history_length: int = 0,
-    quiz_competency: str | None = None,
-    project_competencies: list[str] | None = None,
-    memories: list[dict[str, Any]] | None = None,
-    biblioteca_path: str = "",
-    profil_rol: dict[str, Any] | None = None,
-) -> str:
-    material, _ = get_core_material(biblioteca_path)
 
-    kind_val = kind.value if isinstance(kind, SessionKind) else str(kind)
+# Interdictia scenei, pentru EVALUATOR — plicul 115, singura schimbare fata de prima incercare.
+#
+# La prima despartire (plicul 112) evaluatorul a scris replica de scena la 40 din 40 de pasi de
+# joc, iar la 10 dintre ele cu ALT personaj decat actorul: omul ar fi vazut doua scene una sub
+# alta. Scoaterea lui `actor.md` din promptul lui nu ajunge — transcriptul insusi il invata
+# scena, iar nimic nu-i interzicea s-o joace.
+#
+# Sta ULTIMA in promptul evaluatorului: ce e scris ultimul cantareste cel mai mult (plicul 45).
+FARA_SCENA = (
+    "\n\n---\n"
+    "NU EȘTI ÎN SCENĂ. Primești scena doar ca s-o judeci. NU SCRII NICIODATĂ o replică a "
+    "vreunui personaj — nici a celui din scenă, nici a altuia. NU ÎNCEPI NICIODATĂ un rând cu "
+    "un nume urmat de două puncte. Dacă vrei să arăți ce ar fi putut spune omul, folosești "
+    "forma pe care o știi: „Ai fi putut spune: …”."
+)
+
+
+def _bucatile_comune(
+    kind_val: str,
+    name: str,
+    history_length: int,
+    profil_rol: dict[str, Any] | None,
+    memories: list[dict[str, Any]] | None = None,
+) -> tuple[str, str, str]:
+    """Bucatile pe care le folosesc si promptul de azi, si cele doua ale despartirii.
+
+    Stau intr-un singur loc dinadins — plicul 112. Daca ar fi doua copii, promptul cu un
+    apel si cele cu doua ar devia unul de altul fara ca nimeni sa vada cand.
+
+    Intoarce `(reguli_generale, memory_block, comanda)`.
+    """
     # Salutul se face pe prenume. In profil numele e intreg („Ion Popescu"), iar „Salut,
     # Ion Popescu" suna a formular, nu a om.
     prenume = (name or "").strip().split(" ")[0] or name
@@ -575,6 +615,24 @@ def get_system_prompt_for_kind(
     if comanda and kind_val == "roleplay":
         comanda += bloc_de_distributie(profil_rol, prenume)
 
+    return reguli_generale, memory_block, comanda
+
+
+def get_system_prompt_for_kind(
+    kind: SessionKind | str,
+    name: str = "Participant",
+    history_length: int = 0,
+    quiz_competency: str | None = None,
+    project_competencies: list[str] | None = None,
+    memories: list[dict[str, Any]] | None = None,
+    biblioteca_path: str = "",
+    profil_rol: dict[str, Any] | None = None,
+) -> str:
+    material, _ = get_core_material(biblioteca_path)
+    kind_val = kind.value if isinstance(kind, SessionKind) else str(kind)
+    reguli_generale, memory_block, comanda = _bucatile_comune(
+        kind_val, name, history_length, profil_rol, memories
+    )
     if kind_val == "roleplay":
         # Actorul si evaluarea merg impreuna, ca in aplicatia veche si ca in plicul 22:
         # „peste el vine coach.md SAU PERECHEA actor.md + evaluare.md, dupa mod".
@@ -621,6 +679,42 @@ def get_system_prompt_for_kind(
             f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n"
             f"{REGULI_COACHING_PROMPT}\n\n---\n\n{COACHING_PROMPT}{memory_block}"
         )
+
+
+def get_prompts_pe_meserii(
+    name: str = "Participant",
+    history_length: int = 0,
+    memories: list[dict[str, Any]] | None = None,
+    biblioteca_path: str = "",
+    profil_rol: dict[str, Any] | None = None,
+) -> tuple[str, str]:
+    """Cele doua prompturi ale despartirii actor/evaluator — plicul 112, decizia 7.
+
+    Intoarce `(promptul actorului, promptul evaluatorului)`. Amandoua primesc acelasi
+    transcript, dar fiecare numai materialul meseriei lui. Ordinea „intai personajul, apoi
+    evaluarea" nu mai e o instructiune pentru model: actorul NU primeste regulile de evaluare,
+    deci nu are cum sa evalueze, iar evaluatorul NU primeste `actor.md`, deci n-are personaj.
+
+    Singurul lucru trimis de doua ori, in afara de transcript, e `reguli-generale.md` (3.918
+    caractere): acolo stau numele omului (poarta 5, ceruta de amandoua ieșirile) si interdictia
+    metodelor (poarta 7). Se scrie in raport ca atare.
+    """
+    reguli_generale, memory_block, comanda = _bucatile_comune(
+        "roleplay", name, history_length, profil_rol, memories
+    )
+
+    material_actor, _ = get_core_material(biblioteca_path, felie="actor")
+    material_evaluator, _ = get_core_material(biblioteca_path, felie="evaluator")
+
+    prompt_actor = (
+        f"{material_actor}\n\n---\n\n{reguli_generale}\n\n---\n\n"
+        f"{ACTOR_PROMPT}{memory_block}{comanda}"
+    )
+    prompt_evaluator = (
+        f"{material_evaluator}\n\n---\n\n{reguli_generale}\n\n---\n\n"
+        f"{EVALUARE_PROMPT}{FARA_SCENA}"
+    )
+    return prompt_actor, prompt_evaluator
 
 
 def get_summary_prompt(name: str, opt_text: str, history: str) -> str:
