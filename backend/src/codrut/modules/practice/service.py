@@ -22,6 +22,11 @@ from codrut.modules.companies.models import CompanyProject, ParticipantProfile, 
 from codrut.modules.identity.models import User, UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.practice.budget import release, reserve, settle
+from codrut.modules.practice.citat import (
+    propozitii_numerotate,
+    pune_citatul,
+    sterge_repetarea,
+)
 from codrut.modules.practice.generation_provider import (
     GenerationProvider,
     build_generation_provider,
@@ -692,6 +697,16 @@ class PracticeSessionService:
             else:
                 messages.append(GenerationMessage(role="user", text=text))
 
+            # Replica de ACUM intra in prompt NUMEROTATA pe propozitii, ca modelul sa poata
+            # arata cu un numar propozitia pe care o judeca, in loc s-o copieze — plicul 106.
+            # In baza ramane textul lui, neatins: blocul traieste numai in prompt. Se pune DUPA
+            # bucla de mai sus, si nu inauntru, ca lacatul plicului 64 (care decupeaza bucla din
+            # codul viu si se opreste exact la randul de deasupra) sa ramana intreg.
+            if session_obj.kind == SessionKind.roleplay:
+                bloc_numerotat = propozitii_numerotate(text)
+                if bloc_numerotat:
+                    messages[-1] = GenerationMessage(role="user", text=text + bloc_numerotat)
+
             history_length = len(existing_turns) + 1
 
             # Cele trei piese care existau pe disc dar nu ajungeau niciodata la model.
@@ -777,11 +792,24 @@ class PracticeSessionService:
             # 10. New transaction: settle budget reservation with actual cost and record actor turn
             await settle(self.session, reservation_id, actual_usd=result.estimated_usd)
 
+            # Citatul il pune aplicatia, cuvant cu cuvant, in locul numarului scris de model,
+            # si tot ea sterge repetarea exacta care urmeaza uneori dupa el — plicurile 106-108.
+            # Numarul lipsa sau inexistent nu se ascunde: se scrie in jurnal si se numara.
+            text_final = result.text
+            if session_obj.kind == SessionKind.roleplay:
+                text_final, motiv = pune_citatul(result.text, text)
+                text_final, sterse = sterge_repetarea(text_final)
+                if motiv or sterse:
+                    logger.info(
+                        "practice_citat sesiune=%s motiv=%r sterse=%s",
+                        session_id, motiv, len(sterse),
+                    )
+
             actor_turn = PracticeTurn(
                 session_id=session_id,
                 ordinal=next_ordinal + 1,
                 role=TurnRole.actor,
-                text=result.text,
+                text=text_final,
                 prompt_tokens=result.usage.prompt_tokens,
                 cached_tokens=result.usage.cached_tokens,
                 output_tokens=result.usage.output_tokens,

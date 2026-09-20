@@ -83,7 +83,7 @@ def test_memoria_ajunge_in_prompt_la_inceputul_sesiunii():
 
 def test_versiunea_promptului_a_urcat():
     """Compozitia s-a schimbat; fara urcare, sesiunile nu se mai pot compara."""
-    assert CODY_PROMPT_VERSION == "v3.8"
+    assert CODY_PROMPT_VERSION == "v3.9"
 
 
 def test_serviciul_chiar_trimite_cele_trei_piese():
@@ -792,10 +792,17 @@ def test_pragul_replicii_model_e_sub_9():
 
 
 def test_evaluarea_se_sprijina_pe_citat_si_nu_negociaza_nota():
-    """Lacatul cerut rosu-inainte/verde-dupa: citatul si interdictia de a sari la 10."""
+    """Lacatul cerut rosu-inainte/verde-dupa: citatul si interdictia de a sari la 10.
+
+    Din plicul 109, citatul nu mai e cerut ca text, ci ca NUMAR: modelul arata propozitia,
+    iar aplicatia o pune (`practice/citat.py`). Cerinta a ramas aceeasi — evaluarea se
+    sprijina pe cuvintele omului — dar drumul pe care se implineste s-a schimbat, fiindca
+    prin model se strica: 3 sesiuni din 10 la modelul ieftin, masurat la plicul 107.
+    """
     prompt = get_system_prompt_for_kind("roleplay", name="Andrei", history_length=3)
 
-    assert "CITATUL ÎNAINTE DE VERDICT" in prompt
+    assert "CITATUL SE CERE CU UN NUMĂR, NU CU TEXT" in prompt
+    assert "Ce a spus omul, pe propoziții" in prompt
     assert "INTERZIS ABSOLUT să sari la 10" in prompt
     assert "CEL MULT UN PUNCT" in prompt
 
@@ -882,7 +889,7 @@ def test_regula_contestarii_ramane_si_ce_era_deja_nu_s_a_pierdut():
 
     for bucata in (
         "CÂND OMUL CONTESTĂ NOTA SAU OBSERVAȚIA",
-        "CITATUL ÎNAINTE DE VERDICT",
+        "CITATUL SE CERE CU UN NUMĂR, NU CU TEXT",
         "PUNCTAJUL E OBLIGATORIU",
         "REPLICA SE SCRIE, NU SE DESCRIE",
         "ORI DE CÂTE ORI DAI SUB 9",
