@@ -140,13 +140,6 @@ class Settings(BaseSettings):
     price_output_per_million_usd: Decimal = Decimal("3.75")
     price_thought_per_million_usd: Decimal = Decimal("3.75")
     practice_trainer_direct_entry: bool = False
-
-    # Despartirea actor/evaluator — plicul 112, decizia de arhitectura 7 (Andrei, 24 august).
-    #
-    # Stins, adica purtarea de azi: un singur apel, care face si personajul, si evaluarea.
-    # Aprins: doua apeluri in paralel, fiecare cu materialul meseriei lui. Intoarcerea e
-    # randul asta, nu o operatie.
-    practice_two_calls: bool = False
     biblioteca_path: str = Field(
         default="/opt/codrut-platform/BIBLIOTECA",
         validation_alias=AliasChoices("BIBLIOTECA_PATH", "biblioteca_path"),
