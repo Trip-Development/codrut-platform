@@ -2,32 +2,48 @@ from __future__ import annotations
 
 import io
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from codrut.core.config import Settings
+from codrut.api.dependencies import current_principal
+from codrut.core.config import get_settings
 from codrut.main import create_app
+from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
+from codrut.modules.identity.terms import CURRENT_TERMS_VERSION
+
+
+def _aplicatia_cu_participant():
+    """Aplicația, cu un participant autentificat — plicul 122.
+
+    Testele astea cereau o fixtură, `test_db_session`, care nu există nicăieri în depozit, și
+    treceau `settings=` lui `create_app()`, care nu primește argumente. Deci n-au rulat
+    NICIODATĂ: pytest le raporta ca eroare de colectare, iar eroarea se număra printre cele 16
+    roșii. Acum se pregătesc ca toate celelalte teste de rută (vezi `test_communications_router`).
+    """
+    app = create_app()
+    setari = get_settings().model_copy(update={"generation_provider": "local"})
+
+    async def principal_override() -> SessionPrincipal:
+        return SessionPrincipal(
+            user_id=uuid.uuid4(),
+            email="participant@example.com",
+            role=UserRole.participant,
+            terms_accepted_at=datetime.now(UTC),
+            terms_version=CURRENT_TERMS_VERSION,
+            session_token="test-session",  # noqa: S106
+        )
+
+    app.dependency_overrides[current_principal] = principal_override
+    app.dependency_overrides[get_settings] = lambda: setari
+    return app
 
 
 @pytest.mark.asyncio
-async def test_transcribe_endpoint(test_db_session):
-    settings = Settings(
-        generation_provider="local",
-        jwt_secret="test-secret-key-1234567890",  # noqa: S106
-    )
-    app = create_app(settings=settings)
-
-    principal = SessionPrincipal(
-        user_id=uuid.uuid4(),
-        email="participant@example.com",
-        role="participant",
-    )
-
-    app.dependency_overrides[
-        "codrut.api.dependencies.current_principal"
-    ] = lambda: principal
+async def test_transcribe_endpoint() -> None:
+    app = _aplicatia_cu_participant()
 
     dummy_audio = io.BytesIO(b"RIFFdummywavecontent1234567890")
     files = {"file": ("test.wav", dummy_audio, "audio/wav")}
@@ -42,22 +58,8 @@ async def test_transcribe_endpoint(test_db_session):
 
 
 @pytest.mark.asyncio
-async def test_dashboard_endpoint(test_db_session):
-    settings = Settings(
-        generation_provider="local",
-        jwt_secret="test-secret-key-1234567890",  # noqa: S106
-    )
-    app = create_app(settings=settings)
-
-    principal = SessionPrincipal(
-        user_id=uuid.uuid4(),
-        email="participant@example.com",
-        role="participant",
-    )
-
-    app.dependency_overrides[
-        "codrut.api.dependencies.current_principal"
-    ] = lambda: principal
+async def test_dashboard_endpoint() -> None:
+    app = _aplicatia_cu_participant()
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
