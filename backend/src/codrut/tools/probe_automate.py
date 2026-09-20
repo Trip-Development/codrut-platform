@@ -42,7 +42,6 @@ from codrut.modules.practice.prompts import (
     CODY_PROMPT_VERSION,
     NUME_PERSONAJ,
     _numele_personajului,
-    get_prompts_pe_meserii,
     get_system_prompt_for_kind,
 )
 from codrut.modules.practice.service import DESCHIDE_SESIUNEA
@@ -116,39 +115,13 @@ def personajul(text: str) -> str | None:
     return min(gasite)[1] if gasite else None
 
 
-# Care poarta judeca ce apel, dupa despartirea de la plicul 112. Fara atribuire, depanarea se
-# invarte in gol: vezi „poarta 2 a picat" si nu stii pe cine sa intrebi.
-APELUL_VINOVAT = {
-    "1": "amandoua", "2": "evaluator", "3": "evaluator", "4": "actor",
-    "5": "amandoua", "6": "evaluator", "7": "amandoua", "9": "evaluator",
-}
-
-# Poarta 9 (plicul 112): evaluatorul nu vorbeste in numele personajului.
-#
-# Dupa despartire, evaluatorul nu mai primeste `actor.md`, deci n-ar trebui sa aiba personaj.
-# Daca totusi scrie o replica de scena — „Elena: «...»" sau „(in rol)" — despartirea nu tine,
-# si asta nu se vede din nicio alta poarta: textul final arata la fel.
-EVALUATORUL_JOACA = re.compile(
-    r"(?:^|\n)\s*(?:\*\*)?(?:" + "|".join(re.escape(n) for n in NUME_PERSONAJ)
-    + r")(?:\*\*)?\s*(?:\(in rol\)|\(în rol\))?\s*:\s*[„\"“«]",
-    re.IGNORECASE,
-)
-
-
-def evaluatorul_joaca(text: str) -> str | None:
-    m = EVALUATORUL_JOACA.search(text or "")
-    return m.group(0).strip() if m else None
-
-
 def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
-    """Portile unei sesiuni. Fiecare: aplicabila, instante, trecute, picate."""
+    """Cele sapte porti pentru o sesiune. Fiecare: aplicabila, instante, trecute, picate."""
     def poarta(aplicabila=True):
         return {"aplicabila": aplicabila, "instante": 0, "trecute": 0, "picate": []}
 
-    p = {str(i): poarta() for i in (1, 2, 3, 4, 5, 6, 7, 9)}
+    p = {str(i): poarta() for i in range(1, 8)}
     p["7"]["numarate"] = {m: 0 for m in METODE_NUMARATE}
-    # Poarta 9 se aplica numai cand evaluatorul a raspuns separat — adica la doua apeluri.
-    p["9"]["aplicabila"] = any(x.get("text_evaluator") for x in pasi)
     for i in ("2", "3", "4", "6"):
         p[i]["aplicabila"] = mod == "roleplay"
 
@@ -163,9 +136,6 @@ def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
         bifa("1", bool(r.strip()) and not pas["eroare"], f"pas {nr_pas}: {pas['eroare'] or 'gol'}")
         if not r.strip():
             continue
-        if pas.get("text_evaluator"):
-            joaca = evaluatorul_joaca(pas["text_evaluator"])
-            bifa("9", joaca is None, f"pas {nr_pas}: evaluatorul joaca: {joaca!r}")
         metode = sorted({m.upper() for m in METODE.findall(r)})
         bifa("7", not metode, f"pas {nr_pas}: {', '.join(metode)}")
         for m in NUMARATE.findall(r):
@@ -234,7 +204,7 @@ class Numarator:
         self.coduri[raspuns.status_code] += 1
 
 
-async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool = False) -> dict:
+async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int) -> dict:
     scenariu = SCENARII[mod]
     profil = {
         "conduce_oameni": True,
@@ -255,27 +225,9 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
             if pas.text is None
             else (*istoric, GenerationMessage(role="user", text=pas.text))
         )
-        doua_apeluri = doua and mod == "roleplay"
-        cerere_evaluator = None
-        if doua_apeluri:
-            prompt_actor, prompt_evaluator = get_prompts_pe_meserii(
-                name=PARTICIPANT,
-                history_length=lungime,
-                memories=[],
-                biblioteca_path=setari.biblioteca_path,
-                profil_rol=profil,
-            )
-            cerere_evaluator = GenerationRequest(
-                messages=tuple(mesaje),
-                system_instruction=prompt_evaluator,
-                purpose=GenerationPurpose.evaluator,
-                max_output_tokens=setari.vertex_max_output_tokens_evaluator,
-                temperature=0.2,
-                thinking_budget=setari.thinking_budget_evaluator,
-            )
         cerere = GenerationRequest(
             messages=tuple(mesaje),
-            system_instruction=prompt_actor if doua_apeluri else get_system_prompt_for_kind(
+            system_instruction=get_system_prompt_for_kind(
                 kind=mod,
                 name=PARTICIPANT,
                 history_length=lungime,
@@ -293,32 +245,13 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
         t0 = time.monotonic()
         rand = {"pas": i, "fel": pas.fel, "om": pas.text, "raspuns": "", "eroare": None,
                 "oprire": None, "model": None, "intrat": 0, "iesit": 0, "gandit": 0,
-                "din_cache": 0, "text_actor": "", "text_evaluator": "", "apeluri": 1}
+                "din_cache": 0}
         try:
-            if not doua_apeluri:
-                rez = await furnizor.generate(cerere)
-                u = rez.usage
-                rand.update(raspuns=rez.text or "", oprire=rez.finish_reason, model=rez.model,
-                            intrat=u.prompt_tokens, iesit=u.output_tokens,
-                            gandit=u.thought_tokens, din_cache=u.cached_tokens)
-            else:
-                # Exact ca aplicatia (service.py, plicul 112): in PARALEL, amandoua cu acelasi
-                # transcript, si aplicatia lipeste personajul inaintea evaluarii.
-                rez, rez_e = await asyncio.gather(
-                    furnizor.generate(cerere), furnizor.generate(cerere_evaluator)
-                )
-                u, ue = rez.usage, rez_e.usage
-                text_actor = (rez.text or "").strip()
-                text_eval = (rez_e.text or "").strip()
-                rand.update(
-                    raspuns=f"{text_actor}\n\n***\n\n{text_eval}" if text_eval else text_actor,
-                    text_actor=text_actor, text_evaluator=text_eval, apeluri=2,
-                    oprire=rez.finish_reason, model=rez.model,
-                    intrat=u.prompt_tokens + ue.prompt_tokens,
-                    iesit=u.output_tokens + ue.output_tokens,
-                    gandit=u.thought_tokens + ue.thought_tokens,
-                    din_cache=u.cached_tokens + ue.cached_tokens,
-                )
+            rez = await furnizor.generate(cerere)
+            u = rez.usage
+            rand.update(raspuns=rez.text or "", oprire=rez.finish_reason, model=rez.model,
+                        intrat=u.prompt_tokens, iesit=u.output_tokens, gandit=u.thought_tokens,
+                        din_cache=u.cached_tokens)
         except Exception as err:
             # orice eroare se numara ca replica pierduta; nu opreste rularea
             rand["eroare"] = getattr(err, "code", None) or type(err).__name__
@@ -340,7 +273,7 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
         "rulare": nr,
         "terminata": datetime.now(UTC).isoformat(timespec="seconds"),
         "secunde": round(time.monotonic() - inceput, 1),
-        "apeluri": sum(x.get("apeluri", 1) for x in pasi),
+        "apeluri": len(pasi),
         "http": {str(k): v for k, v in sorted(coduri.items())},
         "pasi": pasi,
         "porti": portile(mod, pasi, nr),
@@ -376,8 +309,6 @@ async def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", default=reale.vertex_actor_model)
     ap.add_argument("--destinatie", default=reale.vertex_region)
     ap.add_argument("--plafon-apeluri", type=int, default=260)
-    ap.add_argument("--doua-apeluri", action="store_true",
-                    help="despartirea actor/evaluator, plicul 112")
     ap.add_argument("--plafon-minute", type=float, default=90)
     ap.add_argument("--jurnal", type=Path,
                     help="fisierul din container unde se scrie fiecare sesiune terminata")
@@ -426,9 +357,7 @@ async def main(argv: list[str] | None = None) -> int:
             if apeluri + len(SCENARII[mod]) > a.plafon_apeluri:
                 motiv = "oprita la plafonul de apeluri"
                 break
-            rezultat = await o_sesiune(
-                furnizor, setari, numarator, mod, nr, doua=a.doua_apeluri
-            )
+            rezultat = await o_sesiune(furnizor, setari, numarator, mod, nr)
             apeluri += rezultat["apeluri"]
             facute += 1
             scrie(rezultat)
