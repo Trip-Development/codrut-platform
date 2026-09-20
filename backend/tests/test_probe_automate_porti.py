@@ -71,7 +71,10 @@ def test_portile_unei_sesiuni_de_role_play() -> None:
     assert p["1"]["trecute"] == p["1"]["instante"] == 5
     assert p["2"]["picate"] == ["pas 4: fara punctaj"]
     assert p["3"]["trecute"] == p["6"]["trecute"] == 1
-    assert p["4"]["personaj"] == "Elena Marin" and p["4"]["trecute"] == 1
+    # Poarta 4 se uita la FIECARE pas de joc, nu la toata sedinta lipita — plicul 115. Aici
+    # sunt doi pasi in care vorbeste cineva, si la amandoi e personajul dat de aplicatie.
+    # („Scena:" de la pasul 2 e o rubrica, nu un vorbitor.)
+    assert p["4"]["personaj"] == "Elena Marin" and p["4"]["trecute"] == p["4"]["instante"] == 2
     assert p["5"]["picate"] == [] and p["7"]["picate"] == []
 
 

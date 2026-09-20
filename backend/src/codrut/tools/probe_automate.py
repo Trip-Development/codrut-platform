@@ -115,13 +115,90 @@ def personajul(text: str) -> str | None:
     return min(gasite)[1] if gasite else None
 
 
+# ---------------------------------------------------------------- replica de scena
+
+# Cine vorbeste in scena — folosit de poarta 4 (stransa) si de poarta 9 — plicul 115.
+#
+# Tiparul de azi al modelului, luat din texte adevarate, nu din inchipuire:
+#   **Dan:** „Pai cum ce anume?…"
+#   *Diana Ilie:*  Cum adica ce m-a deranjat?…
+#   *Victor (se uita lung la tine, isi strange mapa la piept):*  „Nu ma deranjeaza nimic…"
+# Deci: semne de ingrosare sau italice oriunde in jur, indicatie de scena in paranteze dupa nume,
+# vorbirea pe randul urmator, si NUME DIN AFARA LISTEI de personaje.
+#
+# Ce n-are voie sa prinda, ca sa nu devina o alarma care suna mereu: titlurile pe care
+# evaluatorul le scrie normal („Evaluare Cody:", „Scor:", „Replica model:", „Ies din rol:"),
+# replica model („Ai fi putut spune: …") si citatul din vorbele omului („Mihai, ai spus: …" —
+# acolo numele e urmat de virgula, nu de doua puncte).
+_TITLURI = {
+    "evaluare", "evaluarea", "evaluator", "scor", "scorul", "nota", "notă", "punctaj",
+    "feedback", "replica", "replică", "observatie", "observație", "concluzie", "analiza",
+    "analiză", "verdict", "recomandare", "sugestie", "exemplu", "alternativa", "alternativă",
+    "varianta", "variantă", "context", "obiectiv", "situatie", "situație", "sfat", "atentie",
+    "atenție", "important", "rezumat", "bilant", "bilanț", "motiv", "impact", "ies", "ieși",
+    "iesi", "de", "ce", "cum", "ai", "pas", "total", "bine", "rau", "rău", "corect",
+    # „**Cody:**" nu e un personaj: e evaluatorul care isi spune numele inaintea judecatii.
+    # Masurat pe referinta cu un apel: 8 din cele 20 de evaluari incep asa, si toate sunt curate.
+    "cody",
+    # Titlurile SETUP-ului: „SETUP:", „Context:", „Contextul:", „Obiectiv:". Nu sunt personaje;
+    # sunt rubricile cu care incepe scena. Masurat: fara ele, poarta 4 pica la pasul 2 in toate
+    # cele 20 de sesiuni salvate, pe nimic.
+    "setup", "contextul", "obiectivul", "scena", "scenă", "scenariu", "scenariul", "rol",
+    "rolul", "situatia", "situația", "tu", "el", "ea", "personaj", "personajul",
+    "gresit", "greșit", "asertivitate", "empatie", "claritate", "final", "concret", "acum",
+}
+
+_REPLICA_DE_SCENA = re.compile(
+    r"(?m)^[ \t]*[*_]{0,2}\s*"
+    r"(?P<nume>[A-ZĂÂÎȘȚ][\wăâîșțĂÂÎȘȚ.-]*(?:\s+[A-ZĂÂÎȘȚ][\wăâîșțĂÂÎȘȚ.-]*)?)"
+    r"(?:\s*\([^)\n]{0,200}\))?"
+    r"\s*[*_]{0,2}\s*:\s*[*_]{0,2}\s*(?:\n\s*)?[„\"“«\-—*\w]"
+)
+
+
+def replicile_de_scena(text: str) -> list[str]:
+    """Numele celor care vorbesc in text, in ordine. Gol = nimeni nu joaca."""
+    gasite = []
+    for m in _REPLICA_DE_SCENA.finditer(text or ""):
+        nume = m.group("nume").strip()
+        if nume.split()[0].lower().strip(".:") in _TITLURI:
+            continue
+        gasite.append(nume)
+    return gasite
+
+
+def evaluatorul_joaca(text: str) -> str | None:
+    """Poarta 9: evaluatorul nu vorbeste in numele niciunui personaj — plicul 115.
+
+    Prima varianta (plicul 112) cerea un nume DIN LISTA, urmat imediat de ghilimele. A trecut
+    10/10 peste 70 de replici in care evaluatorul chiar juca. Un instrument verificat pe un caz
+    pe care nu-l intalneste niciodata nu e o masura, e o decoratie.
+    """
+    gasite = replicile_de_scena(text)
+    return gasite[0] if gasite else None
+
+
+def _acelasi_personaj(vorbitor: str, asteptat: str) -> bool:
+    """Acelasi om, scris scurt sau intreg: „Diana Ilie", „Diana", „Ilie" — plicul 115.
+
+    Prenumele OMULUI nu trece niciodata: asta e chiar ce pazea poarta 4 de la inceput.
+    """
+    v = {x.strip(".,:").lower() for x in vorbitor.split()}
+    a = {x.strip(".,:").lower() for x in (asteptat or "").split()}
+    if PRENUME.lower() in v:
+        return False
+    return bool(v & a)
+
+
 def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
     """Cele sapte porti pentru o sesiune. Fiecare: aplicabila, instante, trecute, picate."""
     def poarta(aplicabila=True):
         return {"aplicabila": aplicabila, "instante": 0, "trecute": 0, "picate": []}
 
-    p = {str(i): poarta() for i in range(1, 8)}
+    p = {str(i): poarta() for i in (1, 2, 3, 4, 5, 6, 7, 9)}
     p["7"]["numarate"] = {m: 0 for m in METODE_NUMARATE}
+    # Poarta 9 se aplica numai cand evaluatorul a raspuns separat — adica la doua apeluri.
+    p["9"]["aplicabila"] = any(x.get("text_evaluator") for x in pasi)
     for i in ("2", "3", "4", "6"):
         p[i]["aplicabila"] = mod == "roleplay"
 
@@ -136,6 +213,9 @@ def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
         bifa("1", bool(r.strip()) and not pas["eroare"], f"pas {nr_pas}: {pas['eroare'] or 'gol'}")
         if not r.strip():
             continue
+        if pas.get("text_evaluator"):
+            joaca = evaluatorul_joaca(pas["text_evaluator"])
+            bifa("9", joaca is None, f"pas {nr_pas}: evaluatorul joaca {joaca!r}")
         metode = sorted({m.upper() for m in METODE.findall(r)})
         bifa("7", not metode, f"pas {nr_pas}: {', '.join(metode)}")
         for m in NUMARATE.findall(r):
@@ -157,13 +237,29 @@ def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
         bifa("5", re.search(rf"\b{PRENUME}\b", salut["raspuns"]) is not None,
              "salutul nu contine numele omului")
     if mod == "roleplay":
-        scena = " ".join(x["raspuns"] for x in pasi if x["fel"] in ("pornire", "joc"))
-        gasit = personajul(scena)
+        # Poarta 4, STRANSA — plicul 115.
+        #
+        # Pana azi lipea toti pasii sedintei si ii ajungea O SINGURA aparitie a numelui bun.
+        # La `roleplay:8`, in masuratoarea din 20 septembrie, actorul a plecat de la Diana Ilie,
+        # a alunecat la „Radu" doi pasi, s-a intors — si poarta a trecut. Acum se uita la
+        # FIECARE pas in parte: cine vorbeste acolo trebuie sa fie personajul dat de aplicatie.
         asteptat = _numele_personajului(nr_rulare - 1, PRENUME)
-        p["4"]["personaj"] = gasit
         p["4"]["asteptat"] = asteptat
-        bifa("4", gasit is not None and gasit.split()[0] != PRENUME,
-             f"personaj {gasit or 'negasit in lista'}")
+        vazuti: list[str] = []
+        for pas in pasi:
+            if pas["fel"] not in ("pornire", "joc") or not pas["raspuns"].strip():
+                continue
+            # numai partea ACTORULUI: la doua apeluri e separata, la unul singur e ce sta
+            # inaintea despartitorului `***`
+            text = pas.get("text_actor") or pas["raspuns"].split("***")[0]
+            vorbitori = replicile_de_scena(text)
+            if not vorbitori:
+                continue
+            vazuti.extend(vorbitori)
+            straini = sorted({v for v in vorbitori if not _acelasi_personaj(v, asteptat)})
+            bifa("4", not straini,
+                 f"pas {pas['pas']}: joaca {', '.join(straini)}, nu {asteptat}")
+        p["4"]["personaj"] = vazuti[0] if vazuti else None
     return p
 
 
