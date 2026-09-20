@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/shell/app-shell";
 import {
+  participantNavItems,
   participantNavItemsForType,
-  participantTrainingNavItems,
   trainerNavItems,
 } from "@/components/shell/nav";
 import {
@@ -86,13 +86,20 @@ export function ParticipantRouteLoading({
  * coaching, iar omul de la training vedea „Chestionare" si „Rezultate" la fiecare
  * intrare, pana se incarca pagina.
  *
- * Cand tipul nu se stie, se ia lista de training: la training meniul e submultime,
- * deci un element care apare tarziu deranjeaza mai putin decat unul care apare si
- * apoi dispare.
+ * Cand tipul NU se stie, se ia meniul celor din afara trainingului — plicul 116.
+ *
+ * Pana la plicul 113 se lua cel de training, si era bine: atunci el era o SUBMULTIME a
+ * celuilalt, deci un element care apare tarziu deranja mai putin decat unul care apare si apoi
+ * dispare. De la 113 nu mai e submultime: are „Tablou Competente" si „Exerseaza (Cody)", pe care
+ * celalalt nu le mai are.
+ *
+ * Deci alegerea s-a intors: cand nu stim, aratam meniul FARA exersare. E mai putin rau sa
+ * lipseasca o clipa un tab decat sa apara unuia care n-are ce cauta acolo — un om din proiectul
+ * Michelin, de pilda.
  */
 function participantNavItemsForProjectType(projectType?: string | null) {
   return projectType == null
-    ? participantTrainingNavItems
+    ? participantNavItems
     : participantNavItemsForType(projectType);
 }
 
