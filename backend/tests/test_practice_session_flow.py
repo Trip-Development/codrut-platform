@@ -60,6 +60,14 @@ async def create_test_context(
         company_id=company.id,
         name=f"Practice Project {suffix}",
         status=CompanyProjectStatus.active,
+        # Exersarea se porneste DOAR pe proiecte de tip `training` (`service.py:159`).
+        #
+        # Poarta aia a fost pusa dinadins, si e chiar cea pe care se sprijina afirmatia ca
+        # mutarea codului nu aprinde Cody pentru nimeni: fara ea, cei 216 oameni de la Michelin
+        # ar putea porni sesiuni. Fixtura de aici ramasese dinaintea ei, asa ca opt teste picau
+        # la poarta de tip INAINTE sa ajunga la ce voiau ele sa masoare — refuzurile de
+        # apartenenta, de plafon, de lungime.
+        project_type="training",
     )
     session.add(project)
     await session.flush()
