@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import uuid
@@ -15,6 +16,7 @@ from codrut.contracts.generation import (
     GenerationMessage,
     GenerationPurpose,
     GenerationRequest,
+    GenerationResult,
 )
 from codrut.core.config import Settings, get_settings
 from codrut.core.errors import DomainError
@@ -42,6 +44,7 @@ from codrut.modules.practice.policies import ensure_participant_may_practice
 from codrut.modules.practice.pricing import estimate_pessimistic_cost
 from codrut.modules.practice.prompts import (
     CODY_PROMPT_VERSION,
+    get_prompts_pe_meserii,
     get_system_prompt_for_kind,
 )
 from codrut.modules.practice.quotas import (
@@ -252,6 +255,68 @@ class PracticeSessionService:
         # ramane deschisa si goala — nu se pierde pentru o replica ratata.
         prima = await self._prima_replica(practice_session, profile, program_settings)
         return practice_session, prima
+
+    def _istoricul_unei_meserii(
+        self, existing_turns, text: str, meserie: str
+    ) -> list[GenerationMessage]:
+        """Istoricul asa cum il vede UN singur apel — plicul 117.
+
+        Replicile omului intra intregi, la amandoua meseriile: ele sunt ce s-a spus de fapt.
+        Replicile lui Cody intra numai cu bucata meseriei respective.
+
+        Randurile vechi n-au bucatile salvate (coloanele sunt nule). Atunci se foloseste `text`,
+        ca pana acum: sesiunile incepute inainte nu se strica, doar nu castiga nimic.
+
+        Regula plicurilor 64-65 ramane neatinsa: replicile „user" una dupa alta se string, iar
+        replica de acum ia locul unui orfan ramas de la o generare esuata.
+        """
+        camp = "text_actor" if meserie == "actor" else "text_evaluator"
+        mesaje: list[GenerationMessage] = []
+        for t in existing_turns:
+            role_str = "user" if t.role == TurnRole.participant else "model"
+            if role_str == "user":
+                continut = t.text
+            elif (
+                getattr(t, "text_actor", None) is None
+                and getattr(t, "text_evaluator", None) is None
+            ):
+                # rand vechi, dinaintea plicului 117: n-are bucati, deci se ia textul lipit
+                continut = t.text
+            else:
+                # rand cu bucati: se ia NUMAI a lui. Daca lipseste (evaluare nelivrata), randul
+                # se sare — nu se inlocuieste cu textul lipit, altfel s-ar intoarce exact
+                # amestecul pe care plicul asta il desface.
+                continut = getattr(t, camp, None) or ""
+            if not (continut or "").strip():
+                continue
+            if mesaje and mesaje[-1].role == role_str == "user":
+                mesaje[-1] = GenerationMessage(role="user", text=continut)
+                continue
+            mesaje.append(GenerationMessage(role=role_str, text=continut))
+        if mesaje and mesaje[-1].role == "user":
+            mesaje[-1] = GenerationMessage(role="user", text=text)
+        else:
+            mesaje.append(GenerationMessage(role="user", text=text))
+        return mesaje
+
+    async def _evaluatorul(
+        self, cerere: GenerationRequest, session_id: uuid.UUID
+    ) -> GenerationResult | None:
+        """Apelul evaluatorului, cu o singura reincercare — plicul 112, punctul 2e.
+
+        Daca pica si a doua oara, intoarce None: replica personajului se afiseaza oricum, iar
+        evaluarea lipsa se spune pe fata. Replica omului nu se pierde niciodata — ea e salvata
+        in baza inainte de orice apel (plicul 83).
+        """
+        for incercare in (1, 2):
+            try:
+                return await self.generation_provider.generate(cerere)
+            except Exception:
+                logger.warning(
+                    "practice_evaluator_esuat sesiune=%s incercarea=%s",
+                    session_id, incercare, exc_info=True,
+                )
+        return None
 
     async def start_trainer_session(
         self,
@@ -701,6 +766,9 @@ class PracticeSessionService:
                 history_length=history_length,
             )
 
+            doua_apeluri = (
+                self.settings.practice_two_calls and session_obj.kind == SessionKind.roleplay
+            )
             system_instruction = get_system_prompt_for_kind(
                 kind=session_obj.kind,
                 name=profile.full_name,
@@ -726,6 +794,49 @@ class PracticeSessionService:
                 thinking_budget=self.settings.thinking_budget_actor,
             )
 
+            # Despartirea actor/evaluator — plicul 112. Amandoua primesc ACELASI transcript;
+            # niciuna nu asteapta iesirea celeilalte, deci pleaca in paralel.
+            #
+            # Ordinea „intai personajul, apoi evaluarea" nu mai e o rugaminte catre model:
+            # actorul nu primeste regulile de evaluare, evaluatorul nu primeste personajul.
+            cerere_evaluator: GenerationRequest | None = None
+            if doua_apeluri:
+                # Fiecare apel isi vede NUMAI propriul trecut — plicul 117.
+                #
+                # Pana acum amandoua primeau `messages`, facut din `t.text`, adica din textul
+                # LIPIT: scena si evaluarea intr-un singur rand. Deci fiecare isi citea, marcata
+                # ca fiind a lui, si munca celuilalt — evaluatorul se vedea jucand scena, deci
+                # juca; actorul se vedea dand note, deci dadea note.
+                #
+                # Dovada care a inchis discutia (raportul 115): niciuna din cele 16 abateri nu
+                # era la pasul 3, primul pas de joc. Toate la 4, 5 si 6. Promptul tine la
+                # inceput; istoricul castiga pe masura ce se lungeste.
+                mesaje_actor = self._istoricul_unei_meserii(existing_turns, text, "actor")
+                mesaje_evaluator = self._istoricul_unei_meserii(existing_turns, text, "evaluator")
+                prompt_actor, prompt_evaluator = get_prompts_pe_meserii(
+                    name=profile.full_name,
+                    history_length=history_length,
+                    memories=memorii,
+                    biblioteca_path=self.settings.biblioteca_path,
+                    profil_rol=await self._profilul_de_rol(profile, session_obj.id),
+                )
+                request = GenerationRequest(
+                    messages=tuple(mesaje_actor),
+                    system_instruction=prompt_actor,
+                    purpose=GenerationPurpose.actor,
+                    max_output_tokens=self.settings.vertex_max_output_tokens,
+                    temperature=0.7,
+                    thinking_budget=self.settings.thinking_budget_actor,
+                )
+                cerere_evaluator = GenerationRequest(
+                    messages=tuple(mesaje_evaluator),
+                    system_instruction=prompt_evaluator,
+                    purpose=GenerationPurpose.evaluator,
+                    max_output_tokens=self.settings.vertex_max_output_tokens_evaluator,
+                    temperature=0.2,
+                    thinking_budget=self.settings.thinking_budget_evaluator,
+                )
+
             # 7. Estimate pessimistic cost and reserve budget
             prompt_words = sum(len(m.text.split()) for m in request.messages)
             if request.system_instruction:
@@ -738,6 +849,19 @@ class PracticeSessionService:
                 thinking_budget=self.settings.thinking_budget_actor,
                 settings=self.settings,
             )
+            # Plicul 112: se rezerva pentru AMANDOUA apelurile, cu preturile din mediu — lectia
+            # plicului 101, unde preturile ramase ale modelului vechi faceau paza sa numere de
+            # 2,4 ori mai putin decat adevarul.
+            if cerere_evaluator is not None:
+                cuvinte_eval = sum(len(m.text.split()) for m in cerere_evaluator.messages)
+                if cerere_evaluator.system_instruction:
+                    cuvinte_eval += len(cerere_evaluator.system_instruction.split())
+                estimated_usd += estimate_pessimistic_cost(
+                    prompt_tokens=max(1, cuvinte_eval),
+                    max_output_tokens=self.settings.vertex_max_output_tokens_evaluator,
+                    thinking_budget=self.settings.thinking_budget_evaluator,
+                    settings=self.settings,
+                )
 
             stmt_active_members = select(func.count(ProjectMembership.id)).where(
                 ProjectMembership.project_id == program_settings.project_id,
@@ -767,7 +891,16 @@ class PracticeSessionService:
                 messages[-1].text[:80] if messages else "",
             )
             try:
-                result = await self.generation_provider.generate(request)
+                if cerere_evaluator is None:
+                    result = await self.generation_provider.generate(request)
+                    rezultat_evaluator = None
+                else:
+                    # In paralel, nu pe rand: altfel despartirea ar dubla asteptarea omului
+                    # in loc s-o scada.
+                    result, rezultat_evaluator = await asyncio.gather(
+                        self.generation_provider.generate(request),
+                        self._evaluatorul(cerere_evaluator, session_id),
+                    )
             except Exception:
                 # 11. On failure: release budget, commit, participant turn remains saved in DB
                 await release(self.session, reservation_id)
@@ -775,13 +908,40 @@ class PracticeSessionService:
                 raise
 
             # 10. New transaction: settle budget reservation with actual cost and record actor turn
-            await settle(self.session, reservation_id, actual_usd=result.estimated_usd)
+            cost_real = result.estimated_usd
+            if rezultat_evaluator is not None:
+                cost_real += rezultat_evaluator.estimated_usd
+            await settle(self.session, reservation_id, actual_usd=cost_real)
+
+            # Ordinea o pune aplicatia acum, nu modelul: personajul intai, evaluarea dupa.
+            # `***` e acelasi despartitor pe care il scrie azi un singur apel.
+            text_final = result.text
+            if cerere_evaluator is not None:
+                evaluarea = (
+                    (rezultat_evaluator.text or "").strip()
+                    if rezultat_evaluator is not None else ""
+                )
+                if not evaluarea:
+                    # Punctul 2e: replica personajului SE AFISEAZA oricum, iar lipsa evaluarii
+                    # se spune pe fata, fara nota inventata.
+                    evaluarea = (
+                        "_Evaluare nelivrată. Replica ta e salvată; nota vine data viitoare._"
+                    )
+                text_final = f"{(result.text or '').strip()}\n\n***\n\n{evaluarea}"
 
             actor_turn = PracticeTurn(
                 session_id=session_id,
                 ordinal=next_ordinal + 1,
                 role=TurnRole.actor,
-                text=result.text,
+                text=text_final,
+                # Cele doua bucati, pentru istoricul de data viitoare — plicul 117. La un
+                # singur apel raman nule, si atunci istoricul se face din `text`, ca pana acum.
+                text_actor=(result.text or "").strip() if cerere_evaluator is not None else None,
+                text_evaluator=(
+                    (rezultat_evaluator.text or "").strip()
+                    if cerere_evaluator is not None and rezultat_evaluator is not None
+                    else None
+                ),
                 prompt_tokens=result.usage.prompt_tokens,
                 cached_tokens=result.usage.cached_tokens,
                 output_tokens=result.usage.output_tokens,
