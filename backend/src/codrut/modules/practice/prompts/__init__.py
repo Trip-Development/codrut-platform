@@ -195,6 +195,30 @@ REGULI_GENERALE_TEMPLATE = (_PROMPTS_DIR / "reguli-generale.md").read_text(encod
 REGULI_COACHING_PROMPT = (_PROMPTS_DIR / "reguli-coaching.md").read_text(encoding="utf-8").strip()
 ACTOR_PROMPT = (_PROMPTS_DIR / "actor.md").read_text(encoding="utf-8").strip()
 EVALUARE_PROMPT = (_PROMPTS_DIR / "evaluare.md").read_text(encoding="utf-8").strip()
+
+# Promptul ACTORULUI la doua apeluri — plicul 119, partea B.
+#
+# `actor.md` incepe, din lumea dinainte de despartire, cu: „Esti simultan actor si
+# Cody-ca-profesor." Cand evaluarea o face alt apel, randul ala nu mai e adevarat — si actorul
+# facea exact ce i se cerea: la plicul 118 a iesit din rol la 10 pasi din 40, iar la o sedinta
+# la TOTI cei patru pasi de joc.
+#
+# Se schimba NUMAI primele doua randuri, si NUMAI pe drumul cu doua apeluri. `ACTOR_PROMPT`
+# ramane neatins, caracter cu caracter, fiindca pe el se sprijina drumul cu un singur apel —
+# aparat de un lacat propriu (`test_promptul_de_la_un_apel_nu_se_atinge.py`).
+_ACTOR_CAP_VECHI = (
+    "MODUL ROLE-PLAY — PROTOCOL STRICT:\n"
+    "Ești simultan actor și Cody-ca-profesor. Cele două roluri sunt complet separate "
+    "și nu se amestecă niciodată."
+)
+_ACTOR_CAP_NOU = (
+    "MODUL ROLE-PLAY — PROTOCOL STRICT:\n"
+    "Ești personajul din scenă, atât. NU ești Cody-ca-profesor: evaluarea o scrie altcineva, "
+    "în altă parte, și nu e treaba ta. NU IEȘI DIN ROL NICIODATĂ — nu comentezi, nu dai lecții, "
+    "nu spui „ies din rol” sau „pauză de rol”, și nu scrii niciodată „***”."
+)
+ACTOR_PROMPT_DOUA_APELURI = ACTOR_PROMPT.replace(_ACTOR_CAP_VECHI, _ACTOR_CAP_NOU, 1)
+
 COACHING_PROMPT = (_PROMPTS_DIR / "coaching.md").read_text(encoding="utf-8").strip()
 QUIZ_PROMPT = (_PROMPTS_DIR / "quiz.md").read_text(encoding="utf-8").strip()
 REZUMAT_TEMPLATE = (_PROMPTS_DIR / "rezumat.md").read_text(encoding="utf-8").strip()
@@ -708,7 +732,7 @@ def get_prompts_pe_meserii(
 
     prompt_actor = (
         f"{material_actor}\n\n---\n\n{reguli_generale}\n\n---\n\n"
-        f"{ACTOR_PROMPT}{memory_block}{comanda}"
+        f"{ACTOR_PROMPT_DOUA_APELURI}{memory_block}{comanda}"
     )
     prompt_evaluator = (
         f"{material_evaluator}\n\n---\n\n{reguli_generale}\n\n---\n\n"
