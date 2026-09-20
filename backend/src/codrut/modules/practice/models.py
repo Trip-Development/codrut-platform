@@ -297,6 +297,18 @@ class PracticeTurn(TimestampMixin, Base):
         nullable=False,
     )
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    # Cele doua bucati ale replicii, la despartirea actor/evaluator — plicul 117.
+    #
+    # `text` ramane textul LIPIT, cel care se afiseaza si pe care se sprijina drumul cu un
+    # singur apel. Coloanele astea doua se umplu numai la doua apeluri, si servesc la un singur
+    # lucru: fiecare apel isi citeste in istoric NUMAI bucata lui.
+    #
+    # De ce conteaza: doua incercari de despartire au esuat la fel — evaluatorul juca scena,
+    # actorul dadea note. Cauza nu era promptul, ci istoricul: amandoua apelurile primeau
+    # aceeasi lista de mesaje, facuta din textul lipit, deci fiecare isi citea, ca fiind a lui,
+    # si munca celuilalt.
+    text_actor: Mapped[str | None] = mapped_column(Text, nullable=True)
+    text_evaluator: Mapped[str | None] = mapped_column(Text, nullable=True)
     prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cached_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
