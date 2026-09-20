@@ -183,7 +183,10 @@ async def test_ten_turn_practice_session_flow_local_provider() -> None:
         assert practice_session.id is not None
         assert practice_session.pack_id == ctx["pack"].id
         assert practice_session.state == SessionState.open
-        assert practice_session.turn_count == 0
+        # Sesiunea se deschide cu replica lui Cody, generata chiar la pornire (`_prima_replica`,
+        # plicul 45): omul intra si gaseste salutul, nu un ecran gol. Deci numaratoarea porneste
+        # de la 1, nu de la 0. Testul astepta lumea dinainte.
+        assert practice_session.turn_count == 1
 
         # 2. Ten turns flow
         now = datetime.now(UTC)
@@ -465,9 +468,15 @@ async def test_generation_failure_releases_budget_and_persists_participant_turn(
         assert exc_info.value.code == "vertex_network_error"
 
         # 1. Budget reservation is released in DB
+        #
+        # Sesiunea are ACUM doua rezervari: una pentru replica de deschidere, generata la
+        # pornire (plicul 45), si una pentru replica asta, care a esuat. Ne uitam la ultima —
+        # cea care trebuie sa fie eliberata.
         stmt_res = (
             select(PracticeBudgetReservation)
             .where(PracticeBudgetReservation.session_id == practice_session.id)
+            .order_by(PracticeBudgetReservation.created_at.desc())
+            .limit(1)
         )
         res_row = (await session.execute(stmt_res)).scalar_one()
         assert res_row.state == BudgetReservationState.released
