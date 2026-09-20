@@ -18,6 +18,7 @@ import os
 from codrut.core.config import Settings
 from codrut.modules.practice.prompts import (
     ACTOR_PROMPT,
+    ACTOR_PROMPT_DOUA_APELURI,
     EVALUARE_PROMPT,
     get_core_material,
     get_prompts_pe_meserii,
@@ -37,9 +38,15 @@ def test_comutatorul_e_stins_implicit() -> None:
 
 
 def test_actorul_nu_primeste_regulile_de_evaluare() -> None:
-    """Ordinea, prin construcție: cine n-are regulile de evaluare nu poate evalua."""
+    """Ordinea, prin construcție: cine n-are regulile de evaluare nu poate evalua.
+
+    De la plicul 119 actorul primește, la două apeluri, varianta căreia i s-a scos rândul
+    „ești simultan actor și Cody-ca-profesor". Restul e neschimbat, iar `ACTOR_PROMPT` —
+    cel de la un singur apel — rămâne neatins, apărat de lacătul lui.
+    """
     actor, _ = _cele_doua()
-    assert ACTOR_PROMPT[:200] in actor
+    assert ACTOR_PROMPT_DOUA_APELURI[:200] in actor
+    assert "NU ești Cody-ca-profesor" in actor
     assert EVALUARE_PROMPT[:200] not in actor
     assert "PUNCTAJUL E OBLIGATORIU" not in actor
 
