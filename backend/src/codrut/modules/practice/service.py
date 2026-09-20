@@ -707,8 +707,26 @@ class PracticeSessionService:
         ensure_turn_length(text, program_settings.max_chars_per_turn)
 
         # 3. Check turn count limit
+        #
+        # Se numara REPLICILE OMULUI, nu `turn_count` — plicul 123, hotararea lui Andrei:
+        # salutul nu se numara printre cele 10 schimburi.
+        #
+        # `turn_count` creste si la replica de deschidere, generata la pornire (`_prima_replica`),
+        # deci cu plafonul pus pe 10 omul primea NOUA schimburi: al zecelea mesaj al lui ii
+        # inchidea sedinta fara raspuns, tacut.
+        #
+        # De ce se numara si nu se scade unu din `turn_count`: `turn_count` e citit si de tabloul
+        # participantului (`schemas.py:50`, `practice.ts`), iar o sedinta in care generarea de la
+        # pornire a esuat n-are replica de deschidere deloc. Numaratoarea replicilor omului e
+        # adevarata in toate cazurile, si NU atinge nimic altceva — nici `turn_count`, nici
+        # `history_length`, pe care se sprijina pasul de pornire de la plicul 119.
+        stmt_replici_om = select(func.count(PracticeTurn.id)).where(
+            PracticeTurn.session_id == session_id,
+            PracticeTurn.role == TurnRole.participant,
+        )
+        replici_ale_omului = (await self.session.execute(stmt_replici_om)).scalar_one() or 0
         if is_session_turn_limit_reached(
-            session_obj.turn_count, program_settings.max_turns_per_session
+            replici_ale_omului, program_settings.max_turns_per_session
         ):
             session_obj.state = SessionState.closed
             session_obj.ended_at = datetime.now(UTC)
