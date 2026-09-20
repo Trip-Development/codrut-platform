@@ -120,7 +120,8 @@ def personajul(text: str) -> str | None:
 # in gol: vezi „poarta 2 a picat" si nu stii pe cine sa intrebi.
 APELUL_VINOVAT = {
     "1": "amandoua", "2": "evaluator", "3": "evaluator", "4": "actor",
-    "5": "amandoua", "6": "evaluator", "7": "amandoua", "9": "evaluator", "10": "evaluator",
+    "5": "amandoua", "6": "evaluator", "7": "amandoua", "9": "evaluator",
+    "10": "evaluator", "11": "actor",
 }
 
 
@@ -228,16 +229,45 @@ def alt_personaj(text: str, asteptat: str) -> str | None:
     return None
 
 
+# Poarta 11: actorul nu iese din rol — plicul 119.
+#
+# Promptul lui ii spunea, in primul rand, „esti simultan actor si Cody-ca-profesor" — propozitie
+# ramasa din lumea dinainte de despartire. Facea exact ce i se cerea: la plicul 118 a iesit din
+# rol la 10 pasi din 40, iar la `roleplay:5` la TOTI cei patru pasi de joc. Omul primea acolo o
+# lectie de la actor SI o evaluare de la evaluator, si nicio scena curata.
+#
+# Prinde si `***` in iesirea actorului: acolo nu e al lui, e despartitorul cu care aplicatia
+# lipeste cele doua apeluri. Daca il scrie el, si-a facut singur doua blocuri.
+IESIRE_DIN_ROL = re.compile(
+    r"(ies(?:im|i)?\s+(?:o |doua |două )?"
+    r"(?:clip[ăa]|secund[ăa]|secunde)?\s*din\s+(?:rol|scen[ăa]|rolul)"
+    r"|ie[șs]ire\s+din\s+rol"
+    r"|pauz[ăa]\s+de\s+(?:rol|joc|scen[ăa])"
+    r"|intervin\s+ca\s+(?:trainer|coach|cody)"
+    r"|moment\s+de\s+coaching"
+    r"|r[ăa]m[âa]n\s+(?:pu[țt]in\s+)?[îi]n\s+coaching"
+    r"|\*\*\*)",
+    re.IGNORECASE,
+)
+
+
+def actorul_iese_din_rol(text: str) -> str | None:
+    m = IESIRE_DIN_ROL.search(text or "")
+    return m.group(0).strip() if m else None
+
+
 def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
     """Portile unei sesiuni. Fiecare: aplicabila, instante, trecute, picate."""
     def poarta(aplicabila=True):
         return {"aplicabila": aplicabila, "instante": 0, "trecute": 0, "picate": []}
 
-    p = {str(i): poarta() for i in (1, 2, 3, 4, 5, 6, 7, 9, 10)}
+    p = {str(i): poarta() for i in (1, 2, 3, 4, 5, 6, 7, 9, 10, 11)}
     p["7"]["numarate"] = {m: 0 for m in METODE_NUMARATE}
     # Poarta 9 se aplica numai cand evaluatorul a raspuns separat — adica la doua apeluri.
     p["9"]["aplicabila"] = any(x.get("text_evaluator") for x in pasi)
     p["10"]["aplicabila"] = p["9"]["aplicabila"] and mod == "roleplay"
+    # poarta 11 se aplica numai cand actorul a raspuns separat (doua apeluri)
+    p["11"]["aplicabila"] = any(x.get("text_actor") for x in pasi) and mod == "roleplay"
     for i in ("2", "3", "4", "6"):
         p[i]["aplicabila"] = mod == "roleplay"
 
@@ -252,6 +282,9 @@ def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
         bifa("1", bool(r.strip()) and not pas["eroare"], f"pas {nr_pas}: {pas['eroare'] or 'gol'}")
         if not r.strip():
             continue
+        if pas.get("text_actor") and mod == "roleplay" and fel == "joc":
+            iese = actorul_iese_din_rol(pas["text_actor"])
+            bifa("11", iese is None, f"pas {nr_pas}: actorul iese din rol {iese!r}")
         if pas.get("text_evaluator"):
             joaca = evaluatorul_joaca(pas["text_evaluator"])
             bifa("9", joaca is None, f"pas {nr_pas}: evaluatorul joaca {joaca!r}")
