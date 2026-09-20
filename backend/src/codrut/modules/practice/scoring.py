@@ -4,6 +4,7 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
+from decimal import ROUND_HALF_UP, Decimal
 
 COMPETENCY_LEVEL_DESCRIPTIONS = {
     "INTEGRARE": "E reflex automat — apare și sub stres, fără efort conștient.",
@@ -34,11 +35,19 @@ def roleplay_xp(score: int | float) -> int:
 def quiz_xp(percent: int | float) -> int:
     """Procent quiz -> puncte XP.
 
-    0 dacă <= 0; altfel min(10, round(percent / 10)).
+    0 dacă <= 0; altfel cel mult 10, cu jumătatea rotunjită ÎN SUS: 8,5 -> 9.
+
+    Hotărârea lui Andrei, 20 septembrie (plicul 123). Până atunci se folosea `round()`, care în
+    Python rotunjește BANCAR: `round(8.5)` dă 8, dar `round(1.5)` dă 2. Deci nu era nici măcar
+    „în jos" — era inconsecvent, iar doi oameni cu jumătăți diferite primeau tratamente diferite,
+    fără nicio regulă pe care s-o poată înțelege.
+
+    E atingibil, nu teoretic: un scor de 8,5 la o competență devine 85%, iar acolo cele două
+    rotunjiri diferă cu un punct.
     """
     if percent <= 0:
         return 0
-    calculated = round(percent / 10.0)
+    calculated = int(Decimal(str(percent / 10.0)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
     return min(10, max(0, calculated))
 
 
