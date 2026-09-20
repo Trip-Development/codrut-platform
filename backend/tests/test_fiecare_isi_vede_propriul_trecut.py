@@ -51,18 +51,39 @@ def test_actorul_nu_mai_vede_evaluarea() -> None:
     assert all(EVALUARE not in text for _, text in mesaje)
 
 
-def test_evaluatorul_nu_mai_vede_scena() -> None:
+def test_evaluatorul_vede_scena_dar_nu_ca_fiind_a_lui() -> None:
+    """Plicul 118 schimbă ce apăra testul ăsta la 117, și dinadins.
+
+    La 117 evaluatorului i s-a tăiat scena de tot — și atunci și-a inventat propriul scenariu:
+    personajul inventat a apărut în 23 de replici ale lui și într-una a actorului. Scena nu e
+    „bucata actorului", e FAPT COMUN.
+
+    Acum o primește înapoi, dar niciodată ca replică a lui: apare numai în mesaje de rol „user",
+    cu etichetă. Ce nu are voie să se întoarcă e ATRIBUIREA, nu conținutul.
+    """
     mesaje = _istoric("evaluator")
     assert ("model", EVALUARE) in mesaje
-    assert all(SCENA not in text for _, text in mesaje)
+    assert any(SCENA in text for rol, text in mesaje if rol == "user")
+    assert all(SCENA not in text for rol, text in mesaje if rol == "model")
+    assert any("[În scenă, celălalt personaj a spus:]" in text for _, text in mesaje)
+
+
+def test_actorul_tot_nu_vede_evaluarea() -> None:
+    """Istoricul actorului nu se atinge — el e curat: 0/40, și își ține personajul 41/41."""
+    mesaje = _istoric("actor")
+    assert all(EVALUARE not in text for _, text in mesaje)
 
 
 def test_replicile_omului_ajung_la_amandoi_intregi() -> None:
-    """Ele sunt ce s-a spus de fapt; nu se taie pentru nimeni."""
+    """Ele sunt ce s-a spus de fapt; nu se taie pentru nimeni.
+
+    La evaluator, replica omului vine cu scena înaintea ei, deci se verifică prin cuprindere.
+    """
     for meserie in ("actor", "evaluator"):
         mesaje = _istoric(meserie)
-        assert ("user", "Păi nu e vina mea.") in mesaje
-        assert mesaje[-1] == ("user", "Acum ce facem?")
+        assert any("Păi nu e vina mea." in text for rol, text in mesaje if rol == "user")
+        assert mesaje[-1][0] == "user"
+        assert mesaje[-1][1].endswith("Acum ce facem?")
 
 
 def test_randurile_vechi_folosesc_textul_lipit() -> None:

@@ -92,6 +92,14 @@ MEMORIE_RELEVANTA_MINIMA = 40
 MEMORIE_PANA_LA_REPLICA = 2
 
 
+# Eticheta cu care scena ajunge la EVALUATOR — plicul 118.
+#
+# Nu ca replica lui (asa a ajuns pana la 117, si o continua), nu deloc (asa a fost la 117, si
+# si-a inventat alta). A treia varianta: ce a produs celalalt, marcat pe fata ca venind de la
+# altcineva.
+SCENA_CELUILALT = "[În scenă, celălalt personaj a spus:]"
+
+
 class PracticeSessionService:
     def __init__(
         self,
@@ -272,31 +280,50 @@ class PracticeSessionService:
         """
         camp = "text_actor" if meserie == "actor" else "text_evaluator"
         mesaje: list[GenerationMessage] = []
+        scena_in_asteptare = ""
+
+        def pune_user(continut: str) -> None:
+            """Replica omului, cu scena dinaintea ei daca e vreuna in asteptare."""
+            nonlocal scena_in_asteptare
+            intreg = continut
+            if scena_in_asteptare:
+                intreg = f"{SCENA_CELUILALT}\n{scena_in_asteptare}\n\n{continut}"
+            scena_in_asteptare = ""
+            if mesaje and mesaje[-1].role == "user":
+                mesaje[-1] = GenerationMessage(role="user", text=intreg)
+            else:
+                mesaje.append(GenerationMessage(role="user", text=intreg))
+
         for t in existing_turns:
-            role_str = "user" if t.role == TurnRole.participant else "model"
-            if role_str == "user":
-                continut = t.text
-            elif (
+            if t.role == TurnRole.participant:
+                if (t.text or "").strip():
+                    pune_user(t.text)
+                continue
+            vechi_fara_bucati = (
                 getattr(t, "text_actor", None) is None
                 and getattr(t, "text_evaluator", None) is None
-            ):
-                # rand vechi, dinaintea plicului 117: n-are bucati, deci se ia textul lipit
+            )
+            if vechi_fara_bucati:
+                # rand dinaintea plicului 117: n-are bucati, deci se ia textul lipit
                 continut = t.text
             else:
                 # rand cu bucati: se ia NUMAI a lui. Daca lipseste (evaluare nelivrata), randul
                 # se sare — nu se inlocuieste cu textul lipit, altfel s-ar intoarce exact
-                # amestecul pe care plicul asta il desface.
+                # amestecul pe care plicurile 117-118 il desfac.
                 continut = getattr(t, camp, None) or ""
-            if not (continut or "").strip():
-                continue
-            if mesaje and mesaje[-1].role == role_str == "user":
-                mesaje[-1] = GenerationMessage(role="user", text=continut)
-                continue
-            mesaje.append(GenerationMessage(role=role_str, text=continut))
-        if mesaje and mesaje[-1].role == "user":
-            mesaje[-1] = GenerationMessage(role="user", text=text)
-        else:
-            mesaje.append(GenerationMessage(role="user", text=text))
+                if meserie == "evaluator" and not vechi_fara_bucati:
+                    # Scena i se da inapoi, dar NU ca propriul lui trecut — plicul 118.
+                    #
+                    # La 117 i-am taiat-o de tot, si atunci si-a inventat propriul scenariu:
+                    # personajul inventat a aparut in 23 de replici ale lui si intr-una a
+                    # actorului. Scena nu e „bucata actorului", e FAPT COMUN — fara ea n-are ce
+                    # judeca. Se pune deci inaintea replicii urmatoare a omului, pe rolul
+                    # „user" si cu o eticheta: e vorba celuilalt din scena, nu a lui.
+                    scena_in_asteptare = (getattr(t, "text_actor", None) or "").strip()
+            if (continut or "").strip():
+                mesaje.append(GenerationMessage(role="model", text=continut))
+
+        pune_user(text)
         return mesaje
 
     async def _evaluatorul(

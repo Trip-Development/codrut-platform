@@ -45,7 +45,7 @@ from codrut.modules.practice.prompts import (
     get_prompts_pe_meserii,
     get_system_prompt_for_kind,
 )
-from codrut.modules.practice.service import DESCHIDE_SESIUNEA
+from codrut.modules.practice.service import DESCHIDE_SESIUNEA, SCENA_CELUILALT
 from codrut.tools.probe_metode_scoase import METODE_INTERZISE, METODE_NUMARATE
 from codrut.tools.probe_scenarii import COMPETENTE_PROIECT, PARTICIPANT, SCENARII
 
@@ -120,7 +120,7 @@ def personajul(text: str) -> str | None:
 # in gol: vezi „poarta 2 a picat" si nu stii pe cine sa intrebi.
 APELUL_VINOVAT = {
     "1": "amandoua", "2": "evaluator", "3": "evaluator", "4": "actor",
-    "5": "amandoua", "6": "evaluator", "7": "amandoua", "9": "evaluator",
+    "5": "amandoua", "6": "evaluator", "7": "amandoua", "9": "evaluator", "10": "evaluator",
 }
 
 
@@ -199,15 +199,45 @@ def _acelasi_personaj(vorbitor: str, asteptat: str) -> bool:
     return bool(v & a)
 
 
+# Numele pe care modelul le inventeaza cand n-are scena — masurate la plicul 117.
+#
+# Nu sunt in `NUME_PERSONAJ`: le scoate din el insusi. „Radu" a aparut in 23 de replici ale
+# evaluatorului si intr-una singura a actorului, in aceeasi rulare.
+NUME_INVENTATE = ("Radu", "Victor", "Dan", "Laura")
+
+
+def alt_personaj(text: str, asteptat: str) -> str | None:
+    """Poarta 10: evaluatorul nu vorbeste despre alt personaj decat cel al sedintei — plicul 118.
+
+    Defectul de la plicul 117 a trecut pe sub toate cele opt porti, fiindca nu e o replica de
+    scena — e text curgator, corect, despre altcineva. Poarta 9 cauta `Nume: „vorbire"`; asta
+    cauta numele, oriunde in text.
+
+    Ce NU prinde: prenumele omului si personajul sedintei, cu toate felurile de a-l scrie.
+    """
+    t = text or ""
+    candidati = [n for n in NUME_PERSONAJ] + [n for n in NUME_INVENTATE]
+    for nume in candidati:
+        if _acelasi_personaj(nume, asteptat):
+            continue
+        for bucata in {nume, *nume.split()}:
+            if bucata.lower() == PRENUME.lower() or len(bucata) < 4:
+                continue
+            if re.search(rf"\b{re.escape(bucata)}\b", t):
+                return nume
+    return None
+
+
 def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
     """Portile unei sesiuni. Fiecare: aplicabila, instante, trecute, picate."""
     def poarta(aplicabila=True):
         return {"aplicabila": aplicabila, "instante": 0, "trecute": 0, "picate": []}
 
-    p = {str(i): poarta() for i in (1, 2, 3, 4, 5, 6, 7, 9)}
+    p = {str(i): poarta() for i in (1, 2, 3, 4, 5, 6, 7, 9, 10)}
     p["7"]["numarate"] = {m: 0 for m in METODE_NUMARATE}
     # Poarta 9 se aplica numai cand evaluatorul a raspuns separat — adica la doua apeluri.
     p["9"]["aplicabila"] = any(x.get("text_evaluator") for x in pasi)
+    p["10"]["aplicabila"] = p["9"]["aplicabila"] and mod == "roleplay"
     for i in ("2", "3", "4", "6"):
         p[i]["aplicabila"] = mod == "roleplay"
 
@@ -225,6 +255,11 @@ def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
         if pas.get("text_evaluator"):
             joaca = evaluatorul_joaca(pas["text_evaluator"])
             bifa("9", joaca is None, f"pas {nr_pas}: evaluatorul joaca {joaca!r}")
+            if mod == "roleplay":
+                strain = alt_personaj(
+                    pas["text_evaluator"], _numele_personajului(nr_rulare - 1, PRENUME)
+                )
+                bifa("10", strain is None, f"pas {nr_pas}: evaluatorul vorbeste despre {strain!r}")
         metode = sorted({m.upper() for m in METODE.findall(r)})
         bifa("7", not metode, f"pas {nr_pas}: {', '.join(metode)}")
         for m in NUMARATE.findall(r):
@@ -331,6 +366,7 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
     # intra la amandoua, replicile lui Cody numai cu bucata meseriei respective.
     istoric: list[GenerationMessage] = []
     istoric_evaluator: list[GenerationMessage] = []
+    scena_in_asteptare = ""
     pasi = []
     inceput = time.monotonic()
     coduri_inainte = Counter(numarator.coduri)
@@ -345,10 +381,15 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
         )
         # Istoricul evaluatorului — plicul 117. Aceleasi replici ale omului, dar din replicile
         # lui Cody numai bucata lui.
+        # Exact ca aplicatia (plicul 118): scena ajunge la evaluator INAINTEA replicii omului,
+        # marcata ca vorba celuilalt din scena — nu ca replica lui.
+        text_pentru_evaluator = pas.text
+        if pas.text is not None and scena_in_asteptare:
+            text_pentru_evaluator = f"{SCENA_CELUILALT}\n{scena_in_asteptare}\n\n{pas.text}"
         mesaje_evaluator = (
             (GenerationMessage(role="user", text=DESCHIDE_SESIUNEA),)
             if pas.text is None
-            else (*istoric_evaluator, GenerationMessage(role="user", text=pas.text))
+            else (*istoric_evaluator, GenerationMessage(role="user", text=text_pentru_evaluator))
         )
         doua_apeluri = doua and mod == "roleplay"
         cerere_evaluator = None
@@ -426,11 +467,16 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
             continue
         if pas.text is not None:
             istoric.append(GenerationMessage(role="user", text=pas.text))
-            istoric_evaluator.append(GenerationMessage(role="user", text=pas.text))
+            istoric_evaluator.append(
+                GenerationMessage(role="user", text=text_pentru_evaluator)
+            )
+            scena_in_asteptare = ""
         if doua_apeluri:
             # fiecare isi tine numai bucata lui; daca una lipseste, randul se sare
             if rand["text_actor"]:
                 istoric.append(GenerationMessage(role="model", text=rand["text_actor"]))
+                # scena asteapta urmatoarea replica a omului, ca sa plece odata cu ea
+                scena_in_asteptare = rand["text_actor"].strip()
             if rand["text_evaluator"]:
                 istoric_evaluator.append(
                     GenerationMessage(role="model", text=rand["text_evaluator"])
