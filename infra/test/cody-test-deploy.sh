@@ -54,6 +54,24 @@ if [[ ! "$ACTOR" =~ ^[A-Za-z0-9_-]{1,39}$ ]]; then
   exit 1
 fi
 
+# --- Plasa de disc — plicul 116, partea B ---------------------------------------------------
+#
+# Pe 20 septembrie discul s-a umplut 100% la mijlocul lucrului: redis n-a mai putut scrie in AOF,
+# iar aplicatia a ramas `unhealthy`. Cauza erau 166 de imagini si 6 GB de cache, adunate din sase
+# puneri intr-o zi. Serverul are 38 GB; o imagine de frontend singura are 3,1 GB.
+#
+# Deci: sub PRAGUL de mai jos NU se pune. Mai bine nu pui decat sa pui pe jumatate si sa lasi
+# serverul mort. Pragul se poate ridica din mediu, ca plasa sa poata fi incercata fara sa umplem
+# discul dinadins.
+PRAG_LIBER_GB="${CODY_TEST_PRAG_GB:-5}"
+LIBER_GB=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+echo "=== [Cody Test Deploy] Disc liber: ${LIBER_GB} GB (pragul: ${PRAG_LIBER_GB} GB) ==="
+if (( LIBER_GB < PRAG_LIBER_GB )); then
+  echo "Error: Prea putin loc pe disc: ${LIBER_GB} GB libere, sub pragul de ${PRAG_LIBER_GB} GB." >&2
+  echo "       Punerea NU a inceput. Fa curat (docker builder prune / image prune) si reia." >&2
+  exit 1
+fi
+
 # Read GitHub token from stdin (handle trailing newline or EOF gracefully)
 GITHUB_TOKEN=""
 if ! IFS= read -r GITHUB_TOKEN && [[ -z "$GITHUB_TOKEN" ]]; then
@@ -145,6 +163,44 @@ docker compose --env-file .env -f compose.test.yaml run --rm -T testbackend alem
 
 echo "=== [Cody Test Deploy] Starting all services ==="
 docker compose --env-file .env -f compose.test.yaml up -d
+
+echo "=== [Cody Test Deploy] Waiting for testbackend to become healthy ==="
+MAX_WAIT=180
+WAITED=0
+while true; do
+  STATUS=$(docker compose --env-file .env -f compose.test.yaml ps --format "{{.Service}}: {{.Health}}" 2>/dev/null || true)
+  if [[ "$STATUS" =~ "testbackend: healthy" ]]; then
+    echo "testbackend healthy after ${WAITED}s."
+    break
+  fi
+  if [[ $WAITED -ge $MAX_WAIT ]]; then
+    echo "Warning: testbackend nu e healthy dupa ${MAX_WAIT}s. Status: $STATUS" >&2
+    echo "         NU se face curat: imaginile raman, ca intoarcerea sa fie posibila." >&2
+    break
+  fi
+  sleep 5
+  WAITED=$((WAITED + 5))
+done
+
+# --- Curatenie — plicul 116, partea B --------------------------------------------------------
+#
+# Se face NUMAI dupa ce containerele sunt sus si backendul e healthy: daca punerea a iesit prost,
+# imaginile vechi raman, ca intoarcerea sa fie de o comanda.
+#
+# CE NU SE ATINGE, si nu se schimba din reflex:
+#   · VOLUMELE. Acolo stau baza de proba si datele redis. Stergerea lor nu are voie sa apara in
+#     scriptul asta, in nicio forma si cu niciun filtru: nici `prune`, nici `rm`, nici prin
+#     `compose down -v`. Daca vezi vreodata asa ceva aici, e o greseala, nu o imbunatatire.
+#   · imaginile mai noi de 6 ore — intoarcerea la oricare punere a zilei ramane posibila.
+if [[ "$STATUS" =~ "testbackend: healthy" ]]; then
+  echo "=== [Cody Test Deploy] Curatenie (volumele NU se ating) ==="
+  INAINTE_GB=$(df -BM --output=avail / | tail -1 | tr -dc '0-9')
+  docker builder prune -f >/dev/null 2>&1 || true
+  docker image prune -a -f --filter "until=6h" >/dev/null 2>&1 || true
+  DUPA_GB=$(df -BM --output=avail / | tail -1 | tr -dc '0-9')
+  ELIBERAT=$(( DUPA_GB - INAINTE_GB ))
+  echo "Eliberat: ${ELIBERAT} MB · disc liber acum: $(( DUPA_GB / 1024 )) GB"
+fi
 
 echo "=== [Cody Test Deploy] Final Container Status ==="
 docker compose --env-file .env -f compose.test.yaml ps
