@@ -313,6 +313,13 @@ class PracticeTurn(TimestampMixin, Base):
     cached_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     thought_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Costul ADEVARAT al replicii, in dolari — plicul 120.
+    #
+    # Coloanele de unitati de mai sus tin NUMAI apelul actorului. La doua apeluri, unitatile
+    # evaluatorului nu se salvau nicaieri, deci socoteala zilei le pierdea cu totul — pe langa
+    # faptul ca le-ar fi socotit la pretul gresit. Aici sta suma reala, fiecare apel la pretul
+    # modelului lui, asa cum a fost decontata la buget.
+    cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         index=True,

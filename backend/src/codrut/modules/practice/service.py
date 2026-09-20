@@ -984,6 +984,9 @@ class PracticeSessionService:
                 cached_tokens=result.usage.cached_tokens,
                 output_tokens=result.usage.output_tokens,
                 thought_tokens=result.usage.thought_tokens,
+                # Costul adevarat al replicii, cu fiecare apel la pretul modelului lui —
+                # plicul 120. Coloanele de unitati de mai sus tin numai apelul actorului.
+                cost_usd=cost_real,
                 expires_at=expires_at,
             )
             self.session.add(actor_turn)
@@ -1293,22 +1296,45 @@ class PracticeSessionService:
             func.sum(PracticeTurn.thought_tokens),
         ).where(PracticeTurn.created_at >= today_start)
         row = (await self.session.execute(stmt_turns_data)).one()
+        # numai pentru procentul de cache de mai jos; banii se socotesc separat
         prompt_t = row[0] or 0
         cached_t = row[1] or 0
-        output_t = row[2] or 0
-        thought_t = row[3] or 0
+
+        # Banii zilei — plicul 120.
+        #
+        # Pana azi se aduna TOT textul si se socotea la pretul modelului ACTORULUI. Cu doua
+        # modele in aceeasi replica, asta numara gresit in amandoua felurile; iar unitatile
+        # evaluatorului nu se salveaza deloc in coloanele de mai sus, deci se pierdeau cu totul.
+        #
+        # Acum: se aduna costurile ADEVARATE, salvate pe fiecare replica, fiecare apel la pretul
+        # modelului lui. Randurile de dinaintea plicului n-au coloana — pentru ELE, si numai
+        # pentru ele, ramane estimarea din unitati.
+        stmt_cost = select(
+            func.sum(PracticeTurn.cost_usd),
+            func.sum(PracticeTurn.prompt_tokens),
+            func.sum(PracticeTurn.cached_tokens),
+            func.sum(PracticeTurn.output_tokens),
+            func.sum(PracticeTurn.thought_tokens),
+        ).where(PracticeTurn.created_at >= today_start, PracticeTurn.cost_usd.is_(None))
+        vechi_row = (await self.session.execute(stmt_cost)).one()
+        stmt_cost_nou = select(func.sum(PracticeTurn.cost_usd)).where(
+            PracticeTurn.created_at >= today_start, PracticeTurn.cost_usd.is_not(None)
+        )
+        cost_salvat = (await self.session.execute(stmt_cost_nou)).scalar_one() or Decimal(0)
 
         cache_percent = (
             float(round((Decimal(cached_t) / Decimal(prompt_t) * 100), 1)) if prompt_t > 0 else 0.0
         )
 
-        usage_today = TokenUsage(
-            prompt_tokens=prompt_t,
-            cached_tokens=cached_t,
-            output_tokens=output_t,
-            thought_tokens=thought_t,
+        usage_fara_cost = TokenUsage(
+            prompt_tokens=vechi_row[1] or 0,
+            cached_tokens=vechi_row[2] or 0,
+            output_tokens=vechi_row[3] or 0,
+            thought_tokens=vechi_row[4] or 0,
         )
-        cost_usd = estimate_cost(usage_today, self.settings, model=self.settings.vertex_actor_model)
+        cost_usd = Decimal(cost_salvat) + estimate_cost(
+            usage_fara_cost, self.settings, model=self.settings.vertex_actor_model
+        )
 
         return {
             "status": "normal",
