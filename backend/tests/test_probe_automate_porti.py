@@ -40,7 +40,11 @@ def test_replica_model_cere_si_formularea_si_ghilimelele() -> None:
     # forma cea mai des intalnita la masuratoarea de referinta: replica pe randul urmator
     assert are_replica_model("Ai fi putut spune:\n„Carmen, hai să vedem ce lipsește.”")
     assert are_replica_model("Ai fi putut spune:  \n„Radu, înțeleg graba.”")
+    # unele modele o scriu ca titlu — masurat la plicul 102, pe 3.1-flash-lite si 3.5-flash-lite
+    assert are_replica_model("**Replica model:**\n„Elena, înțeleg că a fost o săptămână grea.”")
+    assert are_replica_model("**Replică model:**\n„Înțeleg că a fost aglomerat.”")
     assert not are_replica_model("Ai fi putut fi mai orientat spre soluții.")
+    assert not are_replica_model("Replica model lipsește de tot aici, fără citat.")
 
 
 def test_personajul_se_gaseste_dupa_nume_nu_dupa_prenumele_omului() -> None:

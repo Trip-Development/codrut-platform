@@ -58,7 +58,9 @@ GHILIMELE = re.compile(r"[«„\"“]([^«»„”\"“]{6,400})[»”\"“]")
 REPLICA_MODEL = re.compile(
     r"(ai fi putut (spune|zice|formula|încerca|întreba)|ai putea (spune|zice|formula)"
     r"|puteai (spune|zice)|(o )?variant[ăa] mai (bun[ăa]|clar[ăa])|ar fi sunat"
-    r"|mai bine ar fi fost s[ăa] spui|încearc[ăa] (așa|ceva de genul))"
+    r"|mai bine ar fi fost s[ăa] spui|încearc[ăa] (așa|ceva de genul)"
+    # unele modele o scriu ca titlu, nu ca fraza: „**Replica model:**" — plicul 102
+    r"|replic[ăa] model)"
     # replica vine des pe randul urmator („Ai fi putut spune:\n„...”") — plicul 82
     r"[\s\S]{0,200}?[«„\"“]",
     re.IGNORECASE,
