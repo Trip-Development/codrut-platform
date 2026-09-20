@@ -424,7 +424,9 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
             if pas.text is None
             else (*istoric_evaluator, GenerationMessage(role="user", text=text_pentru_evaluator))
         )
-        doua_apeluri = doua and mod == "roleplay"
+        # Exact ca aplicatia (plicul 119, partea A): la pasul de pornire nu se cheama
+        # evaluatorul — acolo omul doar a confirmat, n-are ce evalua.
+        doua_apeluri = doua and mod == "roleplay" and pas.fel != "pornire"
         cerere_evaluator = None
         if doua_apeluri:
             prompt_actor, prompt_evaluator = get_prompts_pe_meserii(
