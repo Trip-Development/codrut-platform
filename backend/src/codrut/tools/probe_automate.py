@@ -560,6 +560,8 @@ async def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--sesiuni", help="lista ordonata, ex. roleplay:1,knowledge:1")
     ap.add_argument("--model", default=reale.vertex_actor_model)
+    ap.add_argument("--model-evaluator", default=None,
+                    help="evaluatorul pe alt model decat actorul (plicul 120)")
     ap.add_argument("--destinatie", default=reale.vertex_region)
     ap.add_argument("--plafon-apeluri", type=int, default=260)
     ap.add_argument("--doua-apeluri", action="store_true",
@@ -583,9 +585,12 @@ async def main(argv: list[str] | None = None) -> int:
             ap.error(f"mod necunoscut: {mod}")
         sesiuni.append((mod, int(nr)))
 
+    # `--model` pune AMANDOUA meseriile pe acelasi model, ca pana acum. `--model-evaluator`
+    # il tine pe evaluator pe altul — plicul 120, unde actorul trece pe modelul ieftin si
+    # evaluatorul ramane pe cel scump.
     setari = reale.model_copy(update={
         "vertex_actor_model": a.model,
-        "vertex_evaluator_model": a.model,
+        "vertex_evaluator_model": a.model_evaluator or a.model,
         "vertex_region": a.destinatie,
     })
     numarator = Numarator()
