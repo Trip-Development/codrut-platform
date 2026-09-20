@@ -107,8 +107,17 @@ class Settings(BaseSettings):
     # Plicul 101: la comutarea din 19 septembrie preturile au ramas ale modelului vechi, iar
     # aplicatia a socotit de ~2,4 ori mai putin decat adevarul — inclusiv la plafonul care
     # opreste generarea.
-    vertex_actor_model: str = "gemini-2.5-flash"
-    vertex_evaluator_model: str = "gemini-2.5-flash"
+    # FARA VALOARE IMPLICITA, dinadins — plicul 114, pasul 3.
+    #
+    # Pana azi scria aici `gemini-2.5-flash`: modelul care se retrage pe 16 octombrie 2026 si
+    # care nu raspunde la destinatia europeana. `compose.prod.yaml` nu trece nicio setare Vertex,
+    # deci in ziua in care productia ar fi chemat modelul ar fi pornit TACUT pe unul mort — nu la
+    # pornire, ci la prima replica a unui om adevarat.
+    #
+    # Acum: cine nu-si spune modelul nu porneste, cu mesaj limpede. Mai bine se opreste la
+    # pornire decat in fata omului.
+    vertex_actor_model: str
+    vertex_evaluator_model: str
     # Rezerva pentru transcriere, daca modelul principal nu o poate face — plicul 89.
     # Gol inseamna „fara rezerva", nu „modelul vechi".
     vertex_transcribe_fallback: str = ""
