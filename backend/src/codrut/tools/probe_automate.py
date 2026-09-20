@@ -37,12 +37,6 @@ import httpx
 
 from codrut.contracts.generation import GenerationMessage, GenerationPurpose, GenerationRequest
 from codrut.core.config import get_settings
-from codrut.modules.practice.citat import (
-    propozitii_numerotate,
-    pune_citatul,
-    sterge_repetarea,
-    text_dublat,
-)
 from codrut.modules.practice.generation_provider import build_generation_provider
 from codrut.modules.practice.prompts import (
     CODY_PROMPT_VERSION,
@@ -126,7 +120,7 @@ def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
     def poarta(aplicabila=True):
         return {"aplicabila": aplicabila, "instante": 0, "trecute": 0, "picate": []}
 
-    p = {str(i): poarta() for i in range(1, 9)}
+    p = {str(i): poarta() for i in range(1, 8)}
     p["7"]["numarate"] = {m: 0 for m in METODE_NUMARATE}
     for i in ("2", "3", "4", "6"):
         p[i]["aplicabila"] = mod == "roleplay"
@@ -142,11 +136,6 @@ def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
         bifa("1", bool(r.strip()) and not pas["eroare"], f"pas {nr_pas}: {pas['eroare'] or 'gol'}")
         if not r.strip():
             continue
-        # Poarta 8 (plicul 109): o bucata de text scrisa de doua ori, lipite. Celelalte sapte
-        # porti citesc textul dupa ce cauta in el nota, citatul, numele sau metodele — niciuna
-        # nu-l citeste CA TEXT, si de aia defectul de la plicul 108 a trecut prin toate.
-        dublat = text_dublat(r)
-        bifa("8", dublat is None, f"pas {nr_pas}: scris de doua ori: {(dublat or '')[:60]!r}")
         metode = sorted({m.upper() for m in METODE.findall(r)})
         bifa("7", not metode, f"pas {nr_pas}: {', '.join(metode)}")
         for m in NUMARATE.findall(r):
@@ -231,17 +220,10 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int) -> dict:
         # Exact ca aplicatia (service.py): salutul la istoric 0, cu instructiunea de deschidere,
         # care nu se pastreaza; apoi istoricul are replica lui Cody + replica noua a omului.
         lungime = 0 if pas.text is None else len(istoric) + 1
-        # Exact ca aplicatia (service.py): replica de ACUM intra numerotata pe propozitii, cele
-        # din istoric raman cum le-a scris omul — istoricul aplicatiei vine din baza.
-        text_pentru_model = (
-            pas.text + propozitii_numerotate(pas.text)
-            if pas.text is not None and mod == "roleplay"
-            else pas.text
-        )
         mesaje = (
             (GenerationMessage(role="user", text=DESCHIDE_SESIUNEA),)
             if pas.text is None
-            else (*istoric, GenerationMessage(role="user", text=text_pentru_model))
+            else (*istoric, GenerationMessage(role="user", text=pas.text))
         )
         cerere = GenerationRequest(
             messages=tuple(mesaje),
@@ -263,19 +245,13 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int) -> dict:
         t0 = time.monotonic()
         rand = {"pas": i, "fel": pas.fel, "om": pas.text, "raspuns": "", "eroare": None,
                 "oprire": None, "model": None, "intrat": 0, "iesit": 0, "gandit": 0,
-                "din_cache": 0, "motiv_citat": "", "sterse": 0}
+                "din_cache": 0}
         try:
             rez = await furnizor.generate(cerere)
             u = rez.usage
-            # Tot ca aplicatia: citatul il pune aplicatia in locul numarului, apoi isi sterge
-            # singura repetarea exacta. Portile vad textul pe care l-ar vedea si omul.
-            text_final, motiv, sterse = rez.text or "", "", []
-            if mod == "roleplay":
-                text_final, motiv = pune_citatul(text_final, pas.text or "")
-                text_final, sterse = sterge_repetarea(text_final)
-            rand.update(raspuns=text_final, oprire=rez.finish_reason, model=rez.model,
+            rand.update(raspuns=rez.text or "", oprire=rez.finish_reason, model=rez.model,
                         intrat=u.prompt_tokens, iesit=u.output_tokens, gandit=u.thought_tokens,
-                        din_cache=u.cached_tokens, motiv_citat=motiv, sterse=len(sterse))
+                        din_cache=u.cached_tokens)
         except Exception as err:
             # orice eroare se numara ca replica pierduta; nu opreste rularea
             rand["eroare"] = getattr(err, "code", None) or type(err).__name__
