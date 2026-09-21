@@ -199,8 +199,13 @@ async def test_ten_turn_practice_session_flow_local_provider() -> None:
 
             assert actor_turn is not None
             assert actor_turn.role == TurnRole.actor
-            assert actor_turn.ordinal == turn_idx * 2
-            assert practice_session.turn_count == turn_idx
+            # Toate trei numerele de mai jos sunt cu UNU mai mari decat le astepta testul scris
+            # inainte de plicul 45. Cauza e aceeasi, si e o hotarare luata dinadins atunci:
+            # replica de deschidere a lui Cody ocupa primul loc (`ordinal` 0 si 1), creste
+            # numaratoarea si consuma o rezervare. Deci la schimbul `turn_idx` al omului s-au
+            # scurs deja `turn_idx + 1` schimburi. Nu e o purtare noua, e lumea de dupa 45.
+            assert actor_turn.ordinal == turn_idx * 2 + 1
+            assert practice_session.turn_count == turn_idx + 1
 
             # Verify participant turn and actor turn retention expires_at
             stmt_turns = (
@@ -223,7 +228,8 @@ async def test_ten_turn_practice_session_flow_local_provider() -> None:
                 .order_by(PracticeBudgetReservation.created_at.desc())
             )
             reservations = (await session.execute(stmt_reservations)).scalars().all()
-            assert len(reservations) == turn_idx
+            # +1: rezervarea replicii de deschidere (plicul 45), ca mai sus.
+            assert len(reservations) == turn_idx + 1
             latest_res = reservations[0]
             assert latest_res.state == BudgetReservationState.settled
             assert latest_res.actual_usd is not None
@@ -245,8 +251,13 @@ async def test_ten_turn_practice_session_flow_local_provider() -> None:
         outcome = (await session.execute(stmt_outcome)).scalar_one()
         assert outcome.kind == OutcomeKind.turn_limit
 
-        # 5. Verify local provider recorded exactly 10 requests without touching network
-        assert len(provider.recorded_requests) == 10
+        # 5. Verify local provider recorded exactly 11 requests without touching network
+        #
+        # A patra asteptare decalata de aceeasi cauza, gasita la rulare, nu in plic: pe langa cele
+        # 10 schimburi, modelul e chemat o data la pornire, pentru replica de deschidere a lui Cody
+        # (plicul 45). Cererea in plus e chiar aceea: `Incepe tu sesiunea, dupa regula primului
+        # mesaj...`. Tot zero apeluri de retea — furnizorul e cel local.
+        assert len(provider.recorded_requests) == 11
 
         await redis.aclose()
         await session.rollback()
