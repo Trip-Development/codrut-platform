@@ -132,6 +132,14 @@ services:
       CODRUT_VERTEX_CREDENTIALS_PATH: ${CODRUT_VERTEX_CREDENTIALS_PATH:-/etc/codrut/cody-vertex.json}
       CODRUT_VERTEX_ACTOR_MODEL: ${CODRUT_VERTEX_ACTOR_MODEL:?Set CODRUT_VERTEX_ACTOR_MODEL in .env}
       CODRUT_VERTEX_EVALUATOR_MODEL: ${CODRUT_VERTEX_EVALUATOR_MODEL:?Set CODRUT_VERTEX_EVALUATOR_MODEL in .env}
+      # Despartirea actor/evaluator — plicul 112, comutatorul din `config.py`.
+      #
+      # Lipsea de aici, si de aceea nu se putea aprinde: lista asta e INCHISA, deci un rand
+      # pus in `.env` nu ajungea niciodata la proces. Masurat la plicul 125: `.env` avea
+      # `CODRUT_PRACTICE_TWO_CALLS=true`, iar procesul viu raspundea `False`.
+      #
+      # Implicit STINS, ca in cod. Se aprinde din `.env`-ul serverului.
+      CODRUT_PRACTICE_TWO_CALLS: ${CODRUT_PRACTICE_TWO_CALLS:-false}
       # Cat asteapta aplicatia o replica — plicul 96. Implicit ca in cod (60); pe proba
       # .env il ridica la 120: cea mai lenta replica buna masurata a venit la 80,5 s.
       CODRUT_VERTEX_TIMEOUT_SECONDS: ${CODRUT_VERTEX_TIMEOUT_SECONDS:-60}
@@ -221,6 +229,14 @@ services:
       CODRUT_VERTEX_CREDENTIALS_PATH: ${CODRUT_VERTEX_CREDENTIALS_PATH:-/etc/codrut/cody-vertex.json}
       CODRUT_VERTEX_ACTOR_MODEL: ${CODRUT_VERTEX_ACTOR_MODEL:?Set CODRUT_VERTEX_ACTOR_MODEL in .env}
       CODRUT_VERTEX_EVALUATOR_MODEL: ${CODRUT_VERTEX_EVALUATOR_MODEL:?Set CODRUT_VERTEX_EVALUATOR_MODEL in .env}
+      # Despartirea actor/evaluator — plicul 112, comutatorul din `config.py`.
+      #
+      # Lipsea de aici, si de aceea nu se putea aprinde: lista asta e INCHISA, deci un rand
+      # pus in `.env` nu ajungea niciodata la proces. Masurat la plicul 125: `.env` avea
+      # `CODRUT_PRACTICE_TWO_CALLS=true`, iar procesul viu raspundea `False`.
+      #
+      # Implicit STINS, ca in cod. Se aprinde din `.env`-ul serverului.
+      CODRUT_PRACTICE_TWO_CALLS: ${CODRUT_PRACTICE_TWO_CALLS:-false}
       # Cat asteapta aplicatia o replica — plicul 96. Implicit ca in cod (60); pe proba
       # .env il ridica la 120: cea mai lenta replica buna masurata a venit la 80,5 s.
       CODRUT_VERTEX_TIMEOUT_SECONDS: ${CODRUT_VERTEX_TIMEOUT_SECONDS:-60}
