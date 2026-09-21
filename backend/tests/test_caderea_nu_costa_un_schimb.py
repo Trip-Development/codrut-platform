@@ -55,7 +55,10 @@ class FurnizorCarePicaOData:
 
 @pytest.mark.asyncio
 async def test_o_generare_picata_nu_mananca_un_schimb() -> None:
-    """Plafon 3, prima generare după o replică a omului pică, el reîncearcă: primește 3 răspunsuri."""
+    """Plafon 3, prima generare după o replică a omului pică, el reîncearcă.
+
+    Trebuie să primească trei răspunsuri, nu două.
+    """
     settings = Settings(generation_provider="local")
     # apelul 1 e salutul de la pornire; apelul 2 e primul schimb al omului — acolo cade
     provider = FurnizorCarePicaOData(settings, pica_la_apelul=2)
@@ -102,7 +105,8 @@ async def test_o_generare_picata_nu_mananca_un_schimb() -> None:
                 text=f"Replica omului {i}",
             )
             assert raspuns is not None, (
-                f"la schimbul {i} omul a rămas fără răspuns: căderea de dinainte l-a costat un schimb"
+                f"la schimbul {i} omul a rămas fără răspuns:"
+                " căderea de dinainte l-a costat un schimb"
             )
             assert raspuns.role == TurnRole.actor
 
