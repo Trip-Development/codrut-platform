@@ -708,25 +708,44 @@ class PracticeSessionService:
 
         # 3. Check turn count limit
         #
-        # Se numara REPLICILE OMULUI, nu `turn_count` — plicul 123, hotararea lui Andrei:
-        # salutul nu se numara printre cele 10 schimburi.
+        # Se numara SCHIMBURILE REUSITE — plicul 123 (hotararea lui Andrei: salutul nu se numara
+        # printre cele 10) si plicul 124 (nici o generare picata nu se numara).
         #
-        # `turn_count` creste si la replica de deschidere, generata la pornire (`_prima_replica`),
-        # deci cu plafonul pus pe 10 omul primea NOUA schimburi: al zecelea mesaj al lui ii
-        # inchidea sedinta fara raspuns, tacut.
+        # Doua pierderi tacute, amandoua platite de om, amandoua inchise aici:
         #
-        # De ce se numara si nu se scade unu din `turn_count`: `turn_count` e citit si de tabloul
-        # participantului (`schemas.py:50`, `practice.ts`), iar o sedinta in care generarea de la
-        # pornire a esuat n-are replica de deschidere deloc. Numaratoarea replicilor omului e
-        # adevarata in toate cazurile, si NU atinge nimic altceva — nici `turn_count`, nici
-        # `history_length`, pe care se sprijina pasul de pornire de la plicul 119.
-        stmt_replici_om = select(func.count(PracticeTurn.id)).where(
-            PracticeTurn.session_id == session_id,
-            PracticeTurn.role == TurnRole.participant,
+        # 1. `turn_count` creste si la replica de deschidere, generata la pornire
+        #    (`_prima_replica`, plicul 45). Cu plafonul pus pe 10, omul primea NOUA schimburi:
+        #    al zecelea mesaj al lui ii inchidea sedinta fara raspuns.
+        # 2. Numarand in schimb toate randurile omului — cum am facut la 123 — fiecare generare
+        #    picata il costa un schimb: replica lui RAMANE salvata cand modelul refuza (vezi
+        #    „participant turn remains saved in DB"), el mai apasa o data, si se salveaza inca
+        #    un rand. In sedinta auditorului au fost SASE la rand, fara niciun raspuns intre ele.
+        #
+        # Un schimb reusit = o replica a ACTORULUI care vine dupa ce omul a vorbit macar o data.
+        # Asa iese, dintr-o singura regula, si salutul nescazut (el vine INAINTE ca omul sa fi
+        # vorbit), si randurile orfane (n-au primit niciun raspuns, deci nu numara nimic) — si
+        # sedinta in care generarea de la pornire a esuat nu pierde nimic, fiindca n-are salut
+        # de scazut.
+        #
+        # De ce nu se scade din `turn_count`: el e citit si de tabloul participantului
+        # (`schemas.py:50`, `practice.ts`), iar valoarea lui salvata ramane astfel neatinsa.
+        # Nimic altceva nu se misca — nici `history_length`, pe care se sprijina pasul de pornire
+        # de la plicul 119.
+        stmt_roluri = (
+            select(PracticeTurn.role)
+            .where(PracticeTurn.session_id == session_id)
+            .order_by(PracticeTurn.ordinal.asc())
         )
-        replici_ale_omului = (await self.session.execute(stmt_replici_om)).scalar_one() or 0
+        roluri = (await self.session.execute(stmt_roluri)).scalars().all()
+        omul_a_vorbit = False
+        schimburi_reusite = 0
+        for rol in roluri:
+            if rol == TurnRole.participant:
+                omul_a_vorbit = True
+            elif rol == TurnRole.actor and omul_a_vorbit:
+                schimburi_reusite += 1
         if is_session_turn_limit_reached(
-            replici_ale_omului, program_settings.max_turns_per_session
+            schimburi_reusite, program_settings.max_turns_per_session
         ):
             session_obj.state = SessionState.closed
             session_obj.ended_at = datetime.now(UTC)
