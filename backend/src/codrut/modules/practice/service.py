@@ -23,7 +23,7 @@ from codrut.core.errors import DomainError
 from codrut.modules.companies.models import CompanyProject, ParticipantProfile, ProjectMembership
 from codrut.modules.identity.models import User, UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
-from codrut.modules.practice.budget import release, reserve, settle
+from codrut.modules.practice.budget import BudgetExceeded, release, reserve, settle
 from codrut.modules.practice.generation_provider import (
     GenerationProvider,
     build_generation_provider,
@@ -99,6 +99,17 @@ MEMORIE_PANA_LA_REPLICA = 2
 # si-a inventat alta). A treia varianta: ce a produs celalalt, marcat pe fata ca venind de la
 # altcineva.
 SCENA_CELUILALT = "[În scenă, celălalt personaj a spus:]"
+
+
+# Motivul scris in baza cand plafonul de bani se atinge chiar la inchidere — plicul 129, E.3.
+#
+# Sedinta se inchide oricum, dar fara evaluare: altfel omul ar apasa butonul la nesfarsit si ar
+# primi de fiecare data acelasi refuz.
+MOTIV_PESTE_PLAFON = "Inchisa fara evaluare: plafonul de buget al programului a fost atins."
+
+
+class _FaraEvaluare(Exception):
+    """Semnal intern: sedinta se inchide, dar nu se cheama modelul. Nu iese din serviciu."""
 
 
 class PracticeSessionService:
@@ -1103,6 +1114,7 @@ class PracticeSessionService:
             )
 
         summary_text: str | None = None
+        peste_plafon = False
 
         # Proiectul sesiunii. PracticeSession nu-l tine direct — il are prin setarile
         # de program. Se afla o singura data si se foloseste peste tot mai jos:
@@ -1144,9 +1156,61 @@ class PracticeSessionService:
                 temperature=0.2,
                 thinking_budget=self.settings.thinking_budget_evaluator,
             )
+
+            # Apelul de inchidere trece prin buget, ca oricare altul — plicul 129, partea E.
+            #
+            # Pana azi NU trecea: nicio rezervare, nicio replica, deci niciun rand in care sa
+            # scrie ce a costat. Masurat la plicul 128: din 5 sedinte inchise, ZERO rezervari
+            # dupa ultima replica. Urmarile erau doua, amandoua tacute:
+            #   · plafonul pe participant (`usd_cap_per_participant`) nu-l vedea deloc;
+            #   · costul unei sedinte iesea mai mic decat adevarul, cu chiar apelul care
+            #     citeste tot transcriptul.
+            #
+            # Rezervarea E locul unde se scrie costul: ea e singurul registru complet al
+            # sedintei (coloana `cost_usd` de pe replici nu acopera nici replica de deschidere
+            # — plicul 125). Deci „rezervat inainte, decontat dupa" rezolva amandoua deodata.
+            rezervare_id = None
             try:
+                cuvinte = len(summary_content.split()) + len(
+                    (req.system_instruction or "").split()
+                )
+                estimare = estimate_pessimistic_cost(
+                    prompt_tokens=max(1, cuvinte),
+                    max_output_tokens=self.settings.vertex_max_output_tokens_evaluator,
+                    thinking_budget=self.settings.thinking_budget_evaluator,
+                    settings=self.settings,
+                )
+                stmt_activi = select(func.count(ProjectMembership.id)).where(
+                    ProjectMembership.project_id == proiect_id,
+                    ProjectMembership.active.is_(True),
+                )
+                activi = (await self.session.execute(stmt_activi)).scalar_one() or 0
+                plafon = Decimal(activi) * (
+                    _setari.usd_cap_per_participant if _setari else Decimal("0")
+                )
+                rezervare_id = await reserve(
+                    session=self.session,
+                    program_settings_id=session_obj.program_settings_id,
+                    estimated_usd=estimare,
+                    cap_usd=plafon,
+                    session_id=session_id,
+                )
+                peste_plafon = False
+            except BudgetExceeded:
+                # Plafonul atins CHIAR la inchidere: sedinta se inchide oricum, fara evaluare.
+                # Altfel omul ar ramane cu o sedinta pe care n-o mai poate inchide NICIODATA —
+                # ar apasa butonul si ar primi de fiecare data acelasi refuz.
+                logger.warning("practice_inchidere_peste_plafon sesiune=%s", session_id)
+                peste_plafon = True
+                note = note or MOTIV_PESTE_PLAFON
+
+            try:
+                if peste_plafon:
+                    raise _FaraEvaluare()
                 res = await self.generation_provider.generate(req)
                 summary_text = res.text
+                if rezervare_id is not None:
+                    await settle(self.session, rezervare_id, actual_usd=res.estimated_usd)
 
                 # 4-step closing flow persistence
                 json_match = re.search(r"```json\s*(\{.*?\})\s*```", summary_text, re.DOTALL)
@@ -1246,15 +1310,21 @@ class PracticeSessionService:
                         "No scores, insight moment or memory were persisted."
                     )
 
+            except _FaraEvaluare:
+                summary_text = None
             except Exception as err:
                 logging.getLogger(__name__).warning(f"Failed to generate session summary: {err}")
+                if rezervare_id is not None:
+                    # Banii rezervati se dau inapoi daca apelul n-a avut loc — ca la
+                    # `_prima_replica`. Altfel plafonul ar scadea pentru un apel care n-a fost.
+                    await release(self.session, rezervare_id)
 
         # A DOUA chemare, portata la plicul 29 din app/api/evaluate/route.ts.
         # Aplicatia veche facea doua chemari la oprirea sesiunii, nu una: rezumatul
         # de mai sus (cele patru axe) SI evaluarea structurala de aici, care da
         # scoruri pe competentele PROIECTULUI, mostrele „asa ai spus / asa ar fi
         # sunat" si recomandarile pentru trainer. A doua nu fusese portata.
-        if turns:
+        if turns and not peste_plafon:
             try:
                 from codrut.modules.practice.evaluator import (
                     PracticeEvaluator,

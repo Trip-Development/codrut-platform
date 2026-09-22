@@ -294,7 +294,21 @@ def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
                 )
                 bifa("10", strain is None, f"pas {nr_pas}: evaluatorul vorbeste despre {strain!r}")
         metode = sorted({m.upper() for m in METODE.findall(r)})
-        bifa("7", not metode, f"pas {nr_pas}: {', '.join(metode)}")
+        # La QUIZ, Sandwich se numara, nu se pedepseste — plicul 129, partea D, hotararea lui
+        # Andrei din 22 septembrie.
+        #
+        # Masurat la 128: poarta a picat pe `knowledge:2`, unde intrebarea 7 din 10 era chiar
+        # „De ce este contraindicata metoda «Sandwich»?", iar Cody explica de ce NU se foloseste.
+        # Poarta numara cuvantul si nu poate vedea diferenta intre a folosi metoda si a o preda
+        # ca fiind gresita. E acelasi caz pentru care ADKAR si OILS au trecut la numarate pe 19
+        # septembrie; Sandwich n-a fost trecut atunci.
+        #
+        # La role-play si la strategie ramane PEDEPSIT, neatins: acolo nu se preda nimic.
+        pedepsite = [m for m in metode if not (mod == "knowledge" and m == "SANDWICH")]
+        for m in metode:
+            if m not in pedepsite:
+                p["7"]["numarate"][m] = p["7"]["numarate"].get(m, 0) + 1
+        bifa("7", not pedepsite, f"pas {nr_pas}: {', '.join(pedepsite)}")
         for m in NUMARATE.findall(r):
             p["7"]["numarate"][m.upper()] += 1
         interzise = sorted({m.group(0) for m in NUME_INTERZISE.finditer(r)})
