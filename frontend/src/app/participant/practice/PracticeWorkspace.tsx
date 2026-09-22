@@ -434,7 +434,11 @@ export function PracticeWorkspace({
                     </CardTitle>
                     {opt.disabled ? (
                       <Badge variant="outline" className="text-xs">
-                        În curând
+                        {/* „În curând" e adevărat pentru Cercetare, care chiar vine.
+                            Pentru quiz e fals: nu vine nimic, trainerul pur și simplu nu
+                            l-a aprins pe proiectul ăsta. Textul e al lui Andrei, 22
+                            septembrie — plicul 129, partea C. */}
+                        {opt.kind === "knowledge" ? "Disponibil doar la cursuri" : "În curând"}
                       </Badge>
                     ) : isSelected ? (
                       <Badge className="text-xs bg-primary text-primary-foreground">
@@ -454,7 +458,12 @@ export function PracticeWorkspace({
           })}
         </div>
 
-        <div className="flex justify-end mt-4">
+        <div className="mt-4 flex items-center justify-end gap-3">
+          {/* Butonul gri fără niciun cuvânt l-a oprit pe Andrei pe 22 septembrie: nu avea de
+              unde să știe că îi lipsește proiectul. Textul e al lui — plicul 129, partea A. */}
+          {!projectId ? (
+            <span className="text-sm text-muted-foreground">Alege întâi proiectul, sus.</span>
+          ) : null}
           <Button
             size="default"
             className="px-6"
@@ -536,12 +545,17 @@ export function PracticeWorkspace({
 
       {/* Inchiderea cere doua raspunsuri de la model — evaluatorul si rezumatul — deci
           trec cateva secunde bune. Pana la plicul 39 ecranul nu spunea nimic in timpul
-          asta. Forma de asteptare e cea folosita deja in aplicatie. */}
+          asta. Forma de asteptare e cea folosita deja in aplicatie.
+
+          Textul e al lui Andrei, 22 septembrie (plicul 129, partea B). Cel de dinainte
+          spunea „cateva secunde"; masurat la plicul 128, inchiderea a durat intre 17 si 72
+          de secunde. Un text care promite mai putin decat se intampla e mai rau decat
+          niciunul: omul crede ca s-a blocat ceva. */}
       {isEnding ? (
         <div>
-          <LoadingStatus label="Se închide sesiunea." />
+          <LoadingStatus label="Pregătesc evaluarea ta." />
           <p className="-mt-3 mb-1 text-xs text-muted-foreground">
-            Cody se uită peste ce ai lucrat. Durează câteva secunde.
+            Durează până la un minut.
           </p>
         </div>
       ) : null}

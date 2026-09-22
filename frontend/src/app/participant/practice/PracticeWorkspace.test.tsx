@@ -264,7 +264,11 @@ describe("PracticeWorkspace — ecranul de final", () => {
 
   it("cât se generează sinteza, ecranul spune ce se întâmplă", async () => {
     // Dupa „Încheie sesiunea" trec cateva secunde bune — doua cereri catre model — si
-    // ecranul nu spunea nimic.
+    // ecranul nu spunea nimic (plicul 39).
+    //
+    // Textul s-a schimbat la plicul 129, partea B, la hotararea lui Andrei: spunea „câteva
+    // secunde", iar masurat la plicul 128 inchiderea a durat intre 17 si 72 de secunde. Un text
+    // care promite mai putin decat se intampla e mai rau decat niciunul.
     let deblocheaza: (v: unknown) => void = () => {};
     api.endPracticeSession.mockReturnValue(
       new Promise((resolve) => {
@@ -275,16 +279,14 @@ describe("PracticeWorkspace — ecranul de final", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
 
-    expect(await screen.findByText("Se închide sesiunea.")).toBeTruthy();
-    expect(
-      screen.getByText("Cody se uită peste ce ai lucrat. Durează câteva secunde."),
-    ).toBeTruthy();
+    expect(await screen.findByText("Pregătesc evaluarea ta.")).toBeTruthy();
+    expect(screen.getByText("Durează până la un minut.")).toBeTruthy();
 
     deblocheaza({
       session: { ...SESIUNE_DESCHISA, state: "closed" },
       summary: "Gata.",
     });
-    await waitFor(() => expect(screen.queryByText("Se închide sesiunea.")).toBeNull());
+    await waitFor(() => expect(screen.queryByText("Pregătesc evaluarea ta.")).toBeNull());
   });
 });
 
