@@ -59,7 +59,7 @@ def _pas(nr, fel, raspuns, om=None, eroare=None):
 
 def test_portile_unei_sesiuni_de_role_play() -> None:
     pasi = [
-        _pas(1, "salut", "Salut, Mihai. Hai să lucrăm puțin. Ești gata de un joc de rol?"),
+        _pas(1, "salut", "Salut. Ești gata de un joc de rol?"),
         _pas(2, "pornire", "Scena: Elena Marin, colega ta, te oprește pe hol.", "Da, hai."),
         _pas(3, "joc", EVALUARE_SUB_9, "Păi nu e vina mea, eu am făcut ce mi s-a cerut."),
         _pas(4, "joc", "Elena Marin: Bine.\n\n**Evaluare:** fără notă."),
@@ -88,7 +88,9 @@ def test_portile_prind_numele_lipsa_si_metodele_scoase() -> None:
 
     assert p["1"]["picate"] == ["pas 2: vertex_rate_limited"]
     assert p["7"]["picate"] == ["pas 1: SANDWICH"]
-    assert "salutul nu contine numele omului" in p["5"]["picate"]
+    # doua prinderi: locul gol „[Nume]" la pasul 1, si salutul care nu incepe cu „Salut."
+    assert "pas 1: [Nume]" in p["5"]["picate"]
+    assert any(x.startswith("salutul nu incepe cu") for x in p["5"]["picate"])
 
 
 def test_adkar_si_oils_se_numara_dar_nu_pica_poarta() -> None:

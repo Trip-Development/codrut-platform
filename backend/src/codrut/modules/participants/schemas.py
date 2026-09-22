@@ -70,6 +70,10 @@ class ParticipantWorkspaceProject(BaseModel):
     # participantului. Un om de la training nu are ce cauta in ecranele de coaching.
     project_type: str | None = None
     status: str = "active"
+    # „Verificam cat ai retinut" e aprins pe proiectul asta? — plicul 128, partea E.
+    # Din el se stinge butonul din meniul participantului, ca la „Cercetare". Refuzul
+    # adevarat sta in backend (`quiz_not_enabled`); asta e ca omul sa nu apese degeaba.
+    quiz_enabled: bool = False
     history_bucket: str = "current"
     deadline_label: str
     deadline_at: datetime | None = None

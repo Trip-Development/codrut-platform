@@ -214,6 +214,15 @@ class PracticeProgramSettings(TimestampMixin, Base):
         index=True,
     )
     is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # „Verificam cat ai retinut" — stins la ORICE proiect, pana il aprinde trainerul.
+    #
+    # Plicul 128, partea E, hotararea lui Andrei din 22 septembrie: „La proiectul Michelin,
+    # partea de «verificam cat ai retinut» trebuie sa fie inaccesibila, la fel ca cercetare.
+    # Trebuie sa fie activa doar la cursuri, nu la team coaching, unde nu predau nimic."
+    #
+    # Implicit STINS, dinadins: un proiect nou nu are de unde sa stie daca e curs. Cine preda
+    # ceva il aprinde; cine nu, nu se gandeste niciodata la el.
+    quiz_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     max_turns_per_session: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
     max_sessions_per_day: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
     max_chars_per_turn: Mapped[int] = mapped_column(Integer, nullable=False, default=1200)

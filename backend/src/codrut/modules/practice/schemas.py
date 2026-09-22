@@ -164,6 +164,9 @@ class PracticeSetupRequest(BaseModel):
     # O lista explicita inlocuieste selectia, inclusiv una goala.
     competencies: list[str] | None = None
     is_enabled: bool = True
+    # „Verificam cat ai retinut" — plicul 128, partea E. `None` lasa neatinsa valoarea de acum
+    # a proiectului; un proiect nou porneste STINS.
+    quiz_enabled: bool | None = None
     # Cate sesiuni poate porni un om intr-o zi. Pana la plicul 35 numarul era ingropat
     # in configurare si nu se putea schimba decat in baza. `None` lasa neatinsa
     # valoarea de acum a proiectului.
@@ -180,6 +183,7 @@ class PracticeSetupResponse(BaseModel):
     theme_name: str | None = None
     competencies: list[ThemeCompetencyItem] = Field(default_factory=list)
     max_sessions_per_day: int | None = None
+    quiz_enabled: bool = False
 
 
 # ---- evolutia competentelor pe proiect (plic 29, punctul 2) ----

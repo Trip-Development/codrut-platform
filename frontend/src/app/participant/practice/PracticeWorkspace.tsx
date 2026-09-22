@@ -157,40 +157,28 @@ function aratButoaneleDePornire(
   return turns.every((t) => t.role !== "participant");
 }
 
-const FIXED_OPENINGS = [
-  {
-    id: "1",
-    label: "1. Colegul care întârzie",
-    text: "Am un coleg care întârzie de trei luni cu partea lui din proiect. De fiecare dată are un motiv. Eu îmi refac planurile în jurul lui și nu i-am spus niciodată nimic direct. Nu vreau să îl pun la zid.",
-  },
-  {
-    id: "2",
-    label: "2. Feedbackul vag",
-    text: "Vreau să îi spun unuia din echipă să fie mai implicat. Am tot amânat. Cum îi zic fără să îl demotivez?",
-  },
-  {
-    id: "3",
-    label: "3. Victima organizațională",
-    text: "La noi în fabrică nu merge cu discuții din astea. Oamenii sunt obișnuiți altfel. Am încercat, nu se poate.",
-  },
-  {
-    id: "4",
-    label: "4. Mesaj fără context",
-    text: "Sunt varză azi.",
-  },
-  {
-    id: "5",
-    label: "5. Exercițiu în rol greu",
-    text: "Hai să exersăm. Eu sunt șeful care ți-a cerut raportul de vineri și tu ești omul care nu l-a făcut. Începe tu.",
-  },
-];
 
 export function PracticeWorkspace({
   projectId,
+  quizEnabled = false,
 }: {
   projectId?: string | null;
+  /**
+   * „Verificăm cât ai reținut" e aprins pe proiectul ăsta? — plicul 128, partea E.
+   *
+   * Stins la orice proiect până îl aprinde trainerul: quizul e al cursurilor, nu al team
+   * coachingului, unde nu predă nimeni nimic. Stins, arată exact ca „Cercetare" — se vede,
+   * nu se poate apăsa. Refuzul adevărat stă în backend (`quiz_not_enabled`); ăsta e doar ca
+   * omul să nu apese degeaba.
+   */
+  quizEnabled?: boolean;
 }) {
   const [selectedKind, setSelectedKind] = useState<SessionKind>("roleplay");
+  // Daca quizul se stinge cat omul e pe ecran, alegerea lui nu are voie sa ramana acolo —
+  // altfel apasa „Incepe conversatia" si primeste un refuz de la server.
+  useEffect(() => {
+    if (!quizEnabled && selectedKind === "knowledge") setSelectedKind("roleplay");
+  }, [quizEnabled, selectedKind]);
   const [session, setSession] = useState<PracticeSession | null>(null);
   const [turns, setTurns] = useState<PracticeTurn[]>([]);
   const [inputText, setInputText] = useState("");
@@ -213,7 +201,7 @@ export function PracticeWorkspace({
     scrollToBottom();
   }, [turns, isLoading]);
 
-  const handleStartSession = async (initialText?: string) => {
+  const handleStartSession = async () => {
     if (!projectId) {
       setErrorMsg("Nu a fost selectat niciun proiect activ.");
       return;
@@ -230,27 +218,6 @@ export function PracticeWorkspace({
       // ramane cel gol de pana acum — sesiunea nu se pierde pentru o replica ratata.
       setTurns(newSession.firstTurn ? [newSession.firstTurn] : []);
 
-      if (initialText && initialText.trim()) {
-        const turnRes = await submitPracticeTurn(newSession.id, initialText.trim());
-        // Replica de deschidere ramane prima; altfel pornirea cu o situatie gata
-        // scrisa ar sterge-o din transcript.
-        const newTurns: PracticeTurn[] = newSession.firstTurn
-          ? [newSession.firstTurn, turnRes.participantTurn]
-          : [turnRes.participantTurn];
-        if (turnRes.actorTurn) {
-          newTurns.push(turnRes.actorTurn);
-        }
-        setTurns(newTurns);
-        setSession((prev) =>
-          prev
-            ? {
-                ...prev,
-                state: turnRes.sessionState,
-                turnCount: prev.turnCount + 1,
-              }
-            : null
-        );
-      }
     } catch (err: unknown) {
       setErrorMsg(mesajDeRefuz(err));
     } finally {
@@ -440,7 +407,11 @@ export function PracticeWorkspace({
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {PRACTICE_OPTIONS.map((opt) => {
+          {PRACTICE_OPTIONS.map((optiune) => {
+            const opt =
+              optiune.kind === "knowledge" && !quizEnabled
+                ? { ...optiune, disabled: true }
+                : optiune;
             const isSelected = selectedKind === opt.kind;
             return (
               <Card
@@ -481,27 +452,6 @@ export function PracticeWorkspace({
               </Card>
             );
           })}
-        </div>
-
-        {/* Deschideri rapide recomandate */}
-        <div className="mt-2 flex flex-col gap-3">
-          <h3 className="text-sm font-semibold text-foreground">
-            Sau alege o situație de deschidere directă:
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {FIXED_OPENINGS.map((op) => (
-              <Button
-                key={op.id}
-                variant="outline"
-                size="sm"
-                className="text-xs h-8 text-left"
-                disabled={isLoading}
-                onClick={() => handleStartSession(op.text)}
-              >
-                {op.label}
-              </Button>
-            ))}
-          </div>
         </div>
 
         <div className="flex justify-end mt-4">

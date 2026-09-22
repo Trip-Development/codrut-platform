@@ -225,6 +225,19 @@ class PracticeSessionService:
 
         assert profile is not None
 
+        # 3bis. „Verificam cat ai retinut" — numai unde trainerul l-a aprins.
+        #
+        # Plicul 128, partea E, hotararea lui Andrei: quizul e al cursurilor. La team coaching
+        # nu preda nimeni nimic, deci n-are ce verifica.
+        #
+        # Refuzul sta AICI, nu doar in meniu: butonul ascuns se ocoleste cu o cerere scrisa de
+        # mana. Un drum inchis se inchide pe partea serverului, altfel e doar o perdea.
+        if kind == SessionKind.knowledge and not program_settings.quiz_enabled:
+            raise DomainError(
+                "Quiz is not enabled for this project",
+                code="quiz_not_enabled",
+            )
+
         # 4. Daily sessions limit
         now = datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)

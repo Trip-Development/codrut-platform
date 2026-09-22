@@ -83,7 +83,7 @@ def test_memoria_ajunge_in_prompt_la_inceputul_sesiunii():
 
 def test_versiunea_promptului_a_urcat():
     """Compozitia s-a schimbat; fara urcare, sesiunile nu se mai pot compara."""
-    assert CODY_PROMPT_VERSION == "v3.8"
+    assert CODY_PROMPT_VERSION == "v3.9"
 
 
 def test_serviciul_chiar_trimite_cele_trei_piese():
@@ -545,31 +545,34 @@ def test_omul_are_nume_nu_santinela():
 # ---- plicul 50 ----
 
 
-def test_salutul_il_cheama_pe_prenume():
-    """Numele era in prompt de la plicul 49, dar salutul nu-l folosea.
+def test_salutul_nu_mai_cheama_pe_nimeni_pe_nume():
+    """RASTURNAT la plicul 128, partea A. Ce apara testul asta acum e opusul a ce apara la 50.
 
-    De la plicul 56 salutul e cerut intr-un SINGUR loc — `formula_de_salut`. Inainte era
-    cerut si de regula primului mesaj, doua sabloane pentru acelasi lucru, si in trei din
-    zece sesiuni modelul le-a tratat ca pe un formular.
+    La plicul 50 salutul trebuia sa-l cheme pe om pe prenume, fiindca numele era in prompt dar
+    salutul nu-l folosea. Regula a tinut doi ani de plicuri si a picat la prima intalnire cu un
+    profil adevarat: pe contul de proba al lui Andrei profilul se cheama „user 1", deci Cody i-a
+    zis „Salut, user." (22 septembrie). Numele nu era gresit CITIT, era gresit ARATAT.
+
+    Ce ramane din plicul 50, si de asta testul nu se sterge: salutul e cerut intr-un SINGUR loc
+    (`formula_de_salut`), nu de doua sabloane deodata — aia era cauza formularului de atunci.
     """
     for mod in ("roleplay", "knowledge", "coaching"):
         p = get_system_prompt_for_kind(
             mod, name="Ion Popescu", history_length=0,
             profil_rol={"nr_sesiuni_anterioare": 0},
         )
-        # prenumele, nu numele intreg
-        assert "Salut, Ion." in p, mod
-        assert "Salut, Ion Popescu" not in p, mod
-        # un singur sablon, nu doua
-        assert p.count("Salut, Ion") == 1, mod
-        # si regula primului mesaj nu mai cere ea salutul
+        # niciun nume in salut, nici prenume, nici intreg
+        assert "Salut, Ion" not in p, mod
+        assert "Salut." in p, mod
+        # tot un singur sablon, nu doua — asta e ce ramane din plicul 50
+        assert p.count("- SALUTUL:") == 1, mod
         assert "îl saluți OBLIGATORIU pe prenume" not in p, mod
 
-    # un nume dintr-un singur cuvant ramane cum e
+    # nici cand numele e dintr-un singur cuvant
     p = get_system_prompt_for_kind(
         "roleplay", name="Andrei", history_length=0, profil_rol={"nr_sesiuni_anterioare": 0}
     )
-    assert "Salut, Andrei." in p
+    assert "Salut, Andrei" not in p
 
     # regula se aplica DOAR la prima replica
     tarziu = get_system_prompt_for_kind("roleplay", name="Ion Popescu", history_length=4)
@@ -580,47 +583,41 @@ def test_salutul_il_cheama_pe_prenume():
 # ---- plicul 53 ----
 
 
-def test_salutul_se_alege_in_cod_nu_la_voia_modelului():
-    """Plicul 53 a dat modelului o lista si i-a cerut sa se uite in istoric ca sa nu
-    repete. La primul mesaj al unei sesiuni noi istoricul e GOL — n-are la ce sa se uite,
-    si ia primul element: sase din opt sesiuni au inceput identic.
+def test_salutul_nu_mai_are_ce_sa_aleaga():
+    """RASTURNAT la plicul 128, partea A. Rotatia salutului nu mai exista.
 
-    Deci alegem noi, dupa a cata sesiune e omul. Acelasi numarator care tine rotatia
-    scenei la 8 din 8.
+    Plicul 53 a mutat alegerea vorbei de salut din mana modelului in cod, cu o lista de sapte
+    si un numarator, fiindca modelul lasat sa aleaga incepea sase din opt sesiuni identic.
+    Plicul 128 scoate si vorba, si numele: salutul e „Salut." si atat, la toate trei modurile,
+    la orice numar de sedinte in urma.
+
+    Ce ramane din plicul 53: alegerea NU se lasa modelului. Doar ca acum nu mai e nimic de ales
+    — si ce nu se poate trimite nu se poate gresi, de asta functia nici nu mai are parametri.
     """
-    from codrut.modules.practice.prompts import SALUTURI, formula_de_salut
+    from codrut.modules.practice.prompts import formula_de_salut
 
-    # fiecare sesiune primeste alta formula, si se reia dupa ce se termina lista
-    formule = [formula_de_salut("Ion", {"nr_sesiuni_anterioare": n}) for n in range(len(SALUTURI))]
-    assert len(set(formule)) == len(SALUTURI)
-    assert formula_de_salut("Ion", {"nr_sesiuni_anterioare": len(SALUTURI)}) == formule[0]
+    assert formula_de_salut() == formula_de_salut()
+    assert "Salut." in formula_de_salut()
+    assert "INTERZIS să pui vreun nume în salut" in formula_de_salut()
+    assert "INTERZIS să lași un loc gol" in formula_de_salut()
 
-    # a saptea e seaca, dinadins
-    seaca = formula_de_salut("Ion", {"nr_sesiuni_anterioare": len(SALUTURI) - 1})
-    assert "Salut, Ion. Apoi vine direct întrebarea" in seaca
-    assert "nimic între" in seaca
-    # garda impotriva locului gol si a numelui inventat (plicul 56)
-    assert "INTERZIS să lași un loc gol" in seaca
-    assert "INTERZIS să pui alt nume" in seaca
-
-    # prenumele intra in text, nu numele intreg
-    prima = formula_de_salut("Ion", {"nr_sesiuni_anterioare": 0})
-    assert "Salut, Ion. mă bucur că te-ai apucat." in prima
-    # numele e scris acolo, nu de completat
-    assert "Numele e scris acolo" in prima
-    assert "INTERZIS să lași un loc gol" in prima
-
-    # fara profil nu crapa: cade pe prima formula
-    assert formula_de_salut("Ion", None) == formule[0]
-
-    # ajunge in prompt la toate trei modurile, doar la prima replica
+    # acelasi salut, oricate sedinte ar avea omul in urma si oricare ar fi modul
     for mod in ("roleplay", "knowledge", "coaching"):
-        p = get_system_prompt_for_kind(
-            mod, name="Ion Popescu", history_length=0,
-            profil_rol={"nr_sesiuni_anterioare": 2},
-        )
-        assert "- SALUTUL:" in p, mod
-        assert "bine că ai prins un moment." in p, mod
+        for n in (0, 1, 2, 5, 6, 7, 13):
+            p = get_system_prompt_for_kind(
+                mod, name="Ion Popescu", history_length=0,
+                profil_rol={"nr_sesiuni_anterioare": n},
+            )
+            assert "- SALUTUL:" in p, (mod, n)
+            assert "Salut, Ion" not in p, (mod, n)
+
+    # vorbele vechi nu mai ajung nicaieri
+    p = get_system_prompt_for_kind(
+        "roleplay", name="Ion Popescu", history_length=0,
+        profil_rol={"nr_sesiuni_anterioare": 2},
+    )
+    for vorba in ("mă bucur că te-ai apucat", "bine că ai prins un moment", "ne apucăm de treabă"):
+        assert vorba not in p
 
     tarziu = get_system_prompt_for_kind("roleplay", name="Ion Popescu", history_length=4)
     assert "- SALUTUL:" not in tarziu
@@ -843,9 +840,10 @@ def test_la_role_play_numele_ramane_si_salutul_e_neschimbat():
     mijloc = get_system_prompt_for_kind("roleplay", name="Andrei Vacaru", history_length=4)
     assert "pe om îl cheamă Andrei" in mijloc
 
-    # salutul: acelasi text, cuvant cu cuvant, ca inainte de plicul 76
+    # salutul: acelasi text, cuvant cu cuvant, ca inainte de plicul 76 — si acum fara nume,
+    # de la plicul 128
     inceput = get_system_prompt_for_kind("roleplay", name="Andrei Vacaru", history_length=1)
-    assert formula_de_salut("Andrei", None) in inceput
+    assert formula_de_salut() in inceput
 
 
 def test_evaluarea_nu_mai_poarta_cifra_inventata():

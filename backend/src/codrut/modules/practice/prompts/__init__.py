@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # v2.1 (plicul 37): la role-play perechea actor+evaluare a fost pusa la loc, blocul de
 # quiz si memoria chiar ajung la model. Compozitia promptului s-a schimbat, deci
 # sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
-CODY_PROMPT_VERSION = "v3.8"
+CODY_PROMPT_VERSION = "v3.9"
 
 # Comanda care declanseaza pornirea, pusa ULTIMA in prompt — plicul 45.
 #
@@ -153,32 +153,43 @@ def bloc_de_distributie(profil_rol: dict[str, Any] | None, prenume: str = "") ->
 # Deci nu-i mai cerem sa aleaga. Alegem noi, dupa a cata sesiune e omul — acelasi
 # numarator care tine rotatia scenei la 8 din 8. Ultima e goala dinadins: un salut sec
 # e bun din cand in cand, asa vorbesc oamenii.
-SALUTURI = (
-    "mă bucur că te-ai apucat.",
-    "hai să vedem ce iese azi.",
-    "bine că ai prins un moment.",
-    "ne apucăm de treabă.",
-    "mă bucur să te văd.",
-    "hai să lucrăm puțin.",
-    "",
+# Cele trei intrebari cu care incepe STRATEGIA, dupa salut — plicul 128, partea C.
+#
+# Cuvant cu cuvant ale lui Andrei, 22 septembrie. Schimba hotararea lui din 31 august, cand
+# strategia incepea cu „Cum iti merge ziua pana acum?". Se rotesc dupa cate sedinte are omul in
+# urma, la fel cum se roteau vorbele de salut inainte de plicul asta.
+INTREBARI_DE_STRATEGIE = (
+    "Pentru ce situație vrei să facem o strategie azi?",
+    "Ce situație ai pe masă, pentru care vrei să pregătim o strategie?",
+    "Spune-mi situația pe care vrei s-o pregătim împreună.",
 )
 
 
-def formula_de_salut(prenume: str, profil_rol: dict[str, Any] | None) -> str:
+def intrebarea_de_strategie(profil_rol: dict[str, Any] | None) -> str:
     n = int((profil_rol or {}).get("nr_sesiuni_anterioare") or 0)
-    vorba = SALUTURI[n % len(SALUTURI)]
-    if not vorba:
-        return (
-            f'\n- SALUTUL: mesajul tău începe cu exact aceste cuvinte, copiate ca atare: '
-            f'Salut, {prenume}. Apoi vine direct întrebarea, nimic între. Numele e scris '
-            f'acolo — îl folosești pe el. INTERZIS să lași un loc gol de tipul „[Nume]" '
-            f'și INTERZIS să pui alt nume.'
-        )
+    return INTREBARI_DE_STRATEGIE[n % len(INTREBARI_DE_STRATEGIE)]
+
+
+def formula_de_salut() -> str:
+    """Salutul: `Salut.` si atat — plicul 128, partea A.
+
+    Andrei, 22 septembrie, dupa prima lui proba pe server: „Cand incep conversatia, imi spune:
+    Salut user. Refa sa spuna doar salut."
+
+    Pana azi formula cerea `Salut, {prenume}.` plus o vorba dintr-o lista de sapte. Numele venea
+    din profil, iar pe contul lui de proba profilul se cheama „user 1" — deci prenumele era
+    „user". Numele nu era gresit citit: era gresit ARATAT. Un salut nu e locul lui.
+
+    Nu mai primeste nimic: nici numele, nici numarul de sedinte. De aceea nici nu mai are
+    parametri — nu se poate gresi ce nu se poate trimite.
+
+    Regula cu numele de la plicul 76 (`- NUMELE OMULUI`) ramane neatinsa: acolo numele e un fapt
+    pe care Cody il poate folosi la nevoie, nu o formula pe care e obligat s-o scrie.
+    """
     return (
-        f'\n- SALUTUL: mesajul tău începe cu exact aceste cuvinte, copiate ca atare: '
-        f'Salut, {prenume}. {vorba} Apoi vine întrebarea. Numele e scris acolo — '
-        f'îl folosești pe el. INTERZIS să lași un loc gol de tipul „[Nume]" și INTERZIS '
-        f'să pui alt nume.'
+        '\n- SALUTUL: mesajul tău începe cu exact aceste cuvinte, copiate ca atare: '
+        'Salut. Apoi vine direct întrebarea, nimic între. INTERZIS să pui vreun nume în salut '
+        'și INTERZIS să lași un loc gol de tipul „[Nume]".'
     )
 
 # Replica la care omul raspunde intrebarii de pornire. Salutul se genereaza la
@@ -572,13 +583,19 @@ def _bucatile_comune(
                 'vrea.'
             )
         else:
+            # Strategia intreaba de situatie, nu de ziua lui — plicul 128, partea C.
+            #
+            # Hotararea lui Andrei din 22 septembrie o inlocuieste pe a lui din 31 august. Cele
+            # trei formulari sunt ale lui, cuvant cu cuvant, si se rotesc dupa cate sedinte are
+            # omul in urma — ca sa nu sune la fel a cincea oara.
             dyn_rules = (
-                '- REGULA PRIMULUI MESAJ: DOAR saluți și îl întrebi '
-                '"Cum îți merge ziua până acum?". INTERZIS orice frază de tranziție la subiect.'
+                '- REGULA PRIMULUI MESAJ: DOAR saluți și îl întrebi, cuvânt cu cuvânt: '
+                f'"{intrebarea_de_strategie(profil_rol)}". '
+                'INTERZIS orice frază de tranziție la subiect.'
             )
         # Toate trei modurile saluta, deci variatia merge la toate trei. Mai tarziu in
         # conversatie nu se aplica — acolo ramane regula anti-salut, neatinsa.
-        dyn_rules += formula_de_salut(prenume, profil_rol)
+        dyn_rules += formula_de_salut()
     else:
         dyn_rules = '- REGULA ANTI-SALUT: INTERZIS să mai folosești "Salut", "Bună".'
         # Biblioteca de tranzitii e de coaching: intreaba omul ce vrea sa discute.
