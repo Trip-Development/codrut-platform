@@ -745,7 +745,15 @@ export function PracticeWorkspace({
                 ))}
               </div>
             </div>
-          ) : null}
+          ) : (
+            /* Sesiunea s-a închis fără evaluare — plicul 129, partea E.3. Se întâmplă când
+               plafonul de buget al programului se atinge chiar la închidere. Textul e CEL MAI
+               SCURT NEUTRU pe care l-am putut pune; nu e scris de Andrei, și e în raport ca
+               să-l aleagă el. */
+            <div className="p-3 text-center text-xs text-muted-foreground bg-muted/20 rounded">
+              Sesiunea s-a încheiat fără evaluare.
+            </div>
+          )}
 
           <div className="p-3 text-center text-xs text-muted-foreground bg-muted/20 rounded">
             Această sesiune de practică a fost încheiată.{" "}
