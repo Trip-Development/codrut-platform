@@ -21,20 +21,27 @@ import json
 import logging
 import re
 import uuid
+from decimal import Decimal
 from pathlib import Path
+
+from sqlalchemy import func, select
 
 from codrut.contracts.generation import (
     GenerationMessage,
     GenerationPurpose,
     GenerationRequest,
 )
+from codrut.modules.companies.models import ProjectMembership
+from codrut.modules.practice.budget import BudgetExceeded, release, reserve, settle
 from codrut.modules.practice.models import (
     CompetencyScore,
     InsightMoment,
+    PracticeProgramSettings,
     PracticeTurn,
     SessionSample,
     TurnRole,
 )
+from codrut.modules.practice.pricing import estimate_pessimistic_cost
 
 logger = logging.getLogger(__name__)
 
@@ -162,11 +169,43 @@ class PracticeEvaluator:
             response_mime_type="application/json",
         )
 
+        # A DOUA chemare de la inchidere trece si ea prin buget — plicul 129, partea E.
+        #
+        # Prima (rezumatul) a fost legata in `service.py`. Asta, evaluarea structurala, ramasese
+        # tot pe dinafara: la masuratoarea de dupa reparatie a iesit o singura rezervare dupa
+        # ultima replica, desi la inchidere se cheama modelul de DOUA ori. Aceeasi scapare, in
+        # alt fisier.
+        rezervare_id = None
+        try:
+            setari_program, plafon = await self._plafonul_proiectului(project_id)
+            if setari_program is not None:
+                cuvinte = len(prompt.split()) + len(SYSTEM_PROMPT.split())
+                rezervare_id = await reserve(
+                    session=self.session,
+                    program_settings_id=setari_program.id,
+                    estimated_usd=estimate_pessimistic_cost(
+                        prompt_tokens=max(1, cuvinte),
+                        max_output_tokens=self.settings.vertex_max_output_tokens_evaluator,
+                        thinking_budget=self.settings.thinking_budget_evaluator,
+                        settings=self.settings,
+                    ),
+                    cap_usd=plafon,
+                    session_id=session_id,
+                )
+        except BudgetExceeded:
+            logger.warning("[EVALUATOR] plafonul atins; evaluarea structurala nu se mai face")
+            return {"skipped": True, "reason": "budget_exceeded"}
+
         try:
             rezultat = await self.generation_provider.generate(cerere)
         except Exception as err:
             logger.warning("[EVALUATOR] chemarea a esuat: %s", err)
+            if rezervare_id is not None:
+                await release(self.session, rezervare_id)
             return {"error": str(err)}
+
+        if rezervare_id is not None:
+            await settle(self.session, rezervare_id, actual_usd=rezultat.estimated_usd)
 
         date = _extract_json(rezultat.text)
         if date is None:
@@ -186,6 +225,33 @@ class PracticeEvaluator:
             source_type=source_type,
         )
         return date
+
+    async def _plafonul_proiectului(self, project_id):
+        """Setarile de program ale proiectului si plafonul lui de bani.
+
+        Aceeasi socoteala ca la replici si la rezumat: cate persoane active are proiectul, ori
+        plafonul pe participant. Scrisa aici fiindca evaluatorul n-are alt drum spre ea.
+        """
+        if project_id is None:
+            return None, Decimal("0")
+        setari = (
+            await self.session.execute(
+                select(PracticeProgramSettings).where(
+                    PracticeProgramSettings.project_id == project_id
+                )
+            )
+        ).scalars().first()
+        if setari is None:
+            return None, Decimal("0")
+        activi = (
+            await self.session.execute(
+                select(func.count(ProjectMembership.id)).where(
+                    ProjectMembership.project_id == project_id,
+                    ProjectMembership.active.is_(True),
+                )
+            )
+        ).scalar_one() or 0
+        return setari, Decimal(activi) * setari.usd_cap_per_participant
 
     async def _persist(
         self,
