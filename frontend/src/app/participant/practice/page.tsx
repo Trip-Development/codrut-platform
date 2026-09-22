@@ -30,6 +30,11 @@ export default async function ParticipantPracticePage({
   const name = summary.participantFullName || participant.user.name || participant.user.id;
   const scopeParams = participantScopeParams(summary);
   const projectType = participantActiveProjectType(summary);
+  // „Verificăm cât ai reținut" se aprinde pe proiect — plicul 128, partea E. Îl căutăm pe
+  // proiectul ales; dacă nu se găsește, rămâne stins, ca la orice proiect neconfigurat.
+  const quizEnabled = summary.contexts
+    .flatMap((context) => context.projects ?? [])
+    .some((project) => project.id === summary.projectId && project.quizEnabled === true);
 
   return (
     <AppShell
@@ -49,6 +54,7 @@ export default async function ParticipantPracticePage({
       />
       <PracticeWorkspace
         projectId={summary.projectId}
+        quizEnabled={quizEnabled}
       />
     </AppShell>
   );

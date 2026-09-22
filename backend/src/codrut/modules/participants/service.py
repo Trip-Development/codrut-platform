@@ -1012,11 +1012,26 @@ class ParticipantWorkspaceService:
         }
         projects: dict[UUID, CompanyProject] = {}
         cycles_by_project: dict[UUID, list[AssessmentCycle]] = {}
+        setari_practica: dict[UUID, bool] = {}
         if project_ids:
             project_result = await self.session.execute(
                 select(CompanyProject).where(CompanyProject.id.in_(project_ids))
             )
             projects = {project.id: project for project in project_result.scalars().all()}
+            # Butonul de quiz, pe proiect — plicul 128, partea E. O singura interogare pentru
+            # toate proiectele omului; proiectele fara exersare configurata raman stinse.
+            from codrut.modules.practice.models import PracticeProgramSettings
+
+            setari_practica = {
+                rand.project_id: bool(rand.quiz_enabled)
+                for rand in (
+                    await self.session.execute(
+                        select(PracticeProgramSettings).where(
+                            PracticeProgramSettings.project_id.in_(project_ids)
+                        )
+                    )
+                ).scalars().all()
+            }
             published_cycle_result = await self.session.execute(
                 select(
                     ResultPublication.participant_profile_id,
@@ -1064,6 +1079,7 @@ class ParticipantWorkspaceService:
                         name=project.name,
                         project_type=project.project_type,
                         status=project.status.value,
+                        quiz_enabled=setari_practica.get(project.id, False),
                         history_bucket=(
                             "current"
                             if project.status == CompanyProjectStatus.active

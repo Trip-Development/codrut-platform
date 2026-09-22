@@ -107,6 +107,7 @@ class PracticeSetupService:
             "configured": settings is not None,
             "is_enabled": bool(settings.is_enabled) if settings else False,
             "max_sessions_per_day": settings.max_sessions_per_day if settings else None,
+            "quiz_enabled": bool(settings.quiz_enabled) if settings else False,
             "theme_id": settings.theme_id if settings else None,
             "theme_name": theme_name,
             "competencies": [
@@ -122,6 +123,7 @@ class PracticeSetupService:
         competency_names: list[str] | None,
         is_enabled: bool = True,
         max_sessions_per_day: int | None = None,
+        quiz_enabled: bool | None = None,
     ) -> dict:
         """Make a training project practisable, and record the chosen competencies.
 
@@ -131,6 +133,9 @@ class PracticeSetupService:
 
         ``max_sessions_per_day`` of ``None`` leaves the project's current value alone;
         a new project starts at :data:`SESIUNI_PE_ZI_IMPLICIT`.
+
+        ``quiz_enabled`` of ``None`` leaves the project's current value alone. A new project
+        starts STINS — plicul 128, partea E: quizul e al cursurilor, nu al team coachingului.
         """
         project = await self._require_project(project_id)
         if project.project_type != TRAINING_PROJECT_TYPE:
@@ -193,6 +198,7 @@ class PracticeSetupService:
                 is_enabled=is_enabled,
                 max_turns_per_session=20,
                 max_sessions_per_day=max_sessions_per_day or SESIUNI_PE_ZI_IMPLICIT,
+                quiz_enabled=bool(quiz_enabled),
                 max_chars_per_turn=1200,
                 turn_retention_days=30,
                 usd_cap_per_participant=Decimal("3.00"),
@@ -205,6 +211,8 @@ class PracticeSetupService:
             settings.is_enabled = is_enabled
             if max_sessions_per_day is not None:
                 settings.max_sessions_per_day = max_sessions_per_day
+            if quiz_enabled is not None:
+                settings.quiz_enabled = quiz_enabled
 
         await self.session.execute(
             delete(ProjectCompetency).where(ProjectCompetency.project_id == project_id)

@@ -33,6 +33,8 @@ export function PracticeSetupSection({ projectId }: { projectId: string }) {
   // Plafonul zilnic de sesiuni. Pana la plicul 35 numarul era ingropat in configurare
   // si nu se putea schimba decat direct in baza.
   const [sesiuniPeZi, setSesiuniPeZi] = useState<string>("");
+  // „Verificăm cât ai reținut" — plicul 128, partea E. Stins la orice proiect nou.
+  const [quizAprins, setQuizAprins] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +50,7 @@ export function PracticeSetupSection({ projectId }: { projectId: string }) {
       setThemes(t);
       setSetup(s);
       setSesiuniPeZi(String(s?.maxSessionsPerDay ?? SESIUNI_PE_ZI_IMPLICIT));
+      setQuizAprins(Boolean(s?.quizEnabled));
       const initialTheme = s?.themeId ?? t.find((x) => x.usable)?.id ?? t[0]?.id ?? "";
       setThemeId(initialTheme);
       if (s && s.competencies.length > 0) {
@@ -97,9 +100,11 @@ export function PracticeSetupSection({ projectId }: { projectId: string }) {
         themeId,
         competencies: Array.from(ticked),
         maxSessionsPerDay: numar,
+        quizEnabled: quizAprins,
       });
       setSetup(result);
       setSesiuniPeZi(String(result.maxSessionsPerDay ?? numar));
+      setQuizAprins(Boolean(result.quizEnabled));
       setMessage("Salvat. Participanții pot exersa pe proiectul ăsta.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Nu am putut salva.");
@@ -188,6 +193,28 @@ export function PracticeSetupSection({ projectId }: { projectId: string }) {
           }}
           className="mt-2 w-28 rounded-md border px-3 py-2 text-sm"
         />
+      </div>
+
+      <div className="mt-5">
+        <label className="flex items-start gap-2 text-sm font-medium text-foreground">
+          <input
+            id="quiz-aprins"
+            type="checkbox"
+            checked={quizAprins}
+            onChange={(e) => {
+              setQuizAprins(e.target.checked);
+              setMessage(null);
+            }}
+            className="mt-0.5"
+          />
+          <span>
+            Verificăm cât ai reținut
+            <span className="block text-xs font-normal text-muted-foreground">
+              Stins la orice proiect nou. Aprinde-l numai la proiectele de curs, unde ai
+              predat ceva. Stins, participantul vede butonul, dar nu îl poate apăsa.
+            </span>
+          </span>
+        </label>
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-3">

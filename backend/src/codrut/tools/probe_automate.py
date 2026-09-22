@@ -309,10 +309,20 @@ def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
                     bifa("6", are_citat(r, pas["om"] or ""), f"{unde}, fara citat")
             elif fel in ("salut", "pornire", "despartire"):
                 bifa("2", sc is None, f"pas {nr_pas} ({fel}): punctat {sc:g}" if sc else "")
+    # Salutul e „Salut." si atat — plicul 128, partea A.
+    #
+    # Pana azi poarta cerea EXACT PE DOS: salutul trebuia sa contina numele omului (plicul 50).
+    # Andrei a vazut pe 22 septembrie ce iese din regula aia cand profilul se cheama „user 1":
+    # „Salut, user." Acum numele n-are voie in salut, iar salutul incepe cu cuvantul curat.
     salut = next((x for x in pasi if x["fel"] == "salut"), None)
     if salut and salut["raspuns"].strip():
-        bifa("5", re.search(rf"\b{PRENUME}\b", salut["raspuns"]) is not None,
-             "salutul nu contine numele omului")
+        text_salut = salut["raspuns"].strip()
+        if not text_salut.startswith("Salut."):
+            bifa("5", False, f"salutul nu incepe cu «Salut.»: {text_salut[:60]!r}")
+        elif re.search(rf"\b{PRENUME}\b", text_salut) is not None:
+            bifa("5", False, "salutul contine numele omului")
+        else:
+            bifa("5", True, "")
     if mod == "roleplay":
         # Poarta 4, STRANSA — plicul 115.
         #

@@ -597,6 +597,8 @@ export type PracticeSetup = {
   competencies: ThemeCompetency[];
   /** Cate sesiuni poate porni un om intr-o zi pe proiectul asta. */
   maxSessionsPerDay: number | null;
+  /** „Verificam cat ai retinut" e aprins pe proiectul asta? — plicul 128, partea E. */
+  quizEnabled: boolean;
 };
 
 type RawThemeCompetency = { name: string; description: string | null; order_index: number };
@@ -638,6 +640,7 @@ type RawPracticeSetup = {
   theme_name: string | null;
   competencies: RawThemeCompetency[];
   max_sessions_per_day: number | null;
+  quiz_enabled?: boolean;
 };
 
 function mapSetup(data: RawPracticeSetup): PracticeSetup {
@@ -651,6 +654,7 @@ function mapSetup(data: RawPracticeSetup): PracticeSetup {
     themeName: data.theme_name,
     competencies: (data.competencies || []).map(mapCompetency),
     maxSessionsPerDay: data.max_sessions_per_day ?? null,
+    quizEnabled: data.quiz_enabled ?? false,
   };
 }
 
@@ -664,7 +668,12 @@ export async function getPracticeSetup(projectId: string): Promise<PracticeSetup
 
 export async function configurePracticeSetup(
   projectId: string,
-  input: { themeId: string; competencies: string[]; maxSessionsPerDay?: number | null },
+  input: {
+    themeId: string;
+    competencies: string[];
+    maxSessionsPerDay?: number | null;
+    quizEnabled?: boolean | null;
+  },
 ): Promise<PracticeSetup> {
   const res = await apiFetch(`${getApiBaseUrl()}/practice/projects/${projectId}/setup`, {
     method: "PUT",
@@ -676,6 +685,7 @@ export async function configurePracticeSetup(
       is_enabled: true,
       // `null` lasa neatinsa valoarea de acum a proiectului.
       max_sessions_per_day: input.maxSessionsPerDay ?? null,
+      quiz_enabled: input.quizEnabled ?? null,
     }),
   });
   if (!res.ok) {

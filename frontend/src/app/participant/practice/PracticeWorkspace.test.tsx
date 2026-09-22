@@ -63,6 +63,73 @@ async function porneste() {
   await waitFor(() => expect(api.startPracticeSession).toHaveBeenCalled());
 }
 
+describe("PracticeWorkspace — meniul principal", () => {
+  it("nu mai are deschideri directe: situația se alege după ce intri în mod", () => {
+    // Andrei, 22 septembrie, după prima lui probă pe server: „Toate astea trebuie să iasă.
+    // Situația se stabilește după ce se intră în role-play sau în strategie, nu în meniul
+    // principal." Plicul 128, partea B.
+    render(<PracticeWorkspace projectId="proiect-1" />);
+
+    expect(screen.getByText("Alege modul de antrenament")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Începe conversația" })).toBeTruthy();
+
+    expect(screen.queryByText(/Sau alege o situație de deschidere directă/)).toBeNull();
+    for (const eticheta of [
+      /Colegul care întârzie/,
+      /Feedbackul vag/,
+      /Victima organizațională/,
+      /Mesaj fără context/,
+    ]) {
+      expect(screen.queryByRole("button", { name: eticheta })).toBeNull();
+    }
+  });
+
+  it("pornirea nu mai trimite niciun text gata scris", async () => {
+    // Deschiderile directe porneau sesiunea SI trimiteau pe loc replica scrisa de noi.
+    render(<PracticeWorkspace projectId="proiect-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
+    await waitFor(() => expect(api.startPracticeSession).toHaveBeenCalled());
+
+    expect(api.submitPracticeTurn).not.toHaveBeenCalled();
+  });
+});
+
+describe("PracticeWorkspace — modul de verificare a cunoștințelor", () => {
+  // Plicul 128, partea E. Hotărârea lui Andrei: quizul e al cursurilor, nu al team coachingului.
+  it("stins pe proiect: se vede, dar nu se poate apăsa", () => {
+    render(<PracticeWorkspace projectId="proiect-1" quizEnabled={false} />);
+
+    const cardul = screen.getByText("Verificăm cât ai reținut");
+    expect(cardul).toBeTruthy();
+
+    fireEvent.click(cardul);
+    // nu s-a selectat: „Selectat" rămâne pe role-play
+    expect(screen.getAllByText("Selectat").length).toBe(1);
+    expect(screen.getByText("Role-Play").closest("div")).toBeTruthy();
+  });
+
+  it("aprins pe proiect: se poate alege, ca oricare alt mod", () => {
+    render(<PracticeWorkspace projectId="proiect-1" quizEnabled={true} />);
+
+    fireEvent.click(screen.getByText("Verificăm cât ai reținut"));
+
+    expect(screen.getAllByText("Selectat").length).toBe(1);
+  });
+
+  it("stins, pornirea rămâne pe role-play, nu pe quiz", async () => {
+    render(<PracticeWorkspace projectId="proiect-1" quizEnabled={false} />);
+
+    fireEvent.click(screen.getByText("Verificăm cât ai reținut"));
+    fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
+
+    await waitFor(() => expect(api.startPracticeSession).toHaveBeenCalled());
+    expect(api.startPracticeSession).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "roleplay" }),
+    );
+  });
+});
+
 describe("PracticeWorkspace — drumul înapoi", () => {
   it("dintr-o sesiune deschisă se poate ieși la alegerea modului fără a o închide", async () => {
     // Pana la plicul 34 singura iesire dintr-o sesiune pornita era „Incheie
