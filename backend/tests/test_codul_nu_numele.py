@@ -264,3 +264,15 @@ def test_numaratoarea_vede_numele_cand_pleaca() -> None:
     bucati, intregi = numara(texte, NUMELE, [NUMELE, "Radu Probescu"])
     assert bucati >= 3
     assert intregi == 1
+
+
+def test_un_cuvant_generic_din_numele_contului_nu_e_alarma() -> None:
+    """Pe probă, un cont se cheamă „user 1", iar regula lui Cody spune „INTERZIS «user»".
+
+    Măsurat la plicul 138, pe serverul de probă: 18 alarme false, toate din cuvântul ăsta.
+    """
+    from codrut.tools.numara_nume_spre_model import numara
+
+    texte = ["- numele omului: interzis „user”, „participant”."]
+    assert numara(texte, "user 1", ["user 1"]) == (0, 0)
+    assert ascunde_numele("INTERZIS user", "user 1", "Fox 34") == "INTERZIS user"

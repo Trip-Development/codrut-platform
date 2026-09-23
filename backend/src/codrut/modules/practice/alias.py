@@ -65,6 +65,13 @@ def _fara_diacritice(text: str) -> str:
     )
 
 
+# Cuvinte care stau chiar în promptul lui Cody („INTERZIS «user», «participant»...") și nu pot
+# identifica pe nimeni. Un cont de probă numit „user 1" le are în nume; fără lista asta, poarta
+# de nume suna pe regula lui Cody însăși — măsurat pe probă, la plicul 138: 18 alarme false.
+CUVINTE_CARE_NU_SUNT_NUME = frozenset({"user", "participant", "utilizator", "utilizatorul",
+                                       "trainer", "test", "cody"})
+
+
 def _tipar_pentru_nume(nume: str) -> re.Pattern[str] | None:
     """Fiecare bucată din nume (prenume, nume, fiecare parte a unui nume cu cratimă), ca
     cuvânt întreg, fără să țină cont de litere mari și de diacritice."""
@@ -72,7 +79,7 @@ def _tipar_pentru_nume(nume: str) -> re.Pattern[str] | None:
         _fara_diacritice(b).lower()
         for b in re.split(r"[\s\-]+", nume or "")
         if len(b) >= 2
-    }
+    } - CUVINTE_CARE_NU_SUNT_NUME
     if not bucati:
         return None
     alternative = "|".join(sorted((re.escape(b) for b in bucati), key=len, reverse=True))
