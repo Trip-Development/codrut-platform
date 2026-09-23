@@ -1,7 +1,7 @@
 """add legacy practice tables and xp/streak columns
 
-Revision ID: 0062_legacy_practice_tables
-Revises: 0061_practice_prompt_version
+Revision ID: 0064_legacy_practice_tables
+Revises: 0063_practice_prompt_version
 Create Date: 2026-08-30
 """
 
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0062_legacy_practice_tables"
-down_revision: str | None = "0061_practice_prompt_version"
+revision: str = "0064_legacy_practice_tables"
+down_revision: str | None = "0063_practice_prompt_version"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

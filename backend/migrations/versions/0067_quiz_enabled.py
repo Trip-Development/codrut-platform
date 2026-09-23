@@ -4,8 +4,8 @@ Plicul 128, partea E. Hotararea lui Andrei, 22 septembrie: quizul e activ numai 
 la team coaching, unde nu preda nimic. Implicit STINS — un proiect nou nu are de unde sa stie
 daca e curs.
 
-Revision ID: 0065_quiz_enabled
-Revises: 0064_practice_turn_cost
+Revision ID: 0067_quiz_enabled
+Revises: 0066_practice_turn_cost
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0065_quiz_enabled"
-down_revision = "0064_practice_turn_cost"
+revision = "0067_quiz_enabled"
+down_revision = "0066_practice_turn_cost"
 branch_labels = None
 depends_on = None
 

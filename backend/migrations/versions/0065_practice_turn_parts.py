@@ -6,8 +6,8 @@ cum sunt, iar drumul cu un singur apel nu le foloseste deloc.
 `practice_turns` e un tabel al ramurii noastre, creat de `0060`; pe productie nu exista inca,
 deci migrarea asta nu atinge nicio data vie.
 
-Revision ID: 0063_practice_turn_parts
-Revises: 0062_legacy_practice_tables
+Revision ID: 0065_practice_turn_parts
+Revises: 0064_legacy_practice_tables
 """
 
 from collections.abc import Sequence
@@ -15,8 +15,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0063_practice_turn_parts"
-down_revision: str | None = "0062_legacy_practice_tables"
+revision: str = "0065_practice_turn_parts"
+down_revision: str | None = "0064_legacy_practice_tables"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

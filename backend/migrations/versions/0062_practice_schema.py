@@ -1,7 +1,7 @@
 """create practice module schema
 
-Revision ID: 0060_practice_schema
-Revises: 0059_participant_view_audits
+Revision ID: 0062_practice_schema
+Revises: 0061_response_reopen_archive
 Create Date: 2026-08-27
 """
 
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0060_practice_schema"
-down_revision: str | None = "0059_participant_view_audits"
+revision: str = "0062_practice_schema"
+down_revision: str | None = "0061_response_reopen_archive"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

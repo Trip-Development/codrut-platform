@@ -1,7 +1,7 @@
 """add prompt_version to practice_sessions
 
-Revision ID: 0061_practice_prompt_version
-Revises: 0060_practice_schema
+Revision ID: 0063_practice_prompt_version
+Revises: 0062_practice_schema
 Create Date: 2026-08-29
 """
 
@@ -10,8 +10,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0061_practice_prompt_version"
-down_revision: str | None = "0060_practice_schema"
+revision: str = "0063_practice_prompt_version"
+down_revision: str | None = "0062_practice_schema"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
