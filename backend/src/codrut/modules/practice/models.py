@@ -193,9 +193,11 @@ class PracticeProgramSettings(TimestampMixin, Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # Unicitatea o apara `uq_practice_program_settings_project_id`, din `__table_args__` — plicul
+    # 133. Aici era scrisa a doua oara (`unique=True`), iar `alembic check` cerea un index unic pe
+    # care nicio migrare nu-l facuse. Constrangerea ramane si apara exact la fel.
     project_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("company_projects.id", ondelete="CASCADE"),
-        unique=True,
         index=True,
         nullable=False,
     )
@@ -341,9 +343,10 @@ class PracticeOutcome(TimestampMixin, Base):
     __table_args__ = (UniqueConstraint("session_id", name="uq_practice_outcomes_session_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # Unicitatea o apara `uq_practice_outcomes_session_id`, din `__table_args__` — plicul 133.
+    # Aceeasi dublura ca la `PracticeProgramSettings.project_id`: constrangerea ramane.
     session_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("practice_sessions.id", ondelete="CASCADE"),
-        unique=True,
         index=True,
         nullable=False,
     )
