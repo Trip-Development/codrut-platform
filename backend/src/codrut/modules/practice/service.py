@@ -696,11 +696,31 @@ class PracticeSessionService:
 
         # Memoria a fost scrisa de MODEL, iar pana la plicul 138 modelul primea numele omului —
         # deci insemnarile vechi il contin. Spre model pleaca inapoi numai cu codul in locul lui.
+        #
+        # Memoria e tinuta pe CONT, nu pe profil, iar acelasi om poate avea mai multe profiluri
+        # (la firme diferite), cu numele scris diferit. Gasit pe proba la plicul 138: o insemnare
+        # scrisa sub un profil („Draga <nume>, ...") pleca si cand omul exersa sub celalalt. Deci
+        # se curata de numele TUTUROR profilurilor lui — acelasi cont sau aceeasi adresa.
+        nume_de_ascuns: list[str] = []
+        if profil is not None and cod and recente:
+            conditii = [ParticipantProfile.id == profil.id]
+            if user_id is not None:
+                conditii.append(ParticipantProfile.user_id == user_id)
+            if profil.email:
+                conditii.append(func.lower(ParticipantProfile.email) == profil.email.lower())
+            nume_de_ascuns = sorted({
+                n for n in (await self.session.execute(
+                    select(ParticipantProfile.full_name).where(or_(*conditii))
+                )).scalars().all() if n
+            }, key=len, reverse=True)
+
         def curat(valoare):
-            if profil is None or not cod:
+            if not nume_de_ascuns:
                 return valoare
             if isinstance(valoare, str):
-                return ascunde_numele(valoare, profil.full_name, cod)
+                for nume in nume_de_ascuns:
+                    valoare = ascunde_numele(valoare, nume, cod)
+                return valoare
             if isinstance(valoare, list):
                 return [curat(v) for v in valoare]
             if isinstance(valoare, dict):

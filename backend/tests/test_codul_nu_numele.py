@@ -276,3 +276,58 @@ def test_un_cuvant_generic_din_numele_contului_nu_e_alarma() -> None:
     texte = ["- numele omului: interzis „user”, „participant”."]
     assert numara(texte, "user 1", ["user 1"]) == (0, 0)
     assert ascunde_numele("INTERZIS user", "user 1", "Fox 34") == "INTERZIS user"
+
+
+@pytest.mark.asyncio
+async def test_memoria_scrisa_sub_alt_profil_al_aceluiasi_om_nu_scapa_numele() -> None:
+    """Găsit pe probă, la plicul 138: memoria lui Cody e ținută pe CONT, nu pe profil.
+
+    Același om poate avea mai multe profiluri (la companii diferite), cu nume scrise diferit.
+    Memoria scrisă sub unul („Dragă <nume>, în acest joc de rol...") pleca spre model și când
+    omul exersa sub celălalt. Se curăță de numele tuturor profilurilor lui.
+    """
+    from codrut.modules.companies.models import Company, ParticipantProfile
+
+    settings = Settings(generation_provider="local", practice_two_calls=True)
+    provider = LocalGenerationProvider(settings)
+    async with SessionLocal() as session:
+        ctx = await create_test_context(session)
+        ctx["profile"].full_name = "user 1"
+        cont = User(
+            id=ctx["principal"].user_id,
+            email=ctx["principal"].email,
+            password_hash="x",  # noqa: S106
+            role=UserRole.participant,
+        )
+        alta_firma = Company(name=f"Alta firma {ctx['company'].name}")
+        session.add_all([cont, alta_firma])
+        await session.flush()
+        ctx["profile"].user_id = cont.id
+        session.add(ParticipantProfile(
+            company_id=alta_firma.id, user_id=cont.id, full_name=NUMELE,
+            email=ctx["principal"].email,
+        ))
+        session.add(ParticipantMemory(
+            user_id=cont.id,
+            session_id="sedinta-de-sub-celalalt-profil",
+            summary="Dragă Ionela Zăvoianu-Testescu, în acest joc de rol ai exersat feedbackul.",
+            key_quotes=[],
+            evolution_signals={},
+            personal_context={},
+            relevant_competencies=[],
+            source_type="roleplay",
+            relevance_score=90,
+        ))
+        await session.flush()
+
+        redis = Redis.from_url(settings.redis_url, decode_responses=True)
+        service = PracticeSessionService(
+            session=session, redis=redis, generation_provider=provider, settings=settings
+        )
+        await _sedinta(service, ctx, SessionKind.roleplay, REPLICI[:2])
+        assert any("joc de rol ai exersat" in (c.system_instruction or "")
+                   for c in provider.recorded_requests), "memoria trebuia să ajungă în prompt"
+        assert _fragmente_gasite(provider) == []
+
+        await session.rollback()
+        await redis.aclose()
