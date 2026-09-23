@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
+import time
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol
@@ -69,6 +71,22 @@ class HttpxAuthRequest(GoogleAuthRequest):
             raise TransportError(f"HTTP auth request failed: {exc}") from exc
 
 
+
+
+logger = logging.getLogger("codrut.model")
+
+
+def _urma_apelului(cod: str, http: int | str, incercari: int, inceput: float, model: str,
+                   scop: str) -> None:
+    """Un rând pe fiecare apel spre model care NU reușește — plicul 140.
+
+    Numai ce trebuie ca să afli ce s-a întâmplat: codul, răspunsul HTTP, câte încercări, câte
+    secunde, modelul și la ce folosea. Nimic din conversație — nici promptul, nici mesajele.
+    """
+    logger.warning(
+        "model_apel_esuat cod=%s http=%s incercari=%d secunde=%.1f model=%s scop=%s",
+        cod, http, incercari, time.monotonic() - inceput, model, scop,
+    )
 
 
 TRANSCRIBE_PROMPT = (
@@ -256,12 +274,16 @@ class VertexGenerationProvider:
         # Pauzele sunt scurte dinadins: omul asteapta in fata ecranului.
         PAUZE = (2.0, 5.0)
         response = None
+        inceput = time.monotonic()
+        scop = request.purpose.value
         for incercare in range(len(PAUZE) + 1):
             try:
                 response = await client.post(url, json=payload, headers=headers)
             except Exception as exc:
                 if owns_client:
                     await client.aclose()
+                _urma_apelului("vertex_network_error", type(exc).__name__, incercare + 1,
+                               inceput, model, scop)
                 raise GenerationError(
                     f"Vertex AI network request failed: {type(exc).__name__}",
                     code="vertex_network_error",
@@ -276,6 +298,8 @@ class VertexGenerationProvider:
             await client.aclose()
 
         if response.status_code in (429, 503):
+            _urma_apelului("vertex_rate_limited", response.status_code, len(PAUZE) + 1,
+                           inceput, model, scop)
             # Cod separat dinadins: interfata trebuie sa poata spune „e aglomerat,
             # incearca din nou", nu „nu am putut trimite".
             raise GenerationError(
@@ -285,6 +309,8 @@ class VertexGenerationProvider:
             )
 
         if response.status_code != 200:
+            _urma_apelului("vertex_http_error", response.status_code, incercare + 1,
+                           inceput, model, scop)
             raise GenerationError(
                 f"Vertex AI returned HTTP {response.status_code}",
                 code="vertex_http_error",
@@ -397,12 +423,15 @@ class VertexGenerationProvider:
             owns_client = True
 
         last_exc: Exception | None = None
+        inceput = time.monotonic()
+        ultimul_http: int | str = "-"
         try:
             for model in candidate_models:
                 url = self._build_url(model)
                 try:
                     response = await client.post(url, json=payload, headers=headers)
                     if response.status_code != 200:
+                        ultimul_http = response.status_code
                         continue
                     data = response.json()
                     candidates = data.get("candidates")
@@ -429,11 +458,14 @@ class VertexGenerationProvider:
                     return text, usage, cost_usd
                 except Exception as exc:
                     last_exc = exc
+                    ultimul_http = type(exc).__name__
                     continue
         finally:
             if owns_client:
                 await client.aclose()
 
+        _urma_apelului("transcription_failed", ultimul_http, len(candidate_models), inceput,
+                       ",".join(candidate_models) or "-", "transcriere")
         raise GenerationError(
             f"Transcription failed across models: {last_exc}",
             code="transcription_failed",
