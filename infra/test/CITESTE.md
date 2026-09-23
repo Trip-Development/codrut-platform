@@ -6,10 +6,17 @@ Acest director conține configurația completă pentru **Casa de Probă** a apli
 
 ## 1. Ce este Casa de Probă și de ce există?
 
-Casa de Probă este o copie complet izolată a platformei Cody, care rulează pe același server fizic, dar pe un domeniu separat:
+Casa de Probă este o copie complet izolată a platformei Cody, care rulează pe **serverul ei**, `cody-proba`, pe un domeniu separat:
 👉 **`https://test.cody.andreivacaru.ro`**
 
-Scopul ei este să permită testarea funcționalităților noi (de exemplu modulul de exerciții interactive `practice`) într-un mediu real de cloud, **fără niciun risc pentru producție** și fără a fi nevoie de un server separat.
+Scopul ei este să permită testarea funcționalităților noi (de exemplu modulul de exerciții interactive `practice`) într-un mediu real de cloud, **fără niciun risc pentru producție**.
+
+> **Notă istorică — corectată la plicul 131, 23 septembrie 2026.** Până pe **31 august 2026**, casa
+> de probă rula pe **același server fizic cu producția**, și ghidul ăsta a fost scris atunci
+> (28–31 august). De pe 31 august are serverul ei (`cody-proba`), cu Traefik propriu
+> (`testtraefik`). Textul vechi a stat necorectat trei săptămâni, și cine îl citea credea că proba
+> împarte mașina cu producția. Secțiunea despre Traefik-ul producției a fost scoasă — nu mai e
+> adevărată; restul garanțiilor de izolare au rămas, fiindcă sunt tot adevărate.
 
 ---
 
@@ -47,23 +54,28 @@ Scopul ei este să permită testarea funcționalităților noi (de exemplu modul
      link de parolă.
 5. **NU deschide porturi pe server:**  
    Niciun container de test nu expune porturi publice pe server.
-6. **Prioritate Traefik scăzută:**  
-   Rutele de probă au prioritatea `1` (`traefik.http.routers.codytest-*.priority: "1"`), astfel încât nu pot umbri nicio rută vie.
+6. **Traefik propriu:**  
+   Casa de probă are propriul Traefik (`testtraefik`), cu certificatele lui
+   (`testtraefik_letsencrypt`). Rutele au rămas cu prioritatea `1`
+   (`traefik.http.routers.codytest-*.priority: "1"`) de pe vremea când împărțeau Traefik-ul
+   producției; azi nu mai au lângă ele nicio rută vie de umbrit.
 7. **Limite stricte de memorie și procesor:**  
-   Fiecare serviciu are limită de memorie (total sub 2.5 GB) și limită CPU (`0.5` nuclee pentru `testbackend` și `testfrontend`, `0.25` pentru `testworker`, `testdb`, `testredis`), lăsând producției garantat peste jumătate din resursele mașinii.
+   Fiecare serviciu are limită de memorie (total sub 2.5 GB) și limită CPU (`0.5` nuclee pentru `testbackend` și `testfrontend`, `0.25` pentru `testworker`, `testdb`, `testredis`). Limitele sunt din vremea mașinii comune, când trebuiau să lase producției jumătate din resurse; au rămas, și țin proba în frâu pe serverul ei.
 
 ---
 
-## 3. Legătura cu Traefik și Comportamentul la Deploy în Producție
+## 3. Cum ajunge o versiune pe casa de probă
 
-Pentru a direcționa traficul către casa de probă fără a atinge rețeaua producției, containerul Traefik este conectat direct la rețeaua internă de test:
-```bash
-docker network connect cody-test_interna codrut-platform-traefik-1
-```
-Această comandă **nu repornește Traefik** și nu creează nicio întrerupere pentru producție.
+Punerea pe probă nu mai trece prin producție deloc. Se face din GitHub:
 
-> [!IMPORTANT]
-> **Comportament la punerea în producție:** Când producția se recreează în urma unui deploy, Traefik se recreează și pierde legătura cu `cody-test_interna`. În acest caz, se întrerupe **doar casa de probă**, iar producția funcționează normal (direcție de siguranță optimă). Legătura se reface automat la pornirea casei de probă prin scriptul `.claude-comenzi/porneste-casa-de-proba.sh` sau manual prin comanda de mai sus.
+1. `build-test-image.yml` construiește imaginile pentru comiterea ramurii;
+2. `deploy-test.yml` le pune pe `cody-proba`, prin scriptul de pe server
+   `/usr/local/sbin/cody-test-deploy.sh` (copia lui e `infra/test/cody-test-deploy.sh`), care
+   aduce și `compose.test.yaml` de la aceeași comitere.
+
+**Secțiunea de dinainte** — conectarea casei de probă la Traefik-ul producției
+(`codrut-platform-traefik-1`) și ce se întâmpla cu ea la fiecare punere în producție — **era
+adevărată numai până pe 31 august** și a fost scoasă.
 
 ---
 
@@ -90,4 +102,4 @@ Pentru a elibera complet resursele și a șterge baza de date de test:
 cd /opt/cody-test
 docker compose --env-file .env -f compose.test.yaml down -v
 ```
-După această comandă, nu rămâne nicio urmă pe serverul de producție.
+După această comandă, nu rămâne nicio urmă a bazei de probă pe `cody-proba`.
