@@ -130,6 +130,26 @@ describe("PracticeWorkspace — modul de verificare a cunoștințelor", () => {
   });
 });
 
+describe("PracticeWorkspace — închiderea fără evaluare", () => {
+  it("spune omului, cu cuvintele lui Andrei, că evaluarea n-a putut fi făcută", async () => {
+    // Plicul 129, E.3: când plafonul de buget se atinge chiar la închidere, ședința se
+    // închide oricum, fără sinteză. Textul e al lui Andrei — plicul 131.
+    api.endPracticeSession.mockResolvedValue({
+      session: { ...SESIUNE_DESCHISA, state: "closed" },
+      summary: null,
+    });
+    await porneste();
+
+    fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
+
+    expect(
+      await screen.findByText(
+        "Sesiunea s-a încheiat, dar evaluarea nu s-a putut face acum. Spune-i trainerului tău.",
+      ),
+    ).toBeTruthy();
+  });
+});
+
 describe("PracticeWorkspace — drumul înapoi", () => {
   it("dintr-o sesiune deschisă se poate ieși la alegerea modului fără a o închide", async () => {
     // Pana la plicul 34 singura iesire dintr-o sesiune pornita era „Incheie
