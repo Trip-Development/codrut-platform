@@ -4510,6 +4510,17 @@
             "title": "Closed Sessions Count",
             "type": "integer"
           },
+          "cody_alias": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cody Alias"
+          },
           "current_average": {
             "anyOf": [
               {
@@ -7804,6 +7815,17 @@
       },
       "PracticeDashboardResponse": {
         "properties": {
+          "cody_alias": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cody Alias"
+          },
           "competencies": {
             "items": {
               "$ref": "#/components/schemas/CompetencyDashboardItem"
@@ -8380,6 +8402,17 @@
       },
       "PracticeSessionResponse": {
         "properties": {
+          "cody_alias": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cody Alias"
+          },
           "ended_at": {
             "anyOf": [
               {
@@ -9960,6 +9993,17 @@
             "default": 0,
             "title": "Average Score",
             "type": "integer"
+          },
+          "cody_alias": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cody Alias"
           },
           "email": {
             "anyOf": [

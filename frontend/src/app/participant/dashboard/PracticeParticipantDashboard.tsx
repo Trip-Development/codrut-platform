@@ -95,6 +95,12 @@ export function PracticeParticipantDashboard({ projectId }: PracticeParticipantD
 
   return (
     <div className="space-y-6 py-2">
+      {/* Codul cu care Cody îl știe pe om — plicul 138. Text provizoriu, al lui Andrei de hotărât. */}
+      {data.codyAlias && (
+        <p className="text-sm text-muted-foreground">
+          Codul tău la Cody: <span className="font-semibold text-foreground">{data.codyAlias}</span>
+        </p>
+      )}
       {/* Top Banner: XP, Streak, Badges */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Daily XP */}

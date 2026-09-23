@@ -27,6 +27,8 @@ export type PracticeSession = {
   endedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Codul cu care Cody îl știe pe om (`Fox 34`) — plicul 138. Spre model pleacă el, nu numele. */
+  codyAlias?: string | null;
   /**
    * Replica cu care Cody deschide sesiunea, generata la pornire.
    *
@@ -107,6 +109,7 @@ export async function startPracticeSession(payload: {
     endedAt: data.ended_at,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
+    codyAlias: data.cody_alias ?? null,
     firstTurn: data.first_turn
       ? {
           id: data.first_turn.id,
@@ -250,6 +253,8 @@ export type SessionSampleItem = {
 
 export type PracticeDashboardData = {
   participantName: string;
+  /** Codul omului la Cody — plicul 138; gol până la prima ședință. */
+  codyAlias?: string | null;
   xpToday: number;
   xpDailyCap: number;
   xpTotal: number;
@@ -388,6 +393,7 @@ export async function getPracticeDashboard(
   const data = await res.json();
   return {
     participantName: data.participant_name,
+    codyAlias: data.cody_alias ?? null,
     xpToday: data.xp_today,
     xpDailyCap: data.xp_daily_cap || 100,
     xpTotal: data.xp_total,
@@ -456,6 +462,7 @@ export type EvolutionParticipant = {
   userId: string | null;
   fullName: string;
   email: string | null;
+  codyAlias?: string | null;
   active: boolean;
   testInScore: number | null;
   testOutScore: number | null;
@@ -498,6 +505,7 @@ type RawEvolutionParticipant = {
   user_id: string | null;
   full_name: string;
   email: string | null;
+  cody_alias?: string | null;
   active: boolean;
   test_in_score: number | null;
   test_out_score: number | null;
@@ -557,6 +565,7 @@ export async function getProjectEvolution(
       userId: p.user_id,
       fullName: p.full_name,
       email: p.email,
+      codyAlias: p.cody_alias ?? null,
       active: p.active,
       testInScore: p.test_in_score,
       testOutScore: p.test_out_score,
@@ -715,6 +724,8 @@ export type RoomParticipant = {
   userId: string | null;
   fullName: string;
   email: string | null;
+  /** Codul omului la Cody — plicul 138. Corespondența cod–nume o vede numai trainerul. */
+  codyAlias?: string | null;
   hasAccount: boolean;
   averageScore: number;
   sessionsCount: number;
@@ -826,6 +837,7 @@ export async function getTrainingRoom(
       user_id: string | null;
       full_name: string;
       email: string | null;
+      cody_alias?: string | null;
       has_account: boolean;
       average_score: number;
       sessions_count: number;
@@ -839,6 +851,7 @@ export async function getTrainingRoom(
       userId: p.user_id,
       fullName: p.full_name,
       email: p.email,
+      codyAlias: p.cody_alias ?? null,
       hasAccount: p.has_account,
       averageScore: p.average_score,
       sessionsCount: p.sessions_count,

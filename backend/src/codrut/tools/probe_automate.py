@@ -1,8 +1,9 @@
 """Unealta de probe automate — plicul 82. O poarta de regres, NU o dovada de calitate.
 
 Ruleaza sesiuni scriptate (`probe_scenarii.py`) cu promptul si furnizorul aplicatiei, IN
-MEMORIE: nu deschide nicio conexiune la baza de date si nu salveaza nimic. Verifica mecanic
-sapte porti si numara 429-urile, erorile, durata si textul care intra si iese.
+MEMORIE: nu salveaza nimic in baza. Verifica mecanic portile si numara 429-urile, erorile, durata
+si textul care intra si iese. Din baza CITESTE un singur lucru — numele conturilor de proba, pentru
+poarta de nume (plicul 138) — si nu afiseaza niciunul.
 
 Se cheama din containerul backendului de proba; o comanda locala o porneste si tine socoteala
 (`SPEC-CODY/UNELTE/probe-automate.py`). Scrie pe iesire UN RAND JSON pe sesiune terminata,
@@ -37,6 +38,7 @@ import httpx
 
 from codrut.contracts.generation import GenerationMessage, GenerationPurpose, GenerationRequest
 from codrut.core.config import get_settings
+from codrut.modules.practice.alias import _fara_diacritice, _tipar_pentru_nume
 from codrut.modules.practice.generation_provider import build_generation_provider
 from codrut.modules.practice.prompts import (
     CODY_PROMPT_VERSION,
@@ -48,10 +50,17 @@ from codrut.modules.practice.prompts import (
 )
 from codrut.modules.practice.service import DESCHIDE_SESIUNEA, SCENA_CELUILALT
 from codrut.tools.probe_metode_scoase import METODE_INTERZISE, METODE_NUMARATE
-from codrut.tools.probe_scenarii import COMPETENTE_PROIECT, PARTICIPANT, SCENARII
+from codrut.tools.probe_scenarii import (
+    COD_PARTICIPANT,
+    COMPETENTE_PROIECT,
+    PARTICIPANT,
+    SCENARII,
+)
 
 MODURI = ("roleplay", "knowledge", "coaching")
-PRENUME = PARTICIPANT.split()[0]
+# Ca aplicatia (plicul 138): spre model pleaca codul, deci „prenumele" din porti e primul lui
+# cuvant. Numele adevarat al omului simulat (`PARTICIPANT`) nu pleaca nicaieri.
+PRENUME = COD_PARTICIPANT.split()[0]
 
 # ---------------------------------------------------------------- portile, ca functii pure
 
@@ -189,14 +198,14 @@ def evaluatorul_joaca(text: str) -> str | None:
     return gasite[0] if gasite else None
 
 
-def _acelasi_personaj(vorbitor: str, asteptat: str) -> bool:
+def _acelasi_personaj(vorbitor: str, asteptat: str, prenume: str | None = None) -> bool:
     """Acelasi om, scris scurt sau intreg: „Diana Ilie", „Diana", „Ilie" — plicul 115.
 
     Prenumele OMULUI nu trece niciodata: asta e chiar ce pazea poarta 4 de la inceput.
     """
     v = {x.strip(".,:").lower() for x in vorbitor.split()}
     a = {x.strip(".,:").lower() for x in (asteptat or "").split()}
-    if PRENUME.lower() in v:
+    if (prenume or PRENUME).lower() in v:
         return False
     return bool(v & a)
 
@@ -208,7 +217,7 @@ def _acelasi_personaj(vorbitor: str, asteptat: str) -> bool:
 NUME_INVENTATE = ("Radu", "Victor", "Dan", "Laura")
 
 
-def alt_personaj(text: str, asteptat: str) -> str | None:
+def alt_personaj(text: str, asteptat: str, prenume: str | None = None) -> str | None:
     """Poarta 10: evaluatorul nu vorbeste despre alt personaj decat cel al sedintei — plicul 118.
 
     Defectul de la plicul 117 a trecut pe sub toate cele opt porti, fiindca nu e o replica de
@@ -217,13 +226,16 @@ def alt_personaj(text: str, asteptat: str) -> str | None:
 
     Ce NU prinde: prenumele omului si personajul sedintei, cu toate felurile de a-l scrie.
     """
+    # `prenume`: cum i se spune omului in text. Implicit, primul cuvant din codul lui (plicul 138);
+    # textele salvate inainte de 138 il au pe numele de atunci („Mihai").
+    prenume = prenume or PRENUME
     t = text or ""
     candidati = [n for n in NUME_PERSONAJ] + [n for n in NUME_INVENTATE]
     for nume in candidati:
-        if _acelasi_personaj(nume, asteptat):
+        if _acelasi_personaj(nume, asteptat, prenume):
             continue
         for bucata in {nume, *nume.split()}:
-            if bucata.lower() == PRENUME.lower() or len(bucata) < 4:
+            if bucata.lower() == prenume.lower() or len(bucata) < 4:
                 continue
             if re.search(rf"\b{re.escape(bucata)}\b", t):
                 return nume
@@ -334,7 +346,9 @@ def portile(mod: str, pasi: list[dict], nr_rulare: int) -> dict[str, dict]:
         text_salut = salut["raspuns"].strip()
         if not text_salut.startswith("Salut."):
             bifa("5", False, f"salutul nu incepe cu «Salut.»: {text_salut[:60]!r}")
-        elif re.search(rf"\b{PRENUME}\b", text_salut) is not None:
+        elif re.search(rf"\b{PRENUME}\b", text_salut) is not None or (
+            PARTICIPANT.split()[0] in text_salut
+        ):
             bifa("5", False, "salutul contine numele omului")
         else:
             bifa("5", True, "")
@@ -458,7 +472,7 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
         cerere_evaluator = None
         if doua_apeluri or pornire_la_actor:
             prompt_actor, prompt_evaluator = get_prompts_pe_meserii(
-                name=PARTICIPANT,
+                name=COD_PARTICIPANT,
                 history_length=lungime,
                 memories=[],
                 biblioteca_path=setari.biblioteca_path,
@@ -478,7 +492,7 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
             system_instruction=prompt_actor if doua_apeluri or pornire_la_actor
             else get_system_prompt_for_kind(
                 kind=mod,
-                name=PARTICIPANT,
+                name=COD_PARTICIPANT,
                 history_length=lungime,
                 quiz_competency="mix" if mod == "knowledge" else None,
                 project_competencies=COMPETENTE_PROIECT,
@@ -609,6 +623,50 @@ class Iesire:
                 self.iesirea_traieste = False  # continua doar in jurnal
 
 
+class PaznicDeNume:
+    """Poarta de nume — plicul 138. Prinde TOT textul care pleaca spre model si numara numele.
+
+    Sta intre unealta si furnizorul de generare, singurul punct de trecere. Cauta:
+      · fiecare bucata din numele omului simulat (`PARTICIPANT`), ca in lacatul din teste;
+      · numele INTREGI ale conturilor din baza de proba — intregi, nu pe bucati, fiindca un
+        prenume de cont („Andrei") apare legitim in materialul lui Cody.
+    Nu afiseaza niciun nume: tine numai numarul potrivirilor.
+    """
+
+    def __init__(self, furnizor, nume_intregi: list[str]) -> None:
+        self._furnizor = furnizor
+        self._tipare = [t for t in [_tipar_pentru_nume(PARTICIPANT)] if t is not None]
+        for nume in nume_intregi:
+            curat = _fara_diacritice((nume or "").strip()).lower()
+            if len(curat) >= 5 and " " in curat:
+                self._tipare.append(re.compile(rf"(?<![\w]){re.escape(curat)}(?![\w])"))
+        self.nume_verificate = len(self._tipare)
+        self.gasite = 0
+
+    def numara(self, text: str) -> int:
+        simplu = _fara_diacritice(text or "").lower()
+        return sum(len(t.findall(simplu)) for t in self._tipare)
+
+    async def generate(self, cerere: GenerationRequest):
+        for text in (cerere.system_instruction or "", *(m.text for m in cerere.messages)):
+            self.gasite += self.numara(text)
+        return await self._furnizor.generate(cerere)
+
+
+async def _numele_conturilor_de_proba() -> list[str]:
+    """Numele intregi din baza de proba. Daca baza nu se vede, lista e goala — si se spune."""
+    try:
+        from sqlalchemy import select
+
+        from codrut.core.database import SessionLocal
+        from codrut.modules.companies.models import ParticipantProfile
+
+        async with SessionLocal() as s:
+            return [n for (n,) in (await s.execute(select(ParticipantProfile.full_name))).all()]
+    except Exception:  # noqa: BLE001 — fara baza, poarta ramane pe numele omului simulat
+        return []
+
+
 async def main(argv: list[str] | None = None) -> int:
     reale = get_settings()
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -651,7 +709,9 @@ async def main(argv: list[str] | None = None) -> int:
     client = httpx.AsyncClient(
         timeout=float(setari.vertex_timeout_seconds), event_hooks={"response": [numarator]}
     )
-    furnizor = build_generation_provider(setari, client=client)
+    furnizor = PaznicDeNume(
+        build_generation_provider(setari, client=client), await _numele_conturilor_de_proba()
+    )
     inceput = datetime.now(UTC).isoformat(timespec="seconds")
     scrie({"tip": "cap", "model": a.model, "destinatie": a.destinatie,
            "furnizor": setari.generation_provider, "versiune_prompt": CODY_PROMPT_VERSION,
@@ -682,8 +742,10 @@ async def main(argv: list[str] | None = None) -> int:
     scrie({"tip": "sfarsit", "motiv": motiv, "sesiuni_facute": facute, "inceput": inceput,
            "sfarsit_la": datetime.now(UTC).isoformat(timespec="seconds"),
            "sesiuni_cerute": len(sesiuni), "apeluri": apeluri,
-           "http": {str(k): v for k, v in sorted(numarator.coduri.items())}})
-    return 0
+           "http": {str(k): v for k, v in sorted(numarator.coduri.items())},
+           "nume_trimise": furnizor.gasite, "nume_verificate": furnizor.nume_verificate})
+    # Poarta de nume pica rularea — plicul 138.
+    return 3 if furnizor.gasite else 0
 
 
 if __name__ == "__main__":

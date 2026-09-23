@@ -3391,6 +3391,8 @@ export interface components {
              * @default 0
              */
             closed_sessions_count: number;
+            /** Cody Alias */
+            cody_alias?: string | null;
             /** Current Average */
             current_average?: number | null;
             /** Email */
@@ -4528,6 +4530,8 @@ export interface components {
         };
         /** PracticeDashboardResponse */
         PracticeDashboardResponse: {
+            /** Cody Alias */
+            cody_alias?: string | null;
             /** Competencies */
             competencies: components["schemas"]["CompetencyDashboardItem"][];
             empty_state?: components["schemas"]["DashboardEmptyState"] | null;
@@ -4757,6 +4761,8 @@ export interface components {
         };
         /** PracticeSessionResponse */
         PracticeSessionResponse: {
+            /** Cody Alias */
+            cody_alias?: string | null;
             /** Ended At */
             ended_at?: string | null;
             first_turn?: components["schemas"]["PracticeTurnResponse"] | null;
@@ -5394,6 +5400,8 @@ export interface components {
              * @default 0
              */
             average_score: number;
+            /** Cody Alias */
+            cody_alias?: string | null;
             /** Email */
             email?: string | null;
             /** Full Name */

@@ -491,6 +491,10 @@ export function PracticeWorkspace({
           <span className="text-xs text-muted-foreground">
             • Replica {session.turnCount} / 10
           </span>
+          {/* Codul cu care Cody îl știe pe om — plicul 138. Text provizoriu, al lui Andrei de hotărât. */}
+          {session.codyAlias && (
+            <span className="text-xs text-muted-foreground">• Codul tău: {session.codyAlias}</span>
+          )}
           {session.state === "closed" && (
             <Badge variant="destructive" className="text-xs">
               Sesiune încheiată

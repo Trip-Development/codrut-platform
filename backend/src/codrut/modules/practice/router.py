@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
 from codrut.core.config import Settings, get_settings
+from codrut.modules.companies.models import ParticipantProfile
 from codrut.modules.companies.policies import require_trainer_principal
 from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
@@ -48,7 +49,9 @@ from codrut.modules.practice.setup_service import PracticeSetupService
 router = APIRouter()
 
 
-def _raspuns_de_pornire(practice_session, prima_replica) -> PracticeSessionResponse:
+async def _raspuns_de_pornire(
+    session: AsyncSession, practice_session, prima_replica
+) -> PracticeSessionResponse:
     """Raspunsul la pornirea unei sesiuni, cu replica de deschidere a lui Codrut.
 
     `first_turn` exista in schema de la inceput si era mereu `null` — nimeni nu-l umplea
@@ -58,6 +61,9 @@ def _raspuns_de_pornire(practice_session, prima_replica) -> PracticeSessionRespo
     raspuns = PracticeSessionResponse.model_validate(practice_session)
     if prima_replica is not None:
         raspuns.first_turn = PracticeTurnResponse.model_validate(prima_replica)
+    # Omul isi vede codul pe ecranul de exersare — plicul 138.
+    profil = await session.get(ParticipantProfile, practice_session.participant_profile_id)
+    raspuns.cody_alias = profil.cody_alias if profil is not None else None
     return raspuns
 
 
@@ -80,7 +86,7 @@ async def start_practice_session(
         scenario_id=payload.scenario_id,
     )
     await session.commit()
-    return _raspuns_de_pornire(practice_session, prima_replica)
+    return await _raspuns_de_pornire(session, practice_session, prima_replica)
 
 
 @router.post(
@@ -115,7 +121,7 @@ async def start_trainer_practice_session(
         scenario_id=payload.scenario_id,
     )
     await session.commit()
-    return _raspuns_de_pornire(practice_session, prima_replica)
+    return await _raspuns_de_pornire(session, practice_session, prima_replica)
 
 
 @router.post(

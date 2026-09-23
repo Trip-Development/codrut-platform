@@ -211,6 +211,7 @@ class PracticeDashboardService:
 
         rezultat = {
             "participant_name": profile.full_name if profile else (principal.email.split("@")[0]),
+            "cody_alias": profile.cody_alias if profile else None,
             "xp_today": xp_today,
             "xp_daily_cap": 100,
             "xp_total": total_xp or sum(e.score for e in all_scores),

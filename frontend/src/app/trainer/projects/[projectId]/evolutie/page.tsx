@@ -247,6 +247,12 @@ export default async function ProjectEvolutionPage({
                         {p.fullName}
                       </Link>
                       <span className="block text-xs text-muted-foreground">{p.email}</span>
+                      {/* plicul 138: codul cu care Cody îl știe pe om */}
+                      {p.codyAlias && (
+                        <span className="block text-xs text-muted-foreground">
+                          Cod Cody: {p.codyAlias}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center text-muted-foreground">—</td>
                     <td className="px-4 py-3 text-center text-muted-foreground">—</td>

@@ -205,6 +205,10 @@ class ParticipantProfile(TimestampMixin, Base):
             name="uq_participant_profiles_anonymous_name",
         ),
         UniqueConstraint(
+            "cody_alias",
+            name="uq_participant_profiles_cody_alias",
+        ),
+        UniqueConstraint(
             "company_id",
             "id",
             name="uq_participant_profiles_company_id_id",
@@ -243,6 +247,10 @@ class ParticipantProfile(TimestampMixin, Base):
     pcm_base: Mapped[str | None] = mapped_column(String(80), nullable=True)
     pcm_phase: Mapped[str | None] = mapped_column(String(80), nullable=True)
     anonymous_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # Codul cu care Cody il stie pe om (`Fox 34`) — plicul 138. Spre model pleaca numai el,
+    # niciodata numele. Separat de `anonymous_name` (chestionarele), dinadins: cele doua nu au
+    # voie sa poata fi puse unul langa altul. Se da o singura data, la prima sedinta de exersare.
+    cody_alias: Mapped[str | None] = mapped_column(String(20), nullable=True)
     xp: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 

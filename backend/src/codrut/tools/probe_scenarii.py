@@ -16,9 +16,14 @@ precisa n-ar avea sens in orice scena. Doua sunt slabe, ca sa apara note sub 9.
 
 from dataclasses import dataclass
 
-PARTICIPANT = "Mihai Ionescu"
-# Numele e ales dinadins: „Mihai Șerban" e in lista personajelor, deci poarta 4 verifica si
-# regula „personajul nu poarta prenumele omului".
+# Numele „adevarat" al omului simulat — plicul 138: NU pleaca niciodata spre model. Poarta de
+# nume a uneltii il cauta in tot ce pleaca. E inventat si usor de cautat, si nu seamana cu niciun
+# personaj din scena (pana la 138 era „Mihai Ionescu", dar „Mihai Șerban" e personaj, deci poarta
+# de nume ar fi sunat din senin).
+PARTICIPANT = "Ionela Zăvoianu-Testescu"
+# Ce pleaca in locul numelui, ca in aplicatie: codul omului. Primul lui cuvant („Fox") joaca
+# rolul prenumelui in porti — poarta 4 verifica si regula „personajul nu poarta numele omului".
+COD_PARTICIPANT = "Fox 34"
 
 COMPETENTE_PROIECT = [
     "Ascultare activă",

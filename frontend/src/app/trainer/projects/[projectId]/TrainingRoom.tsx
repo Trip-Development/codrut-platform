@@ -353,6 +353,8 @@ export function TrainingRoom({
             <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="p-4 font-medium">Participant</th>
+                {/* plicul 138: corespondența cod–nume o vede numai trainerul */}
+                <th className="p-4 font-medium">Cod Cody</th>
                 <th className="p-4 font-medium">Status</th>
                 <th className="p-4 text-center font-medium">Test IN</th>
                 <th className="p-4 text-center font-medium">Test OUT</th>
@@ -365,7 +367,7 @@ export function TrainingRoom({
             <tbody>
               {room.participants.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                  <td colSpan={9} className="p-8 text-center text-muted-foreground">
                     Niciun participant înscris în acest proiect.
                   </td>
                 </tr>
@@ -380,6 +382,7 @@ export function TrainingRoom({
                         <span className="font-medium text-foreground">{p.fullName}</span>
                       </div>
                     </td>
+                    <td className="p-4 text-muted-foreground">{p.codyAlias || "—"}</td>
                     <td className="p-4">
                       <span
                         className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"

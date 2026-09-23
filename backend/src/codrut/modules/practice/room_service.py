@@ -212,6 +212,7 @@ class PracticeRoomService:
                 "user_id": u,
                 "full_name": profil.full_name,
                 "email": profil.email,
+                "cody_alias": profil.cody_alias,
                 "has_account": u is not None,
                 "average_score": _medie([s.score for s in ale_lui]),
                 "sessions_count": len(sesiuni_pe_om.get(u, set())) if u else 0,

@@ -23,6 +23,7 @@ from codrut.core.errors import DomainError
 from codrut.modules.companies.models import CompanyProject, ParticipantProfile, ProjectMembership
 from codrut.modules.identity.models import User, UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
+from codrut.modules.practice.alias import ascunde_numele, codul_omului
 from codrut.modules.practice.budget import BudgetExceeded, release, reserve, settle
 from codrut.modules.practice.generation_provider import (
     GenerationProvider,
@@ -511,11 +512,15 @@ class PracticeSessionService:
         coste omul sesiunea — mai ales ca Vertex a dat 429 de mai multe ori.
         """
         competente = await self._competentele_proiectului(program_settings.project_id)
-        memorii = await self._memoria_participantului(profile.user_id, history_length=0)
+        # Spre model pleaca CODUL omului, niciodata numele — plicul 138.
+        cod = await codul_omului(self.session, profile)
+        memorii = await self._memoria_participantului(
+            profile.user_id, history_length=0, profil=profile, cod=cod
+        )
 
         system_instruction = get_system_prompt_for_kind(
             kind=practice_session.kind,
-            name=profile.full_name,
+            name=cod,
             history_length=0,
             quiz_competency=(
                 "mix" if practice_session.kind == SessionKind.knowledge else None
@@ -663,6 +668,8 @@ class PracticeSessionService:
         user_id: uuid.UUID | None,
         *,
         history_length: int,
+        profil: ParticipantProfile | None = None,
+        cod: str | None = None,
     ) -> list[dict]:
         """Ce stie Codrut despre omul asta din sesiunile dinainte.
 
@@ -687,13 +694,26 @@ class PracticeSessionService:
             .limit(MEMORIE_CATE_INSEMNARI)
         )).scalars().all()
 
+        # Memoria a fost scrisa de MODEL, iar pana la plicul 138 modelul primea numele omului —
+        # deci insemnarile vechi il contin. Spre model pleaca inapoi numai cu codul in locul lui.
+        def curat(valoare):
+            if profil is None or not cod:
+                return valoare
+            if isinstance(valoare, str):
+                return ascunde_numele(valoare, profil.full_name, cod)
+            if isinstance(valoare, list):
+                return [curat(v) for v in valoare]
+            if isinstance(valoare, dict):
+                return {k: curat(v) for k, v in valoare.items()}
+            return valoare
+
         return [
             {
                 "created_at": m.created_at.isoformat() if m.created_at else "",
-                "summary": m.summary,
-                "key_quotes": m.key_quotes or [],
-                "evolution_signals": m.evolution_signals or {},
-                "personal_context": m.personal_context or {},
+                "summary": curat(m.summary),
+                "key_quotes": curat(m.key_quotes or []),
+                "evolution_signals": curat(m.evolution_signals or {}),
+                "personal_context": curat(m.personal_context or {}),
                 "relevant_competencies": m.relevant_competencies or [],
                 "relevance_score": m.relevance_score,
             }
@@ -851,9 +871,12 @@ class PracticeSessionService:
 
             # Cele trei piese care existau pe disc dar nu ajungeau niciodata la model.
             competente = await self._competentele_proiectului(program_settings.project_id)
+            cod = await codul_omului(self.session, profile)
             memorii = await self._memoria_participantului(
                 profile.user_id or principal.user_id,
                 history_length=history_length,
+                profil=profile,
+                cod=cod,
             )
 
             comutatorul = (
@@ -879,7 +902,7 @@ class PracticeSessionService:
                 pornire_la_actor = comutatorul
             system_instruction = get_system_prompt_for_kind(
                 kind=session_obj.kind,
-                name=profile.full_name,
+                name=cod,
                 history_length=history_length,
                 # `quiz.md` ii spune modelului sa urmeze EXCLUSIV blocul „MOD QUIZ
                 # ACTIV". Blocul se construia doar daca primea o competenta, si nu
@@ -921,7 +944,7 @@ class PracticeSessionService:
                 # inceput; istoricul castiga pe masura ce se lungeste.
                 mesaje_actor = self._istoricul_unei_meserii(existing_turns, text, "actor")
                 prompt_actor, prompt_evaluator = get_prompts_pe_meserii(
-                    name=profile.full_name,
+                    name=cod,
                     history_length=history_length,
                     memories=memorii,
                     biblioteca_path=self.settings.biblioteca_path,
@@ -1155,16 +1178,18 @@ class PracticeSessionService:
         )
         turns = list((await self.session.execute(stmt_turns)).scalars().all())
 
+        # Spre model pleaca codul, nu numele — plicul 138.
+        cod = await codul_omului(self.session, profile)
         if turns:
             history_lines = []
             for t in turns:
-                speaker = profile.full_name if t.role == TurnRole.participant else "Cody"
+                speaker = cod if t.role == TurnRole.participant else "Cody"
                 history_lines.append(f"{speaker}: {t.text}")
             history_str = "\n\n".join(history_lines)
             from codrut.modules.practice.prompts import get_summary_prompt
 
             summary_content = get_summary_prompt(
-                name=profile.full_name,
+                name=cod,
                 opt_text=session_obj.kind.value,
                 history=history_str,
             )
@@ -1368,7 +1393,7 @@ class PracticeSessionService:
                     user_id=profile.user_id or principal.user_id,
                     project_id=proiect_id,
                     competencies=competente,
-                    transcript=build_transcript(turns, profile.full_name),
+                    transcript=build_transcript(turns, cod),
                     source_type=session_obj.kind.value,
                 )
             except Exception as eval_err:

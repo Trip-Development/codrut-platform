@@ -174,6 +174,7 @@ class PracticeEvolutionService:
                 "user_id": u,
                 "full_name": profil.full_name,
                 "email": profil.email,
+                "cody_alias": profil.cody_alias,
                 "active": bool(apartenenta.active),
                 "test_in_score": None,            # plicul 30
                 "test_out_score": None,           # plicul 30

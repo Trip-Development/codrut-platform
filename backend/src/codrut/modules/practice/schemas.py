@@ -50,6 +50,8 @@ class PracticeSessionResponse(BaseModel):
     turn_count: int = 0
     prompt_version: str | None = None
     first_turn: PracticeTurnResponse | None = None
+    # codul cu care Cody il stie pe om (`Fox 34`) — plicul 138; gol pana la prima sedinta
+    cody_alias: str | None = None
 
 
 class PracticeTurnSubmitResponse(BaseModel):
@@ -127,6 +129,8 @@ class DashboardEmptyState(BaseModel):
 
 class PracticeDashboardResponse(BaseModel):
     participant_name: str
+    # codul cu care Cody il stie pe om (`Fox 34`) — plicul 138; gol pana la prima sedinta
+    cody_alias: str | None = None
     xp_today: int
     xp_daily_cap: int = 100
     xp_total: int
@@ -211,6 +215,8 @@ class EvolutionParticipantItem(BaseModel):
     user_id: UUID | None = None
     full_name: str
     email: str | None = None
+    # codul cu care Cody il stie pe om (`Fox 34`) — plicul 138; gol pana la prima sedinta
+    cody_alias: str | None = None
     active: bool = True
     test_in_score: float | None = None
     test_out_score: float | None = None
@@ -262,6 +268,8 @@ class RoomParticipantItem(BaseModel):
     user_id: UUID | None = None
     full_name: str
     email: str | None = None
+    # codul cu care Cody il stie pe om (`Fox 34`) — plicul 138; gol pana la prima sedinta
+    cody_alias: str | None = None
     has_account: bool = False
     average_score: int = 0
     sessions_count: int = 0
