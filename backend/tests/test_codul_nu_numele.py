@@ -262,7 +262,8 @@ def test_numaratoarea_vede_numele_cand_pleaca() -> None:
 
     texte = ["pe om il cheama ionela.", "ionela zavoianu-testescu a intarziat"]
     bucati, intregi = numara(texte, NUMELE, [NUMELE, "Radu Probescu"])
-    assert bucati >= 3
+    # două apariții ale omului: prenumele singur, apoi numele întreg (numărat o dată, întreg)
+    assert bucati == 2
     assert intregi == 1
 
 
@@ -331,3 +332,15 @@ async def test_memoria_scrisa_sub_alt_profil_al_aceluiasi_om_nu_scapa_numele() -
 
         await session.rollback()
         await redis.aclose()
+
+
+def test_un_nume_facut_numai_din_cuvinte_generice_se_ascunde_intreg() -> None:
+    """Pe probă, contul folosit de comanda pentru producție se cheamă „Test …" — numai cuvinte
+    generice. Memoria lui îl conținea întreg: „Dragă Test Participant, ...". Numele întreg al
+    omului devine codul; cuvântul generic singur rămâne."""
+    from codrut.tools.numara_nume_spre_model import numara
+
+    text = "Dragă Test Participant, în acest joc de rol ai exersat. Un test simplu."
+    curat = ascunde_numele(text, "Test Participant", "Fox 34")
+    assert curat == "Dragă Fox 34, în acest joc de rol ai exersat. Un test simplu."
+    assert numara([text.lower()], "Test Participant", ["Test Participant"]) == (1, 1)

@@ -73,17 +73,21 @@ CUVINTE_CARE_NU_SUNT_NUME = frozenset({"user", "participant", "utilizator", "uti
 
 
 def _tipar_pentru_nume(nume: str) -> re.Pattern[str] | None:
-    """Fiecare bucată din nume (prenume, nume, fiecare parte a unui nume cu cratimă), ca
-    cuvânt întreg, fără să țină cont de litere mari și de diacritice."""
-    bucati = {
-        _fara_diacritice(b).lower()
-        for b in re.split(r"[\s\-]+", nume or "")
-        if len(b) >= 2
-    } - CUVINTE_CARE_NU_SUNT_NUME
-    if not bucati:
+    """Numele întreg și fiecare bucată din el (prenume, nume, fiecare parte a unui nume cu
+    cratimă), ca cuvinte întregi, fără să țină cont de litere mari și de diacritice.
+
+    Numele ÎNTREG se caută întotdeauna, chiar dacă e făcut numai din cuvinte generice: pe probă,
+    un cont se cheamă „Test …", iar memoria lui îl conținea întreg („Dragă Test …, ...") — găsit
+    la plicul 138. Bucățile generice singure („user", „test") nu se caută: stau chiar în prompt.
+    """
+    parti = [_fara_diacritice(b).lower() for b in re.split(r"[\s\-]+", nume or "") if b]
+    bucati = {b for b in parti if len(b) >= 2} - CUVINTE_CARE_NU_SUNT_NUME
+    alternative = sorted((re.escape(b) for b in bucati), key=len, reverse=True)
+    if len(parti) >= 2:
+        alternative.insert(0, r"[\s\-]+".join(re.escape(b) for b in parti))
+    if not alternative:
         return None
-    alternative = "|".join(sorted((re.escape(b) for b in bucati), key=len, reverse=True))
-    return re.compile(rf"(?<![\w])(?:{alternative})(?![\w])")
+    return re.compile(rf"(?<![\w])(?:{'|'.join(alternative)})(?![\w])")
 
 
 def ascunde_numele(text: str, nume: str, cod: str) -> str:
