@@ -47,6 +47,7 @@ from codrut.modules.practice.prompts import (
     REPLICA_DE_CONFIRMARE,
     get_prompts_pe_meserii,
     get_system_prompt_for_kind,
+    scoate_semnatura_cody,
 )
 from codrut.modules.practice.quotas import (
     acquire_generation_lock,
@@ -855,9 +856,10 @@ class PracticeSessionService:
                 history_length=history_length,
             )
 
-            doua_apeluri = (
+            comutatorul = (
                 self.settings.practice_two_calls and session_obj.kind == SessionKind.roleplay
             )
+            doua_apeluri = comutatorul
             # La pasul de pornire NU se cheama evaluatorul — plicul 119, partea A.
             #
             # Acolo omul doar a confirmat („Da, hai"); n-a exersat inca nimic, deci n-are ce
@@ -866,8 +868,15 @@ class PracticeSessionService:
             # scena se naste chiar atunci, in paralel) si doua in care a dat nota confirmarii.
             #
             # Hotaraste aplicatia, dupa numaratoarea pe care o stie deja, NU modelul si nu textul.
+            #
+            # Dar scena o scrie tot ACTORUL, cu promptul lui — plicul 135, partea B. Pana acum
+            # pornirea se facea cu promptul de un singur apel, cu tot materialul lui Andrei, deci
+            # personajul se nastea cu vocea lui si abia de la pasul urmator o pierdea (gasit la
+            # plicul 134). Cu comutatorul stins, pornirea ramane cum era.
+            pornire_la_actor = False
             if history_length == REPLICA_DE_CONFIRMARE:
                 doua_apeluri = False
+                pornire_la_actor = comutatorul
             system_instruction = get_system_prompt_for_kind(
                 kind=session_obj.kind,
                 name=profile.full_name,
@@ -899,7 +908,7 @@ class PracticeSessionService:
             # Ordinea „intai personajul, apoi evaluarea" nu mai e o rugaminte catre model:
             # actorul nu primeste regulile de evaluare, evaluatorul nu primeste personajul.
             cerere_evaluator: GenerationRequest | None = None
-            if doua_apeluri:
+            if doua_apeluri or pornire_la_actor:
                 # Fiecare apel isi vede NUMAI propriul trecut — plicul 117.
                 #
                 # Pana acum amandoua primeau `messages`, facut din `t.text`, adica din textul
@@ -911,7 +920,6 @@ class PracticeSessionService:
                 # era la pasul 3, primul pas de joc. Toate la 4, 5 si 6. Promptul tine la
                 # inceput; istoricul castiga pe masura ce se lungeste.
                 mesaje_actor = self._istoricul_unei_meserii(existing_turns, text, "actor")
-                mesaje_evaluator = self._istoricul_unei_meserii(existing_turns, text, "evaluator")
                 prompt_actor, prompt_evaluator = get_prompts_pe_meserii(
                     name=profile.full_name,
                     history_length=history_length,
@@ -927,6 +935,8 @@ class PracticeSessionService:
                     temperature=0.7,
                     thinking_budget=self.settings.thinking_budget_actor,
                 )
+            if doua_apeluri:
+                mesaje_evaluator = self._istoricul_unei_meserii(existing_turns, text, "evaluator")
                 cerere_evaluator = GenerationRequest(
                     messages=tuple(mesaje_evaluator),
                     system_instruction=prompt_evaluator,
@@ -1015,11 +1025,13 @@ class PracticeSessionService:
             # Ordinea o pune aplicatia acum, nu modelul: personajul intai, evaluarea dupa.
             # `***` e acelasi despartitor pe care il scrie azi un singur apel.
             text_final = result.text
+            # Semnatura „— Cody" de la final se scoate inainte de orice — plicul 135, partea C.
+            evaluarea_curata = (
+                scoate_semnatura_cody((rezultat_evaluator.text or "").strip())
+                if rezultat_evaluator is not None else None
+            )
             if cerere_evaluator is not None:
-                evaluarea = (
-                    (rezultat_evaluator.text or "").strip()
-                    if rezultat_evaluator is not None else ""
-                )
+                evaluarea = evaluarea_curata or ""
                 if not evaluarea:
                     # Punctul 2e: replica personajului SE AFISEAZA oricum, iar lipsa evaluarii
                     # se spune pe fata, fara nota inventata.
@@ -1035,9 +1047,17 @@ class PracticeSessionService:
                 text=text_final,
                 # Cele doua bucati, pentru istoricul de data viitoare — plicul 117. La un
                 # singur apel raman nule, si atunci istoricul se face din `text`, ca pana acum.
-                text_actor=(result.text or "").strip() if cerere_evaluator is not None else None,
+                #
+                # Si la pornirea facuta de actor (plicul 135): scena se salveaza ca bucata lui,
+                # ca evaluatorul s-o primeasca la pasul urmator drept vorba celuilalt (plicul
+                # 118) — nu ca replica lui, cum s-ar intampla cu un rand fara bucati.
+                text_actor=(
+                    (result.text or "").strip()
+                    if cerere_evaluator is not None or pornire_la_actor
+                    else None
+                ),
                 text_evaluator=(
-                    (rezultat_evaluator.text or "").strip()
+                    evaluarea_curata
                     if cerere_evaluator is not None and rezultat_evaluator is not None
                     else None
                 ),

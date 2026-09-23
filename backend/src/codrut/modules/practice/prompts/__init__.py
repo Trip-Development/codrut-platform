@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 # v2.1 (plicul 37): la role-play perechea actor+evaluare a fost pusa la loc, blocul de
 # quiz si memoria chiar ajung la model. Compozitia promptului s-a schimbat, deci
 # sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
-CODY_PROMPT_VERSION = "v3.9"
+CODY_PROMPT_VERSION = "v3.10"
 
 # Comanda care declanseaza pornirea, pusa ULTIMA in prompt — plicul 45.
 #
@@ -316,21 +317,29 @@ def resolve_biblioteca_dir(configured_path: str = "") -> Path | None:
     return None
 
 
-# Care felie a materialului tine de care meserie — plicul 112.
+# Care felie a materialului tine de care meserie — plicul 112, intors la plicul 135.
 #
-# Actorul joaca un personaj si trebuie sa sune ca Cody: profilul, filozofia, tonul, mostrele de
-# voce, conversatiile si regulile de comportament. Evaluatorul judeca o replica: ii trebuie
-# teoria temei. Impartirea nu dubleaza nimic: 105.213 caractere la actor, 32.378 la evaluator,
-# exact cele 137.591 care se trimiteau intr-un singur apel.
+# ACTORUL nu e Cody: e omul dificil din scena (clienta furioasa, colegul care paseaza vina).
+# Ii trebuie numai regulile de purtare, ca sa joace un om credibil. CODY e EVALUATORUL — el
+# trebuie sa sune a Andrei, deci el primeste pagina scurta cu felul lui de a vorbi (tonul si
+# mostrele de voce), plus teoria temei pe care o judeca.
 #
-# Ce n-a fost limpede a ramas la ACTOR, cum cere plicul: `REGULI-COMPORTAMENT` — sunt reguli de
-# purtare (actorul), dar sectiunea 12A e si locul unde Sandwich e dat ca exemplu (evaluatorul).
+# La plicul 112 vocea a fost pusa exact invers: tot materialul lui Andrei pleca la actor, iar
+# evaluatorul primea numai teoria. Asta contrazicea hotararea auditorului din 13 septembrie —
+# „actorul pastreaza «nu vorbi ca Andrei», evaluatorul primeste demonstratiile". Masurat la
+# plicurile 132 si 134: personajul il striga pe om „Andrei" si se semna „— Cody". Cu impartirea
+# de aici (varianta V1 de la 134) ambele au scazut la zero, toate portile au ramas la nivelul
+# martorului, iar textul trimis pe o sedinta a scazut cu 44%.
+#
+# PROFIL-ANDREI, FILOZOFIE si FILOZOFIE-CONVERSATII nu pleaca nicaieri la role-play cu doua
+# apeluri — nici actorul, nici evaluatorul nu le folosesc. Raman intregi pe drumul cu un singur
+# apel (strategie, quiz, role-play cu comutatorul stins).
+#
+# Ordinea la evaluator o da `CORE_SLOTS`, nu tuplul de aici: tonul si mostrele stau inaintea
+# teoriei, deci partea constanta ramane la inceputul promptului (memoria ieftina se prinde pe ea).
 FELII = {
-    "actor": (
-        "PROFIL-ANDREI", "FILOZOFIE", "TON-SI-COMPORTAMENT", "MOSTRE-DE-VOCE",
-        "FILOZOFIE-CONVERSATII", "REGULI-COMPORTAMENT",
-    ),
-    "evaluator": ("TEORIA-TEMEI",),
+    "actor": ("REGULI-COMPORTAMENT",),
+    "evaluator": ("TON-SI-COMPORTAMENT", "MOSTRE-DE-VOCE", "TEORIA-TEMEI"),
 }
 
 
@@ -765,3 +774,19 @@ def get_summary_prompt(name: str, opt_text: str, history: str) -> str:
 # Compatibilitate
 CODY_SYSTEM_PROMPT = get_system_prompt_for_kind("roleplay")
 
+
+# Semnatura de la finalul evaluarii — plicul 135, partea C.
+#
+# Cu tonul si mostrele primite la 135, evaluatorul isi incheia evaluarea cu un rand „— Cody"
+# (12 din 16 la plicul 134). Pe ecran, evaluarea sta deja sub numele lui Cody, deci semnatura e
+# un rand in plus. Se scoate NUMAI un ultim rand care e exact semnatura; restul textului, inclusiv
+# „Cody" oriunde altundeva, nu se atinge.
+_RAND_SEMNATURA = re.compile(r"[ \t]*[—–-][ \t]*Cody[ \t]*")
+
+
+def scoate_semnatura_cody(text: str) -> str:
+    """Textul evaluarii fara un ultim rand „— Cody" (sau „- Cody", „–Cody"). Altfel, neatins."""
+    randuri = (text or "").rstrip().split("\n")
+    if not _RAND_SEMNATURA.fullmatch(randuri[-1]):
+        return text
+    return "\n".join(randuri[:-1]).rstrip()
