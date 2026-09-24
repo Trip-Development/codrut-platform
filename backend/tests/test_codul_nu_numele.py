@@ -244,7 +244,7 @@ async def test_comanda_pentru_productie_numara_zero_si_nu_lasa_nimic() -> None:
     from sqlalchemy import func
 
     from codrut.modules.companies.models import ParticipantProfile
-    from codrut.modules.practice.models import PracticeSession
+    from codrut.modules.practice.models import PracticeConsent, PracticeSession
     from codrut.tools.numara_nume_spre_model import masoara
 
     async with SessionLocal() as session:
@@ -254,6 +254,14 @@ async def test_comanda_pentru_productie_numara_zero_si_nu_lasa_nimic() -> None:
         ctx["profile"].role_group = "leadership"
         proiect = ctx["project"].id
         setari_id = ctx["program_settings"].id
+        # ca pe proba si pe productie: omul nu si-a dat inca acordul (plicul 139)
+        from sqlalchemy import delete as _delete
+
+        from codrut.modules.practice.models import PracticeConsent
+
+        await session.execute(_delete(PracticeConsent).where(
+            PracticeConsent.participant_profile_id == ctx["profile"].id
+        ))
         profil_id = ctx["profile"].id
         await session.commit()
 
@@ -272,6 +280,11 @@ async def test_comanda_pentru_productie_numara_zero_si_nu_lasa_nimic() -> None:
         )).scalar_one()
         assert ramase == 0, "comanda trebuia să întoarcă tranzacția"
         assert cod is None, "nici codul dat în timpul măsurătorii nu rămâne"
+        acorduri = (await session.execute(
+            select(func.count(PracticeConsent.id))
+            .where(PracticeConsent.participant_profile_id == profil_id)
+        )).scalar_one()
+        assert acorduri == 0, "nici acordul dat în timpul măsurătorii nu rămâne"
 
 
 def test_numaratoarea_vede_numele_cand_pleaca() -> None:

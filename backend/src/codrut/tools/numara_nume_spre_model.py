@@ -39,6 +39,7 @@ from codrut.modules.companies.models import ParticipantProfile, ProjectMembershi
 from codrut.modules.identity.models import UserAccountType, UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.identity.terms import CURRENT_TERMS_VERSION
+from codrut.modules.practice.acord import AMPRENTA, da_acordul
 from codrut.modules.practice.alias import _fara_diacritice, _tipar_pentru_nume
 from codrut.modules.practice.generation_provider import LocalGenerationProvider
 from codrut.modules.practice.models import PracticeProgramSettings, SessionKind
@@ -121,6 +122,9 @@ async def masoara(proiect_id: uuid.UUID) -> tuple[int, int, int, int, int]:
                 session_token="numara-nume-spre-model",  # noqa: S106 — nu e o parola
             )
             try:
+                # De la plicul 139 serverul refuza orice sedinta fara acord. Aici acordul se da in
+                # aceeasi tranzactie care se intoarce la sfarsit: nu ramane, omul il vede el insusi.
+                await da_acordul(s, principal, proiect_id, AMPRENTA)
                 for fel in feluri:
                     sedinta, _ = await service.start_session(
                         principal=principal, project_id=proiect_id, kind=fel
