@@ -31,7 +31,11 @@ from codrut.modules.practice.service import PracticeSessionService
 from test_practice_session_flow import create_test_context
 
 NUMELE = "Ionela Zăvoianu-Testescu"
-FRAGMENTE = ("ionela", "zăvoianu", "zavoianu", "testescu")
+# Plicul 142, hotărârea lui Andrei: nici funcția omului nu mai pleacă — numai
+# „conduce oameni: da/nu".
+FUNCTIA = "Director Regional Mărgineanu Sud"
+FRAGMENTE = ("ionela", "zăvoianu", "zavoianu", "testescu", "mărgineanu", "margineanu",
+             "director regional")
 FORMAT = re.compile(r"^[A-Z][a-z]+ [1-9][0-9]$")
 
 REPLICI = (
@@ -115,6 +119,8 @@ async def test_niciun_fragment_din_nume_nu_pleaca_spre_model(doua_apeluri: bool)
     async with SessionLocal() as session:
         ctx = await create_test_context(session)
         ctx["profile"].full_name = NUMELE
+        ctx["profile"].position = FUNCTIA
+        ctx["profile"].role_group = "leadership"
         ctx["program_settings"].quiz_enabled = True
         # Memoria de dinainte: scrisă de model pe vremea când numele pleca, deci îl conține.
         cont = User(
@@ -218,6 +224,16 @@ async def test_poarta_din_unealta_numara_numele_si_nu_le_arata() -> None:
     await paznic.generate(murdar)
     assert paznic.gasite == 2
 
+    # plicul 142: și funcția omului simulat e căutată
+    from codrut.tools.probe_scenarii import FUNCTIE_PARTICIPANT
+
+    functie = GenerationRequest(
+        messages=(GenerationMessage(role="user", text="salut"),),
+        system_instruction=f"Funcția lui în firmă e: {FUNCTIE_PARTICIPANT.lower()}.",
+    )
+    await paznic.generate(functie)
+    assert paznic.gasite == 3
+
 
 # ------------------------------------------------------------ comanda pentru producție
 
@@ -234,15 +250,17 @@ async def test_comanda_pentru_productie_numara_zero_si_nu_lasa_nimic() -> None:
     async with SessionLocal() as session:
         ctx = await create_test_context(session)
         ctx["profile"].full_name = NUMELE
+        ctx["profile"].position = FUNCTIA
+        ctx["profile"].role_group = "leadership"
         proiect = ctx["project"].id
         setari_id = ctx["program_settings"].id
         profil_id = ctx["profile"].id
         await session.commit()
 
-    citite, cereri, bucati, intregi = await masoara(proiect)
+    citite, cereri, bucati, intregi, functii = await masoara(proiect)
     assert citite == 1
     assert cereri >= 6
-    assert (bucati, intregi) == (0, 0)
+    assert (bucati, intregi, functii) == (0, 0, 0)
 
     async with SessionLocal() as session:
         ramase = (await session.execute(

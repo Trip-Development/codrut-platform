@@ -122,13 +122,9 @@ def bloc_de_distributie(profil_rol: dict[str, Any] | None, prenume: str = "") ->
     n = int(profil_rol.get("nr_roleplay_anterioare") or 0)
     directie = rotatie[n % len(rotatie)]
 
-    functie = (profil_rol.get("functie") or "").strip()
-    randul_functiei = (
-        f" Funcția lui în firmă e: {functie}. Contextul scenei să fie plauzibil "
-        f"pentru funcția asta."
-        if functie
-        else ""
-    )
+    # Functia omului NU mai intra aici — plicul 142, hotararea lui Andrei din 23 septembrie: spre
+    # Google pleaca numai daca omul conduce oameni sau nu. Scrisa intreg, la 19 oameni, functia
+    # poate spune cine e omul. (Intra de la plicul 47.)
     interdictia = (
         ""
         if conduce
@@ -137,7 +133,7 @@ def bloc_de_distributie(profil_rol: dict[str, Any] | None, prenume: str = "") ->
     )
     nume = _numele_personajului(n, prenume)
     return (
-        f"\nDISTRIBUȚIA SCENEI: {DIRECTII_SCENA[directie]}{randul_functiei}"
+        f"\nDISTRIBUȚIA SCENEI: {DIRECTII_SCENA[directie]}"
         f"{interdictia} Competența exersată rămâne aceeași; se schimbă doar cu cine."
         f"\nPERSONAJUL SE NUMEȘTE {nume}. Ăsta e numele lui în tot scenariul — în setup, "
         f"în etichetele replicilor și în dialog. Nu-i da alt nume și nu inventa altul."

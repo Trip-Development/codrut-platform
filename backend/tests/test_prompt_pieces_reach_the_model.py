@@ -480,15 +480,18 @@ def test_scena_se_alege_dupa_pozitia_reala_a_omului():
     assert len(directii) == 4
 
 
-def test_functia_omului_intra_in_scena_daca_o_stim():
+def test_functia_omului_nu_mai_intra_in_scena():
+    """Plicul 142, hotărârea lui Andrei, 23 septembrie: spre Google pleacă numai dacă omul conduce
+    oameni sau nu. Funcția scrisă întreg („Director regional vânzări Sud") poate spune cine e omul,
+    la 19 oameni. Până la 142 intra aici, la pornirea scenei (plicul 47)."""
     from codrut.modules.practice.prompts import bloc_de_distributie
 
     cu = bloc_de_distributie({"conduce_oameni": True, "functie": "inginer de producție"})
-    assert "inginer de producție" in cu
-    assert "plauzibil pentru funcția asta" in cu
-
-    fara = bloc_de_distributie({"conduce_oameni": True, "functie": None})
-    assert "Funcția lui în firmă" not in fara
+    assert "inginer de producție" not in cu
+    assert "Funcția lui în firmă" not in cu
+    # „conduce oameni: da/nu" rămâne: omul care nu conduce nu e pus șef în scenă
+    nu_conduce = bloc_de_distributie({"conduce_oameni": False, "functie": "inginer"})
+    assert "INTERZIS să-l pui pe participant în poziție de manager" in nu_conduce
 
 
 def test_fara_profil_se_merge_pe_varianta_sigura():

@@ -650,7 +650,7 @@ class PracticeSessionService:
         return {
             "conduce_oameni": (profile.role_group or "").strip().casefold()
             in {"leadership", "manager"},
-            "functie": profile.position,
+            # Functia (`profile.position`) nu mai pleaca spre model — plicul 142.
             "nr_roleplay_anterioare": anterioare,
             "nr_sesiuni_anterioare": toate,
         }

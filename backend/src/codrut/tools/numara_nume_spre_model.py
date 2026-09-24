@@ -13,7 +13,8 @@ tranzacția întreagă se întoarce.
      strategie (și quiz, dacă e aprins), cu închidere — prin serviciul aplicației, dar cu
      furnizorul LOCAL: nimic nu pleacă spre Google, se prinde doar ce AR pleca;
   3. numără, în tot textul prins: (a) orice bucată din numele omului folosit la ședințe;
-     (b) numele întregi ale tuturor participanților proiectului.
+     (b) numele întregi ale tuturor participanților proiectului; (c) funcțiile lor întregi
+     (plicul 142).
 
 Nu afișează NICIUN nume. Scrie numai numerele. Ieșire 0 când totul e zero, 3 altfel.
 Redis se atinge doar pentru lacătul de generare, de câteva milisecunde, care se eliberează.
@@ -73,8 +74,8 @@ def numara(texte: list[str], nume_om: str, nume_intregi: list[str]) -> tuple[int
     return bucati, intregi
 
 
-async def masoara(proiect_id: uuid.UUID) -> tuple[int, int, int, int]:
-    """(participanți citiți, cereri prinse, bucăți din numele omului, nume întregi)."""
+async def masoara(proiect_id: uuid.UUID) -> tuple[int, int, int, int, int]:
+    """(participanți citiți, cereri prinse, bucăți din numele omului, nume întregi, funcții)."""
     settings = get_settings().model_copy(update={"generation_provider": "local"})
     provider = LocalGenerationProvider(settings)
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
@@ -96,6 +97,8 @@ async def masoara(proiect_id: uuid.UUID) -> tuple[int, int, int, int]:
         # scoase din obiecte ACUM: dupa un rollback, obiectele expira
         oameni = [(p.full_name, p.email, p.user_id) for p in membri]
         nume_intregi = [nume for nume, _, _ in oameni]
+        # plicul 142: nici functia nu pleaca spre model
+        functii = [p.position for p in membri if p.position]
         feluri = [SessionKind.roleplay, SessionKind.coaching]
         if setari is not None and setari.quiz_enabled:
             feluri.append(SessionKind.knowledge)
@@ -138,23 +141,26 @@ async def masoara(proiect_id: uuid.UUID) -> tuple[int, int, int, int]:
         await exterioara.rollback()
         await conn.close()
         await redis.aclose()
-    bucati, intregi = numara(_textul_prins(provider), nume_om, nume_intregi)
-    return len(nume_intregi), len(provider.recorded_requests), bucati, intregi
+    texte = _textul_prins(provider)
+    bucati, intregi = numara(texte, nume_om, nume_intregi)
+    _, functii_gasite = numara(texte, "", functii)
+    return len(nume_intregi), len(provider.recorded_requests), bucati, intregi, functii_gasite
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--proiect", type=uuid.UUID, required=True)
     a = ap.parse_args(argv)
-    citite, cereri, bucati, intregi = asyncio.run(masoara(a.proiect))
+    citite, cereri, bucati, intregi, functii = asyncio.run(masoara(a.proiect))
     print(f"participanti cititi: {citite}")
     print(f"cereri spre model prinse (furnizor local, nimic trimis): {cereri}")
     print(f"bucati din numele omului folosit: {bucati}")
     print(f"nume intregi de participanti: {intregi}")
+    print(f"functii intregi de participanti (plicul 142): {functii}")
     if cereri == 0:
         print("ATENTIE: nicio cerere prinsa — niciun participant nu a putut exersa.")
         return 2
-    return 3 if (bucati or intregi) else 0
+    return 3 if (bucati or intregi or functii) else 0
 
 
 if __name__ == "__main__":

@@ -52,6 +52,7 @@ from codrut.tools.probe_metode_scoase import METODE_INTERZISE, METODE_NUMARATE
 from codrut.tools.probe_scenarii import (
     COD_PARTICIPANT,
     COMPETENTE_PROIECT,
+    FUNCTIE_PARTICIPANT,
     PARTICIPANT,
     SCENARII,
 )
@@ -429,7 +430,7 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
     scenariu = SCENARII[mod]
     profil = {
         "conduce_oameni": True,
-        "functie": None,
+        "functie": FUNCTIE_PARTICIPANT,  # capcana pentru poarta de nume — plicul 142
         "nr_roleplay_anterioare": nr - 1,
         "nr_sesiuni_anterioare": (nr - 1) * len(MODURI) + MODURI.index(mod),
     }
@@ -618,7 +619,8 @@ class PaznicDeNume:
     def __init__(self, furnizor, nume_intregi: list[str]) -> None:
         self._furnizor = furnizor
         self._tipare = [t for t in [_tipar_pentru_nume(PARTICIPANT)] if t is not None]
-        for nume in nume_intregi:
+        # plicul 142: si functia — a omului simulat, si ale conturilor de proba (intregi)
+        for nume in [FUNCTIE_PARTICIPANT, *nume_intregi]:
             curat = _fara_diacritice((nume or "").strip()).lower()
             if len(curat) >= 5 and " " in curat:
                 self._tipare.append(re.compile(rf"(?<![\w]){re.escape(curat)}(?![\w])"))
@@ -636,7 +638,7 @@ class PaznicDeNume:
 
 
 async def _numele_conturilor_de_proba() -> list[str]:
-    """Numele intregi din baza de proba. Daca baza nu se vede, lista e goala — si se spune."""
+    """Numele si functiile intregi din baza de proba (plicurile 138, 142); fara baza, nimic."""
     try:
         from sqlalchemy import select
 
@@ -644,7 +646,10 @@ async def _numele_conturilor_de_proba() -> list[str]:
         from codrut.modules.companies.models import ParticipantProfile
 
         async with SessionLocal() as s:
-            return [n for (n,) in (await s.execute(select(ParticipantProfile.full_name))).all()]
+            randuri = (await s.execute(
+                select(ParticipantProfile.full_name, ParticipantProfile.position)
+            )).all()
+            return [x for rand in randuri for x in rand if x]
     except Exception:  # noqa: BLE001 — fara baza, poarta ramane pe numele omului simulat
         return []
 

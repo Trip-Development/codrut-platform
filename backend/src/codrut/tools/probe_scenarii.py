@@ -24,6 +24,10 @@ PARTICIPANT = "Ionela Zăvoianu-Testescu"
 # Ce pleaca in locul numelui, ca in aplicatie: codul omului. Primul lui cuvant („Fox") joaca
 # rolul prenumelui in porti — poarta 4 verifica si regula „personajul nu poarta numele omului".
 COD_PARTICIPANT = "Fox 34"
+# Functia „adevarata" a omului simulat — plicul 142: NU pleaca spre model. Unealta o pune
+# dinadins in profilul de rol, ca aplicatia de dinainte de 142; daca vreodata ar pleca, poarta de
+# nume o prinde.
+FUNCTIE_PARTICIPANT = "Director Regional Mărgineanu Sud"
 
 COMPETENTE_PROIECT = [
     "Ascultare activă",
