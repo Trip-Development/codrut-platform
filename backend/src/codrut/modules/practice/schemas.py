@@ -9,6 +9,22 @@ from pydantic import BaseModel, ConfigDict, Field
 from codrut.modules.practice.models import OutcomeKind, SessionKind, SessionState, TurnRole
 
 
+class PracticeConsentResponse(BaseModel):
+    """Acordul la prima intrare — plicul 139. Textul vine de la server, cu codul omului în el."""
+
+    acordat: bool
+    cod: str
+    titlu: str
+    paragrafe: list[str]
+    bifa: str
+    amprenta: str
+
+
+class PracticeConsentRequest(BaseModel):
+    # amprenta textului pe care l-a văzut omul; dacă între timp textul s-a schimbat, se refuză
+    amprenta: str
+
+
 class PracticeSessionCreateRequest(BaseModel):
     project_id: UUID
     kind: SessionKind = SessionKind.roleplay

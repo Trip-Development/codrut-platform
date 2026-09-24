@@ -7813,6 +7813,61 @@
         "title": "PersonTheoryItem",
         "type": "object"
       },
+      "PracticeConsentRequest": {
+        "properties": {
+          "amprenta": {
+            "title": "Amprenta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amprenta"
+        ],
+        "title": "PracticeConsentRequest",
+        "type": "object"
+      },
+      "PracticeConsentResponse": {
+        "description": "Acordul la prima intrare \u2014 plicul 139. Textul vine de la server, cu codul omului \u00een el.",
+        "properties": {
+          "acordat": {
+            "title": "Acordat",
+            "type": "boolean"
+          },
+          "amprenta": {
+            "title": "Amprenta",
+            "type": "string"
+          },
+          "bifa": {
+            "title": "Bifa",
+            "type": "string"
+          },
+          "cod": {
+            "title": "Cod",
+            "type": "string"
+          },
+          "paragrafe": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Paragrafe",
+            "type": "array"
+          },
+          "titlu": {
+            "title": "Titlu",
+            "type": "string"
+          }
+        },
+        "required": [
+          "acordat",
+          "cod",
+          "titlu",
+          "paragrafe",
+          "bifa",
+          "amprenta"
+        ],
+        "title": "PracticeConsentResponse",
+        "type": "object"
+      },
       "PracticeDashboardResponse": {
         "properties": {
           "cody_alias": {
@@ -23032,6 +23087,202 @@
           }
         },
         "summary": "Get Participant Practice Dashboard",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/projects/{project_id}/acord": {
+      "get": {
+        "description": "Textul acordului, cu codul omului in el, si daca l-a bifat deja pe proiectul asta.",
+        "operationId": "get_practice_consent_api_practice_projects__project_id__acord_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeConsentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Practice Consent",
+        "tags": [
+          "practice"
+        ]
+      },
+      "post": {
+        "description": "Omul a bifat: se tine minte cine, ce proiect, cand si ce text.",
+        "operationId": "give_practice_consent_api_practice_projects__project_id__acord_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PracticeConsentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeConsentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Give Practice Consent",
         "tags": [
           "practice"
         ]

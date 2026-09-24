@@ -23,6 +23,7 @@ from codrut.core.errors import DomainError
 from codrut.modules.companies.models import CompanyProject, ParticipantProfile, ProjectMembership
 from codrut.modules.identity.models import User, UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
+from codrut.modules.practice.acord import cere_acordul
 from codrut.modules.practice.alias import ascunde_numele, codul_omului
 from codrut.modules.practice.budget import BudgetExceeded, release, reserve, settle
 from codrut.modules.practice.generation_provider import (
@@ -236,6 +237,11 @@ class PracticeSessionService:
         )
 
         assert profile is not None
+
+        # 3a. Acordul la prima intrare — plicul 139. Fara el, nicio sedinta: ecranul ascuns nu e o
+        # usa inchisa. Acordul e pe proiect si pe textul de azi (amprenta lui); daca textul se
+        # schimba, se cere din nou.
+        await cere_acordul(self.session, profile.id, project_id)
 
         # 3bis. „Verificam cat ai retinut" — numai unde trainerul l-a aprins.
         #

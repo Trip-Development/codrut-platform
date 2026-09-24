@@ -12,6 +12,7 @@ from codrut.modules.companies.models import ParticipantProfile
 from codrut.modules.companies.policies import require_trainer_principal
 from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
+from codrut.modules.practice.acord import da_acordul, starea_acordului
 from codrut.modules.practice.dashboard_service import PracticeDashboardService
 from codrut.modules.practice.evolution_service import PracticeEvolutionService
 from codrut.modules.practice.person_service import PracticePersonService
@@ -20,6 +21,8 @@ from codrut.modules.practice.room_service import (
     PracticeRoomService,
 )
 from codrut.modules.practice.schemas import (
+    PracticeConsentRequest,
+    PracticeConsentResponse,
     PracticeDashboardResponse,
     PracticeEvolutionResponse,
     PracticePersonResponse,
@@ -258,6 +261,36 @@ async def get_participant_practice_dashboard(
     return PracticeDashboardResponse(**data)
 
 
+
+
+# ---- acordul la prima intrare (plicul 139) ----
+# Ecranul citeste textul de aici si trimite amprenta textului pe care l-a vazut omul. Refuzul
+# adevarat e la pornirea sedintei (`acord_lipsa`), nu pe ecran.
+
+
+@router.get("/projects/{project_id}/acord", response_model=PracticeConsentResponse)
+async def get_practice_consent(
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeConsentResponse:
+    """Textul acordului, cu codul omului in el, si daca l-a bifat deja pe proiectul asta."""
+    stare = await starea_acordului(session, principal, project_id)
+    await session.commit()  # codul, daca s-a dat acum
+    return PracticeConsentResponse(**stare)
+
+
+@router.post("/projects/{project_id}/acord", response_model=PracticeConsentResponse)
+async def give_practice_consent(
+    project_id: UUID,
+    payload: PracticeConsentRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeConsentResponse:
+    """Omul a bifat: se tine minte cine, ce proiect, cand si ce text."""
+    stare = await da_acordul(session, principal, project_id, payload.amprenta)
+    await session.commit()
+    return PracticeConsentResponse(**stare)
 
 
 # ---- configurarea exersarii pe un proiect de training (plic 29, punctele 4 si 6) ----

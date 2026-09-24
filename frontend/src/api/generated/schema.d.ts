@@ -1581,6 +1581,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/practice/projects/{project_id}/acord": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Practice Consent
+         * @description Textul acordului, cu codul omului in el, si daca l-a bifat deja pe proiectul asta.
+         */
+        get: operations["get_practice_consent_api_practice_projects__project_id__acord_get"];
+        put?: never;
+        /**
+         * Give Practice Consent
+         * @description Omul a bifat: se tine minte cine, ce proiect, cand si ce text.
+         */
+        post: operations["give_practice_consent_api_practice_projects__project_id__acord_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/practice/projects/{project_id}/evolution": {
         parameters: {
             query?: never;
@@ -4527,6 +4551,29 @@ export interface components {
             test_in?: number | null;
             /** Test Out */
             test_out?: number | null;
+        };
+        /** PracticeConsentRequest */
+        PracticeConsentRequest: {
+            /** Amprenta */
+            amprenta: string;
+        };
+        /**
+         * PracticeConsentResponse
+         * @description Acordul la prima intrare — plicul 139. Textul vine de la server, cu codul omului în el.
+         */
+        PracticeConsentResponse: {
+            /** Acordat */
+            acordat: boolean;
+            /** Amprenta */
+            amprenta: string;
+            /** Bifa */
+            bifa: string;
+            /** Cod */
+            cod: string;
+            /** Paragrafe */
+            paragrafe: string[];
+            /** Titlu */
+            titlu: string;
         };
         /** PracticeDashboardResponse */
         PracticeDashboardResponse: {
@@ -14733,6 +14780,162 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PracticeDashboardResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_practice_consent_api_practice_projects__project_id__acord_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeConsentResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    give_practice_consent_api_practice_projects__project_id__acord_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PracticeConsentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeConsentResponse"];
                 };
             };
             /** @description Bad Request */

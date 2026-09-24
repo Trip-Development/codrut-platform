@@ -20,6 +20,8 @@ vi.mock("@/hooks/useVoiceToText", () => ({
 }));
 
 const api = vi.hoisted(() => ({
+  getPracticeConsent: vi.fn(),
+  givePracticeConsent: vi.fn(),
   startPracticeSession: vi.fn(),
   submitPracticeTurn: vi.fn(),
   endPracticeSession: vi.fn(),
@@ -39,6 +41,18 @@ const { PracticeError } = vi.hoisted(() => ({
 
 vi.mock("@/api/practice", () => ({ ...api, PracticeError }));
 
+const ACORD = {
+  acordat: false,
+  cod: "Fox 34",
+  titlu: "Exersează cu Cody",
+  paragrafe: [
+    "Cody e un asistent de exersare construit de Andrei Văcaru.",
+    "Aici intri sub un cod: Fox 34. Numele tău nu e trimis sistemului AI.",
+  ],
+  bifa: "Am înțeles și vreau să încep.",
+  amprenta: "amprenta-textului",
+};
+
 const SESIUNE_DESCHISA = {
   id: "sesiune-1",
   kind: "roleplay" as const,
@@ -53,6 +67,11 @@ beforeEach(() => {
   api.submitPracticeTurn.mockReset();
   api.endPracticeSession.mockReset();
   api.startPracticeSession.mockResolvedValue(SESIUNE_DESCHISA);
+  // implicit omul și-a dat deja acordul (plicul 139); testele acordului îl iau înapoi
+  api.getPracticeConsent.mockReset();
+  api.givePracticeConsent.mockReset();
+  api.getPracticeConsent.mockResolvedValue({ ...ACORD, acordat: true });
+  api.givePracticeConsent.mockResolvedValue({ ...ACORD, acordat: true });
 });
 
 afterEach(cleanup);
@@ -464,5 +483,44 @@ describe("PracticeWorkspace — raspunsul omului ramane pe ecran (plicul 83)", (
     expect(
       screen.queryAllByText("Text care nu pleaca.", { ignore: "script, style, textarea" }),
     ).toHaveLength(0);
+  });
+});
+
+
+describe("PracticeWorkspace — acordul la prima intrare (plicul 139)", () => {
+  it("fără acord: textul și codul se văd, iar butonul se aprinde numai cu bifa", async () => {
+    api.getPracticeConsent.mockResolvedValue(ACORD);
+    render(<PracticeWorkspace projectId="proiect-1" />);
+
+    expect(await screen.findByText("Exersează cu Cody")).toBeTruthy();
+    expect(screen.getByText(/Aici intri sub un cod: Fox 34/)).toBeTruthy();
+    const incepe = screen.getByRole("button", { name: "Începe conversația" });
+    expect((incepe as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect((incepe as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(incepe);
+    await waitFor(() => expect(api.startPracticeSession).toHaveBeenCalled());
+    expect(api.givePracticeConsent).toHaveBeenCalledWith("proiect-1", "amprenta-textului");
+    expect(api.givePracticeConsent.mock.invocationCallOrder[0]).toBeLessThan(
+      api.startPracticeSession.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("cu acord: nu se mai arată nimic în plus", async () => {
+    render(<PracticeWorkspace projectId="proiect-1" />);
+    await waitFor(() => expect(api.getPracticeConsent).toHaveBeenCalled());
+    expect(screen.queryByText("Exersează cu Cody")).toBeNull();
+    expect(
+      (screen.getByRole("button", { name: "Începe conversația" }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it("la role-play, rândul cu /feedback stă lângă locul unde omul scrie", async () => {
+    await porneste();
+    expect(
+      await screen.findByText("Vrei să discuți nota sau evaluarea? Scrie /feedback și mesajul tău."),
+    ).toBeTruthy();
   });
 });

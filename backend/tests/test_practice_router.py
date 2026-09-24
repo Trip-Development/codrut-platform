@@ -66,6 +66,17 @@ async def setup_practice_context(
         active=True,
     )
     session.add(membership)
+    # omul de test și-a dat acordul la prima intrare — plicul 139
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
+
+    from codrut.modules.practice.acord import AMPRENTA
+    from codrut.modules.practice.models import PracticeConsent
+
+    session.add(PracticeConsent(
+        participant_profile_id=profile.id, project_id=project.id, text_hash=AMPRENTA,
+        accepted_at=_dt.now(_UTC),
+    ))
     await session.flush()
 
     theme = PracticeTheme(

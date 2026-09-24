@@ -76,6 +76,17 @@ async def _cont_si_profil_nelegat(session):
             participant_profile_id=profil.id, active=True,
         )
     )
+    # omul de test și-a dat acordul la prima intrare — plicul 139
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
+
+    from codrut.modules.practice.acord import AMPRENTA
+    from codrut.modules.practice.models import PracticeConsent
+
+    session.add(PracticeConsent(
+        participant_profile_id=profil.id, project_id=proiect.id, text_hash=AMPRENTA,
+        accepted_at=_dt.now(_UTC),
+    ))
     await session.flush()
     return cont, proiect, profil
 

@@ -78,6 +78,44 @@ function citesteEroarea(corp: unknown, textImplicit: string): PracticeError {
   return new PracticeError(plic?.message || textImplicit, plic?.code || "unknown", detalii);
 }
 
+/**
+ * Acordul la prima intrare — plicul 139. Textul vine de la server, cu codul omului în el; ecranul
+ * îl arată cum e și trimite înapoi amprenta textului văzut.
+ */
+export type PracticeConsent = {
+  acordat: boolean;
+  cod: string;
+  titlu: string;
+  paragrafe: string[];
+  bifa: string;
+  amprenta: string;
+};
+
+export async function getPracticeConsent(projectId: string): Promise<PracticeConsent> {
+  const res = await apiFetch(`${getApiBaseUrl()}/practice/projects/${projectId}/acord`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw citesteEroarea(err, "Nu am putut încărca acordul");
+  }
+  return (await res.json()) as PracticeConsent;
+}
+
+export async function givePracticeConsent(
+  projectId: string,
+  amprenta: string,
+): Promise<PracticeConsent> {
+  const res = await apiFetch(`${getApiBaseUrl()}/practice/projects/${projectId}/acord`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ amprenta }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw citesteEroarea(err, "Nu am putut salva acordul");
+  }
+  return (await res.json()) as PracticeConsent;
+}
+
 export async function startPracticeSession(payload: {
   projectId: string;
   kind: SessionKind;

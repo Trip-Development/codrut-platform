@@ -124,6 +124,19 @@ async def create_test_context(
     session.add(program_settings)
     await session.flush()
 
+    # Omul de test și-a dat acordul la prima intrare — plicul 139. Fără el serverul refuză orice
+    # ședință (`acord_lipsa`); testele acordului îl iau înapoi dinadins.
+    from codrut.modules.practice.acord import AMPRENTA
+    from codrut.modules.practice.models import PracticeConsent
+
+    session.add(PracticeConsent(
+        participant_profile_id=profile.id,
+        project_id=project.id,
+        text_hash=AMPRENTA,
+        accepted_at=datetime.now(UTC),
+    ))
+    await session.flush()
+
     principal = SessionPrincipal(
         user_id=uuid.uuid4(),
         email=profile.email,

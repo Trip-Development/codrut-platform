@@ -625,3 +625,33 @@ class TrainerNote(TimestampMixin, Base):
     )
     note: Mapped[str] = mapped_column(Text, nullable=False)
 
+
+
+class PracticeConsent(TimestampMixin, Base):
+    """Acordul la prima intrare în exersare — plicul 139.
+
+    Cine (profilul), pe ce proiect, când, și pentru ce text (amprenta lui). Dacă textul se schimbă,
+    amprenta nu se mai potrivește și acordul se cere din nou.
+    """
+
+    __tablename__ = "practice_consents"
+    __table_args__ = (
+        UniqueConstraint(
+            "participant_profile_id", "project_id", "text_hash",
+            name="uq_practice_consents_profile_project_text",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    participant_profile_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("participant_profiles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("company_projects.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    text_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

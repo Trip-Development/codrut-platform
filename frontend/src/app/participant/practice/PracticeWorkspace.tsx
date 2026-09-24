@@ -3,9 +3,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   PracticeError,
+  getPracticeConsent,
+  givePracticeConsent,
   startPracticeSession,
   submitPracticeTurn,
   endPracticeSession,
+  type PracticeConsent,
   type PracticeSession,
   type PracticeTurn,
   type SessionKind,
@@ -13,6 +16,7 @@ import {
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { MicIcon, MicOffIcon, Loader2Icon } from "lucide-react";
 import { useVoiceToText } from "@/hooks/useVoiceToText";
@@ -188,6 +192,25 @@ export function PracticeWorkspace({
   // „Inapoi" duce la alegerea modului FARA sa inchida sesiunea. Sesiunea ramane in
   // stare si pe server; omul se poate intoarce la ea din bannerul de sus.
   const [arataAlegerea, setArataAlegerea] = useState(false);
+  // Acordul la prima intrare — plicul 139. `null` cât se încarcă sau dacă n-a putut fi citit:
+  // atunci ecranul nu arată nimic în plus, iar serverul tot refuză ședința fără acord.
+  const [acord, setAcord] = useState<PracticeConsent | null>(null);
+  const [bifat, setBifat] = useState(false);
+  useEffect(() => {
+    if (!projectId) return;
+    let anulat = false;
+    getPracticeConsent(projectId)
+      .then((a) => {
+        if (!anulat) setAcord(a);
+      })
+      .catch(() => {
+        if (!anulat) setAcord(null);
+      });
+    return () => {
+      anulat = true;
+    };
+  }, [projectId]);
+  const acordLipsa = acord !== null && !acord.acordat;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   // Ca „Vreau alta tema" sa poata pune cursorul la capatul textului pregatit.
@@ -209,6 +232,9 @@ export function PracticeWorkspace({
     setIsLoading(true);
     setErrorMsg(null);
     try {
+      if (acord && !acord.acordat) {
+        setAcord(await givePracticeConsent(projectId, acord.amprenta));
+      }
       const newSession = await startPracticeSession({
         projectId,
         kind: selectedKind,
@@ -406,6 +432,30 @@ export function PracticeWorkspace({
           </div>
         )}
 
+        {/* Acordul la prima intrare — plicul 139. Textul e al lui Andrei și vine de la server,
+            cuvânt cu cuvânt; aici doar se arată. */}
+        {acordLipsa && acord ? (
+          <Card className="border-2 border-primary/30 bg-primary/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">{acord.titlu}</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 text-sm text-foreground">
+              {acord.paragrafe.map((paragraf) => (
+                <p key={paragraf}>{paragraf}</p>
+              ))}
+              <label className="mt-1 flex items-start gap-3 font-medium" htmlFor="acord-cody">
+                <Checkbox
+                  id="acord-cody"
+                  checked={bifat}
+                  onCheckedChange={(valoare) => setBifat(valoare === true)}
+                  className="mt-0.5"
+                />
+                <span>{acord.bifa}</span>
+              </label>
+            </CardContent>
+          </Card>
+        ) : null}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {PRACTICE_OPTIONS.map((optiune) => {
             const opt =
@@ -467,7 +517,7 @@ export function PracticeWorkspace({
           <Button
             size="default"
             className="px-6"
-            disabled={isLoading || !projectId}
+            disabled={isLoading || !projectId || (acordLipsa && !bifat)}
             onClick={() => handleStartSession()}
           >
             {isLoading ? "Se inițializează..." : "Începe conversația"}
@@ -707,6 +757,13 @@ export function PracticeWorkspace({
               </Button>
             </div>
           </div>
+          {/* Rândul lui Andrei, cuvânt cu cuvânt — plicul 139. Numai la role-play: acolo sunt
+              note, iar evaluatorul știe ce e /feedback (`evaluare.md`). */}
+          {session.kind === "roleplay" ? (
+            <p className="text-xs text-muted-foreground">
+              Vrei să discuți nota sau evaluarea? Scrie /feedback și mesajul tău.
+            </p>
+          ) : null}
         </form>
       ) : (
         <div className="space-y-4 pt-3 border-t">
