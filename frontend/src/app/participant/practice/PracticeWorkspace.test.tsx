@@ -524,3 +524,31 @@ describe("PracticeWorkspace — acordul la prima intrare (plicul 139)", () => {
     ).toBeTruthy();
   });
 });
+
+describe("PracticeWorkspace — ședința prea scurtă (plicul 144)", () => {
+  // exact ce trimite serverul sub prag: textul lui Andrei, cu titlurile din `rezumat.md`
+  const TEXTUL =
+    "##Concluzie\n" +
+    "Ai început să interacționezi cu Cody — primul pas e făcut.\n\n" +
+    "Sesiunea a fost prea scurtă pentru o evaluare reală. Pentru ca antrenamentul să producă " +
+    "insight, ai nevoie de cel puțin 5-6 schimburi pe aceeași situație.\n\n" +
+    "##Recomandări\n" +
+    "Reia sesiunea cu o situație concretă din viața ta — ceva care încă te macină. Mergi în " +
+    "detaliu cu Cody, nu te grăbi să închizi.";
+
+  it("omul vede textul lui Andrei sub cele două titluri, fără diezi", async () => {
+    api.endPracticeSession.mockResolvedValue({
+      session: { ...SESIUNE_DESCHISA, state: "closed" },
+      summary: TEXTUL,
+    });
+    await porneste();
+    fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
+    await waitFor(() => expect(api.endPracticeSession).toHaveBeenCalled());
+
+    expect(await screen.findByText("Concluzie")).toBeTruthy();
+    expect(screen.getByText("Recomandări")).toBeTruthy();
+    expect(screen.getByText(/Sesiunea a fost prea scurtă pentru o evaluare reală\./)).toBeTruthy();
+    expect(screen.getByText(/Reia sesiunea cu o situație concretă din viața ta/)).toBeTruthy();
+    expect(screen.queryByText(/##/)).toBeNull();
+  });
+});

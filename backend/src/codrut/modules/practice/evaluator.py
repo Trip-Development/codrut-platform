@@ -59,6 +59,16 @@ SYSTEM_PROMPT = (
 MIN_MESSAGES = 3  # replici ale omului
 MIN_CHARS = 150  # semne scrise de om
 
+
+def sedinta_prea_scurta(replici_om: list[str]) -> bool:
+    """Pragul de sedinta scurta, socotit numai pe ce a scris omul — plicurile 143, 144.
+
+    O singura functie, folosita si de evaluator, si de inchiderea sedintei: doua praguri scrise de
+    mana ar ajunge, intr-o zi, sa spuna lucruri diferite.
+    """
+    scrise = [r.strip() for r in replici_om if (r or "").strip()]
+    return len(scrise) < MIN_MESSAGES or sum(len(r) for r in scrise) < MIN_CHARS
+
 # Prefixul care desparte cele doua feluri de momente. Cele cu `[TRAINER]` sunt
 # notele pentru Andrei si NU ajung niciodata pe ecranul participantului.
 TRAINER_PREFIX = "[TRAINER]"
@@ -74,6 +84,20 @@ INSUFFICIENT_CLOSING = {
         "Mergi în detaliu cu Cody, nu te grăbi să închizi."
     ),
 }
+
+
+def text_sedinta_prea_scurta() -> str:
+    """Ce vede omul dupa o sedinta prea scurta — plicul 144, hotararea lui Andrei.
+
+    Textul lui, cuvant cu cuvant (`INSUFFICIENT_CLOSING`), in forma pe care ecranul o stie deja de
+    la sinteza obisnuita: titlurile sunt cele din `rezumat.md`. „5-6 schimburi" ramane, desi
+    pragul e 3: e sfatul lui Andrei, nu pragul.
+    """
+    return (
+        f"##Concluzie\n{INSUFFICIENT_CLOSING['good_moment']}\n\n"
+        f"{INSUFFICIENT_CLOSING['growth_point']}\n\n"
+        f"##Recomandări\n{INSUFFICIENT_CLOSING['homework']}"
+    )
 
 
 def build_transcript(turns: list[PracticeTurn], participant_name: str) -> str:
@@ -142,7 +166,7 @@ class PracticeEvaluator:
         scrise = [r.strip() for r in replici_om if (r or "").strip()]
         mesaje = len(scrise)
         caractere = sum(len(r) for r in scrise)
-        if mesaje < MIN_MESSAGES or caractere < MIN_CHARS:
+        if sedinta_prea_scurta(replici_om):
             logger.info(
                 "[EVALUATOR] Sesiune insuficienta: %s mesaje, %s caractere",
                 mesaje, caractere,

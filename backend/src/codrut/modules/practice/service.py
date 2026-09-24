@@ -26,6 +26,7 @@ from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.practice.acord import cere_acordul
 from codrut.modules.practice.alias import ascunde_numele, codul_omului
 from codrut.modules.practice.budget import BudgetExceeded, release, reserve, settle
+from codrut.modules.practice.evaluator import sedinta_prea_scurta, text_sedinta_prea_scurta
 from codrut.modules.practice.generation_provider import (
     GenerationProvider,
     build_generation_provider,
@@ -1186,7 +1187,18 @@ class PracticeSessionService:
 
         # Spre model pleaca codul, nu numele — plicul 138.
         cod = await codul_omului(self.session, profile)
-        if turns:
+
+        # Sedinta prea scurta — plicul 144, hotararea lui Andrei. Pragul se socoteste O SINGURA
+        # DATA, aici, cu aceeasi functie ca evaluatorul (plicul 143: numai pe ce a scris omul).
+        # Sub prag: niciun apel spre model, nimic salvat din conversatie; sedinta se inchide
+        # normal, iar omul vede textul lui Andrei, nu o sinteza care judeca „Da, hai." si „Ok.".
+        prea_scurta = sedinta_prea_scurta(
+            [t.text for t in turns if t.role == TurnRole.participant]
+        )
+        if prea_scurta:
+            summary_text = text_sedinta_prea_scurta()
+
+        if turns and not prea_scurta:
             history_lines = []
             for t in turns:
                 speaker = cod if t.role == TurnRole.participant else "Cody"
@@ -1375,7 +1387,7 @@ class PracticeSessionService:
         # de mai sus (cele patru axe) SI evaluarea structurala de aici, care da
         # scoruri pe competentele PROIECTULUI, mostrele „asa ai spus / asa ar fi
         # sunat" si recomandarile pentru trainer. A doua nu fusese portata.
-        if turns and not peste_plafon:
+        if turns and not peste_plafon and not prea_scurta:
             try:
                 from codrut.modules.practice.evaluator import (
                     PracticeEvaluator,
