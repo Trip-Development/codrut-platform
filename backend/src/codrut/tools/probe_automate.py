@@ -46,7 +46,6 @@ from codrut.modules.practice.prompts import (
     _numele_personajului,
     get_prompts_pe_meserii,
     get_system_prompt_for_kind,
-    scoate_semnatura_cody,
 )
 from codrut.modules.practice.service import DESCHIDE_SESIUNEA, SCENA_CELUILALT
 from codrut.tools.probe_metode_scoase import METODE_INTERZISE, METODE_NUMARATE
@@ -466,11 +465,8 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
         # Exact ca aplicatia (plicul 119, partea A): la pasul de pornire nu se cheama
         # evaluatorul — acolo omul doar a confirmat, n-are ce evalua.
         doua_apeluri = doua and mod == "roleplay" and pas.fel != "pornire"
-        # Exact ca aplicatia (plicul 135, partea B): pornirea o scrie tot actorul, cu promptul
-        # lui, intr-un singur apel — nu promptul de un apel, cu tot materialul lui Andrei.
-        pornire_la_actor = doua and mod == "roleplay" and pas.fel == "pornire"
         cerere_evaluator = None
-        if doua_apeluri or pornire_la_actor:
+        if doua_apeluri:
             prompt_actor, prompt_evaluator = get_prompts_pe_meserii(
                 name=COD_PARTICIPANT,
                 history_length=lungime,
@@ -478,7 +474,6 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
                 biblioteca_path=setari.biblioteca_path,
                 profil_rol=profil,
             )
-        if doua_apeluri:
             cerere_evaluator = GenerationRequest(
                 messages=tuple(mesaje_evaluator),
                 system_instruction=prompt_evaluator,
@@ -489,8 +484,7 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
             )
         cerere = GenerationRequest(
             messages=tuple(mesaje),
-            system_instruction=prompt_actor if doua_apeluri or pornire_la_actor
-            else get_system_prompt_for_kind(
+            system_instruction=prompt_actor if doua_apeluri else get_system_prompt_for_kind(
                 kind=mod,
                 name=COD_PARTICIPANT,
                 history_length=lungime,
@@ -525,8 +519,7 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
                 )
                 u, ue = rez.usage, rez_e.usage
                 text_actor = (rez.text or "").strip()
-                # Ca aplicatia (plicul 135, partea C): semnatura „— Cody" de la final se scoate.
-                text_eval = scoate_semnatura_cody((rez_e.text or "").strip())
+                text_eval = (rez_e.text or "").strip()
                 rand.update(
                     raspuns=f"{text_actor}\n\n***\n\n{text_eval}" if text_eval else text_actor,
                     text_actor=text_actor, text_evaluator=text_eval, apeluri=2,
@@ -563,18 +556,7 @@ async def o_sesiune(furnizor, setari, numarator, mod: str, nr: int, doua: bool =
                 GenerationMessage(role="user", text=text_pentru_evaluator)
             )
             scena_in_asteptare = ""
-        if pornire_la_actor:
-            # Ca aplicatia (plicul 135): scena pornirii e bucata actorului, iar evaluatorul o
-            # primeste la pasul urmator ca vorba celuilalt (plicul 118). Pana acum evaluatorul
-            # din unealta n-o primea deloc si credea, la pasul 3, ca scena n-a inceput (134).
-            rand["text_actor"] = (rand["raspuns"] or "").strip()
-            istoric.append(GenerationMessage(role="model", text=rand["text_actor"]))
-            scena_in_asteptare = rand["text_actor"]
-            # Evaluatorul n-are replica la pornire, deci „Da, hai." ar ramane orfana; aplicatia
-            # o inlocuieste cu replica urmatoare (plicurile 64-65), deci si unealta.
-            if istoric_evaluator and istoric_evaluator[-1].role == "user":
-                istoric_evaluator.pop()
-        elif doua_apeluri:
+        if doua_apeluri:
             # fiecare isi tine numai bucata lui; daca una lipseste, randul se sare
             if rand["text_actor"]:
                 istoric.append(GenerationMessage(role="model", text=rand["text_actor"]))

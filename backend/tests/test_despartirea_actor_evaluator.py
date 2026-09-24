@@ -65,12 +65,7 @@ def test_numele_omului_ajunge_la_amandoi() -> None:
 
 
 def test_materialul_nu_se_trimite_de_doua_ori() -> None:
-    """Fiecare felie merge la cel mult o meserie: nimic dublu în afară de regulile generale.
-
-    Până la plicul 135 cele două felii adunate dădeau tot materialul. De atunci PROFIL-ANDREI,
-    FILOZOFIE și FILOZOFIE-CONVERSATII nu pleacă nicăieri la role-play cu două apeluri (vezi
-    `test_vocea_la_cody.py`), deci suma e mai mică decât tot — dinadins.
-    """
+    """Fiecare felie merge la o singură meserie: nimic dublu în afară de regulile generale."""
     m_actor, _ = get_core_material(BIBLIOTECA, felie="actor")
     m_eval, _ = get_core_material(BIBLIOTECA, felie="evaluator")
     tot, _ = get_core_material(BIBLIOTECA)
@@ -78,8 +73,7 @@ def test_materialul_nu_se_trimite_de_doua_ori() -> None:
         return  # fără bibliotecă pe disc nu se poate măsura; restul testelor rămân valabile
     assert "TEORIA-TEMEI" not in m_actor
     assert "PROFIL-ANDREI" not in m_eval
-    assert "PROFIL-ANDREI" not in m_actor
-    assert len(m_actor) + len(m_eval) < len(tot)
+    assert len(m_actor) + len(m_eval) == len(tot)
 
 
 def test_promptul_cu_un_apel_ramane_ce_era() -> None:
