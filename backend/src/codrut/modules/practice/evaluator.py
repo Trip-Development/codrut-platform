@@ -52,9 +52,12 @@ SYSTEM_PROMPT = (
 # Poarta din aplicatia veche (rd. 143). Comentariul de acolo spune de ce si se
 # pastreaza: sub prag nu se salveaza scoruri, ca sa nu se poata aduna puncte din
 # sesiuni neserioase si ca sa nu apara scoruri false.
-# „Praguri stabilite empiric: ~3 schimburi user-Codrut + minim 400 caractere."
-MIN_MESSAGES = 6
-MIN_CHARS = 400
+#
+# Plicul 143: pragul se socoteste NUMAI pe ce a scris OMUL. Pana acum numara tot transcriptul,
+# cu replicile lui Cody, care sunt lungi si au paragrafe — deci trecea mereu. Masurat la 141:
+# „Da, hai." si „Ok." (11 semne scrise de om) au primit note pe 9 competente.
+MIN_MESSAGES = 3  # replici ale omului
+MIN_CHARS = 150  # semne scrise de om
 
 # Prefixul care desparte cele doua feluri de momente. Cele cu `[TRAINER]` sunt
 # notele pentru Andrei si NU ajung niciodata pe ecranul participantului.
@@ -126,6 +129,7 @@ class PracticeEvaluator:
         project_id: uuid.UUID | None,
         competencies: list[str],
         transcript: str,
+        replici_om: list[str],
         source_type: str = "session",
     ) -> dict:
         if not competencies:
@@ -135,8 +139,9 @@ class PracticeEvaluator:
             )
             return {"skipped": True, "reason": "no_competencies"}
 
-        mesaje = len([b for b in re.split(r"\n\n+", transcript) if b.strip()])
-        caractere = len(transcript)
+        scrise = [r.strip() for r in replici_om if (r or "").strip()]
+        mesaje = len(scrise)
+        caractere = sum(len(r) for r in scrise)
         if mesaje < MIN_MESSAGES or caractere < MIN_CHARS:
             logger.info(
                 "[EVALUATOR] Sesiune insuficienta: %s mesaje, %s caractere",
@@ -145,8 +150,8 @@ class PracticeEvaluator:
             return {
                 "insufficient": True,
                 "reason": (
-                    f"Sesiune prea scurtă ({mesaje} mesaje, {caractere} caractere). "
-                    f"Minim: {MIN_MESSAGES} mesaje și {MIN_CHARS} caractere."
+                    f"Sesiune prea scurtă ({mesaje} replici, {caractere} semne scrise de om). "
+                    f"Minim: {MIN_MESSAGES} replici și {MIN_CHARS} semne scrise de om."
                 ),
                 "scores": [],
                 "session_closing": INSUFFICIENT_CLOSING,

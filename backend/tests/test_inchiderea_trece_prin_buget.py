@@ -28,6 +28,7 @@ from codrut.modules.practice.models import (
     PracticeTurn,
     SessionKind,
     SessionState,
+    TurnRole,
 )
 from codrut.modules.practice.service import MOTIV_PESTE_PLAFON, PracticeSessionService
 from test_practice_session_flow import create_test_context
@@ -195,6 +196,7 @@ async def test_si_evaluarea_structurala_isi_ia_rezervarea() -> None:
             project_id=ctx["project"].id,
             competencies=["Ascultare activă"],
             transcript=build_transcript(replici, "Ion"),
+            replici_om=[t.text for t in replici if t.role == TurnRole.participant],
             source_type="roleplay",
         )
 

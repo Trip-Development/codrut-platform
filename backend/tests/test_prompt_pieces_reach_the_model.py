@@ -83,7 +83,7 @@ def test_memoria_ajunge_in_prompt_la_inceputul_sesiunii():
 
 def test_versiunea_promptului_a_urcat():
     """Compozitia s-a schimbat; fara urcare, sesiunile nu se mai pot compara."""
-    assert CODY_PROMPT_VERSION == "v3.9"
+    assert CODY_PROMPT_VERSION == "v3.11"
 
 
 def test_serviciul_chiar_trimite_cele_trei_piese():
@@ -829,19 +829,21 @@ def test_la_quiz_numele_e_in_prompt_si_in_mijlocul_conversatiei():
     prompt = get_system_prompt_for_kind(
         "knowledge", name="Andrei Vacaru", history_length=4, quiz_competency="mix"
     )
-    assert "pe om îl cheamă Andrei" in prompt
+    # de la plicul 143: numele (codul) e o eticheta, nu o forma de adresare
+    assert "sub codul „Andrei Vacaru”" in prompt
+    assert "INTERZIS să i te adresezi pe cod" in prompt
 
 
 def test_la_coaching_numele_e_in_prompt_si_in_mijlocul_conversatiei():
     prompt = get_system_prompt_for_kind("coaching", name="Andrei Vacaru", history_length=4)
-    assert "pe om îl cheamă Andrei" in prompt
+    assert "sub codul „Andrei Vacaru”" in prompt
 
 
 def test_la_role_play_numele_ramane_si_salutul_e_neschimbat():
     from codrut.modules.practice.prompts import formula_de_salut
 
     mijloc = get_system_prompt_for_kind("roleplay", name="Andrei Vacaru", history_length=4)
-    assert "pe om îl cheamă Andrei" in mijloc
+    assert "sub codul „Andrei Vacaru”" in mijloc
 
     # salutul: acelasi text, cuvant cu cuvant, ca inainte de plicul 76 — si acum fara nume,
     # de la plicul 128

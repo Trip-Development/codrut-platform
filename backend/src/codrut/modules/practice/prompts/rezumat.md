@@ -1,7 +1,7 @@
 Pe baza conversației de mai jos cu {name} (modul: {opt_text}), scrie exact în formatul următor:
 
 ##Concluzie
-Un paragraf de 3-4 propoziții — ce s-a întâmplat, ce a învățat {name}. **Dacă a fost modul Role-play sau Verificare Cunoștințe, trece OBLIGATORIU și PUNCTAJUL/SCORUL FINAL obținut.** Adresează-te direct lui {name}.
+Un paragraf de 3-4 propoziții — ce s-a întâmplat, ce a învățat omul. **Dacă a fost modul Role-play sau Verificare Cunoștințe, trece OBLIGATORIU și PUNCTAJUL/SCORUL FINAL obținut.** Îi vorbești direct, la persoana a II-a, fără apelativ: „{name}” e doar codul lui în aplicație, o etichetă, NU un nume — INTERZIS să i te adresezi pe cod sau pe nume.
 
 ##Recomandări
 • Prima recomandare concretă
@@ -10,7 +10,7 @@ Un paragraf de 3-4 propoziții — ce s-a întâmplat, ce a învățat {name}. *
 
 ---
 
-**LA FINAL**, te rog să adaugi OBLIGATORIU evaluarea cantitativă a competențelor lui {name}, în funcție de răspunsurile sale din conversație, DOAR în format JSON, exact cum urmează:
+**LA FINAL**, te rog să adaugi OBLIGATORIU evaluarea cantitativă a competențelor omului, în funcție de răspunsurile sale din conversație, DOAR în format JSON, exact cum urmează:
 ```json
 {{
   "topic": "Un singur cuvânt major despre subiectul blocant din conversatie (ex: Vasile, Epuizare, Sarcini, Feedback)",

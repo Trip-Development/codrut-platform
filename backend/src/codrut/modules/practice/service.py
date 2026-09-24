@@ -1400,6 +1400,8 @@ class PracticeSessionService:
                     project_id=proiect_id,
                     competencies=competente,
                     transcript=build_transcript(turns, cod),
+                    # pragul de sedinta scurta, numai pe ce a scris omul — plicul 143
+                    replici_om=[t.text for t in turns if t.role == TurnRole.participant],
                     source_type=session_obj.kind.value,
                 )
             except Exception as eval_err:

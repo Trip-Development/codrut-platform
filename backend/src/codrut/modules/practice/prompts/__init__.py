@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 # v2.1 (plicul 37): la role-play perechea actor+evaluare a fost pusa la loc, blocul de
 # quiz si memoria chiar ajung la model. Compozitia promptului s-a schimbat, deci
 # sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
-CODY_PROMPT_VERSION = "v3.9"
+# v3.11 — plicul 143 (codul ca eticheta, fara adresare), dupa 138 (codul in loc de nume) si 142
+# (fara functie). Sare peste v3.10, care a fost a candidatului 2 (vocea la Cody, scoasa la 137).
+CODY_PROMPT_VERSION = "v3.11"
 
 # Comanda care declanseaza pornirea, pusa ULTIMA in prompt — plicul 45.
 #
@@ -630,10 +632,17 @@ def _bucatile_comune(
     #
     # Randul spune CARE e numele, nu CAT DE DES sa-l zica: o forma impusa la fiecare replica
     # da recitare (plicul 59). Salutul ramane cum e.
-    if prenume:
+    #
+    # Plicul 143, hotararea lui Andrei: de la 138 spre model pleaca un COD (`Fox 34`), nu un
+    # nume, iar Cody ajunsese sa-i spuna omului „Falcon 48, in acest exercitiu…". Codul e o
+    # eticheta, nu un nume: apare numai pe ecran. Modelul il primeste ca eticheta, cu interdictia
+    # scrisa de a-l folosi ca forma de adresare.
+    if name:
         dyn_rules += (
-            f"\n- NUMELE OMULUI: pe om îl cheamă {prenume}. Când i te adresezi pe nume, "
-            f"folosești numele ăsta. INTERZIS „user”, „participant”, „[Nume]” sau alt nume."
+            f"\n- CODUL OMULUI: omul intră în aplicație sub codul „{name.strip()}”. Codul e o "
+            f"etichetă, NU un nume: INTERZIS să i te adresezi pe cod sau pe nume, INTERZIS "
+            f"„user”, „participant”, „[Nume]”. Îi vorbești direct, la persoana a II-a, fără "
+            f"apelativ."
         )
 
     reguli_generale = REGULI_GENERALE_TEMPLATE.replace("{dynamic_rules}", dyn_rules)

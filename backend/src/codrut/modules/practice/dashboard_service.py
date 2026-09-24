@@ -10,11 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from codrut.modules.companies.models import CompanyProject, ParticipantProfile
 from codrut.modules.identity.models import User
 from codrut.modules.identity.schemas import SessionPrincipal
-from codrut.modules.practice.competency_aliases import CANONICAL_COMPETENCIES, match_comp
+from codrut.modules.practice.competency_aliases import (
+    CANONICAL_COMPETENCIES,
+    _strip_accents,
+    match_comp,
+    normalize_competency_name,
+)
 from codrut.modules.practice.evaluator import TRAINER_PREFIX
 from codrut.modules.practice.models import (
     CompetencyScore,
     InsightMoment,
+    ProjectCompetency,
     SessionSample,
 )
 from codrut.modules.practice.scoring import (
@@ -35,9 +41,26 @@ NEEXERSAT_DESCRIERE = (
 )
 
 
+
+
+def _cheie(nume: str) -> str:
+    """Numele unei competente, normalizat: litere mici, fara diacritice si punctuatie, fara spatii
+    in plus — plicul 143. „rezolvarea  colaborativa" si „Rezolvarea colaborativă" sunt aceeasi."""
+    return _strip_accents(normalize_competency_name(nume or ""))
+
 class PracticeDashboardService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    async def _competentele_proiectului(self, project_id: uuid.UUID | None) -> list[str]:
+        """Competentele alese de trainer pe proiect, in ordinea lui — plicul 143."""
+        if project_id is None:
+            return []
+        return list((await self.session.execute(
+            select(ProjectCompetency.name)
+            .where(ProjectCompetency.project_id == project_id)
+            .order_by(ProjectCompetency.order_index, ProjectCompetency.name)
+        )).scalars().all())
 
     async def get_participant_dashboard_data(
         self,
@@ -142,21 +165,46 @@ class PracticeDashboardService:
             ]
             xp_today = compute_daily_xp(recent_entries)
 
-        # 6. Group scores by canonical competency (7 canonical competencies)
-        scores_by_comp: dict[str, list[ScoreEntry]] = {c: [] for c in CANONICAL_COMPETENCIES}
-        for s in all_scores:
-            matched_canonical = match_comp(s.competency_name)
-            if not matched_canonical:
-                continue
-            entry = ScoreEntry(
-                score=s.score,
-                created_at=s.created_at,
-                source_type=s.source_type,
-            )
-            scores_by_comp[matched_canonical].append(entry)
+        # 6. Notele, grupate pe competentele PROIECTULUI — plicul 143.
+        #
+        # Pana la 143 tabloul grupa pe o lista fixa de 7, din aplicatia veche („Reformulare
+        # activa", „Verificarea intelegerii"…), nu pe competentele alese de trainer. Masurat la
+        # 141: doua competente ale proiectului primeau note si nu apareau deloc, iar doua straine
+        # apareau. Acum lista e a proiectului, in ordinea trainerului; nota se potriveste dupa nume
+        # normalizat, iar aliasurile vechi raman numai a doua incercare, pentru notele din arhiva —
+        # si niciodata nu adauga o competenta care nu e a proiectului.
+        #
+        # Fara proiect sau fara competente alese: lista fixa de azi, ca sa nu se strice nimic.
+        competente = await self._competentele_proiectului(project_id)
+        if competente:
+            dupa_nume = {_cheie(n): n for n in competente}
+            scores_by_comp: dict[str, list[ScoreEntry]] = {c: [] for c in competente}
+            for s in all_scores:
+                nume = dupa_nume.get(_cheie(s.competency_name or ""))
+                if nume is None:
+                    canonic = match_comp(s.competency_name)
+                    nume = dupa_nume.get(_cheie(canonic)) if canonic else None
+                if nume is None:
+                    continue
+                scores_by_comp[nume].append(ScoreEntry(
+                    score=s.score, created_at=s.created_at, source_type=s.source_type,
+                ))
+        else:
+            competente = list(CANONICAL_COMPETENCIES)
+            scores_by_comp = {c: [] for c in CANONICAL_COMPETENCIES}
+            for s in all_scores:
+                matched_canonical = match_comp(s.competency_name)
+                if not matched_canonical:
+                    continue
+                entry = ScoreEntry(
+                    score=s.score,
+                    created_at=s.created_at,
+                    source_type=s.source_type,
+                )
+                scores_by_comp[matched_canonical].append(entry)
 
         competency_results = []
-        for name in CANONICAL_COMPETENCIES:
+        for name in competente:
             entries = scores_by_comp[name]
             ev = compute_competency_evidence(entries)
             competency_results.append({
