@@ -104,6 +104,18 @@ MEMORIE_PANA_LA_REPLICA = 2
 SCENA_CELUILALT = "[În scenă, celălalt personaj a spus:]"
 
 
+def _fara_despartitor(text: str | None) -> str:
+    """Bucata personajului, fara randurile care sunt doar „***" — plicul 152.
+
+    „***" e despartitorul APLICATIEI dintre personaj si evaluare. Cand personajul il scrie singur
+    (la pornire, intre descrierea scenei si prima replica: 7 din 10 porniri, pe proba, 25
+    septembrie), omul vede doua despartitoare, iar actorul se vede, data viitoare, scriindu-l.
+    Regula o pune aplicatia, nu o rugaminte catre model.
+    """
+    linii = [linie for linie in (text or "").splitlines() if linie.strip() != "***"]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(linii)).strip()
+
+
 # Motivul scris in baza cand plafonul de bani se atinge chiar la inchidere — plicul 129, E.3.
 #
 # Sedinta se inchide oricum, dar fara evaluare: altfel omul ar apasa butonul la nesfarsit si ar
@@ -1093,6 +1105,10 @@ class PracticeSessionService:
             # Ordinea o pune aplicatia acum, nu modelul: personajul intai, evaluarea dupa.
             # `***` e acelasi despartitor pe care il scrie azi un singur apel.
             text_final = result.text
+            doar_personajul = cerere_evaluator is not None or pornire_doar_actor
+            text_personaj = _fara_despartitor(result.text) if doar_personajul else None
+            if pornire_doar_actor:
+                text_final = text_personaj
             if cerere_evaluator is not None:
                 evaluarea = (
                     (rezultat_evaluator.text or "").strip()
@@ -1104,7 +1120,7 @@ class PracticeSessionService:
                     evaluarea = (
                         "_Evaluare nelivrată. Replica ta e salvată; nota vine data viitoare._"
                     )
-                text_final = f"{(result.text or '').strip()}\n\n***\n\n{evaluarea}"
+                text_final = f"{text_personaj}\n\n***\n\n{evaluarea}"
 
             actor_turn = PracticeTurn(
                 session_id=session_id,
@@ -1115,10 +1131,7 @@ class PracticeSessionService:
                 # singur apel raman nule, si atunci istoricul se face din `text`, ca pana acum.
                 # La pornire (plicul 152) bucata actorului se salveaza si ea: randul nu mai e
                 # „vechi", deci la replica urmatoare evaluatorul primeste scena ca vorba celuilalt.
-                text_actor=(
-                    (result.text or "").strip()
-                    if cerere_evaluator is not None or pornire_doar_actor else None
-                ),
+                text_actor=text_personaj,
                 text_evaluator=(
                     (rezultat_evaluator.text or "").strip()
                     if cerere_evaluator is not None and rezultat_evaluator is not None

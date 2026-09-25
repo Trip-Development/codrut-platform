@@ -33,6 +33,7 @@ SALUT = "Salut. Ești gata să începem un joc de rol?"
 SCENA = ("Context: Elena Marin, din echipa ta, a întârziat din nou raportul.\n\n"
          "Obiectivul tău: să îi dai feedback asertiv.\n\n"
          "Elena Marin: „Știu, știu, raportul. A fost o săptămână nebună.”")
+SCENA_CU_DESPARTITOR = SCENA.replace("\n\nElena Marin:", "\n\n***\n\nElena Marin:")
 # ce scria Google cu promptul COMBINAT (un singur apel): scena, despărțitorul și nota goală
 COMBINAT = f"{SCENA}\n\n***\n\n[🏆 Scor: -/10]"
 EVALUARE = "Ai numit concret comportamentul și efectul lui.\n\n[🏆 Scor: 7/10]"
@@ -51,8 +52,9 @@ class CaGoogle(LocalGenerationProvider):
             text = EVALUARE
         elif "PUNCTAJUL E OBLIGATORIU" in si:  # promptul combinat, cu regulile de evaluare
             text = COMBINAT
-        else:  # promptul actorului singur
-            text = SCENA
+        else:  # promptul actorului singur — cum a scris Google la 7 din 10 porniri (152-04):
+            # singur, cu „***" intre descrierea scenei si prima replica a personajului
+            text = SCENA_CU_DESPARTITOR
         return replace(rez, text=text)
 
 
