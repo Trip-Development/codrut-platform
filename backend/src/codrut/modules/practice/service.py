@@ -916,7 +916,17 @@ class PracticeSessionService:
             # scena se naste chiar atunci, in paralel) si doua in care a dat nota confirmarii.
             #
             # Hotaraste aplicatia, dupa numaratoarea pe care o stie deja, NU modelul si nu textul.
+            #
+            # Plicul 152: evaluatorul nu se cheama, dar ACTORUL raspunde cu promptul LUI, nu cu cel
+            # combinat. Pana acum pasul asta facea un singur apel cu promptul combinat: replica
+            # iesea in formatul vechi (scena, „***", „[🏆 Scor: -/10]") si se salva fara bucati, iar
+            # la replica urmatoare randul „vechi" ajungea intreg la AMBELE apeluri ca propriul lor
+            # trecut — actorul se vedea dand note, evaluatorul se vedea jucand scena. Masurat pe
+            # sedinta lui Andrei, 25 septembrie: doua reactii ale personajului si doua note la
+            # fiecare replica. Acum rezultatul e bucata actorului, salvata ca atare.
+            pornire_doar_actor = False
             if history_length == REPLICA_DE_CONFIRMARE:
+                pornire_doar_actor = doua_apeluri
                 doua_apeluri = False
             system_instruction = get_system_prompt_for_kind(
                 kind=session_obj.kind,
@@ -949,6 +959,24 @@ class PracticeSessionService:
             # Ordinea „intai personajul, apoi evaluarea" nu mai e o rugaminte catre model:
             # actorul nu primeste regulile de evaluare, evaluatorul nu primeste personajul.
             cerere_evaluator: GenerationRequest | None = None
+            if pornire_doar_actor:
+                # Pasul de pornire, cu doua apeluri pornite — plicul 152: numai actorul, cu
+                # promptul si istoricul LUI. Fara regulile de evaluare, n-are de unde scrie nota.
+                prompt_actor, _ = get_prompts_pe_meserii(
+                    name=cod,
+                    history_length=history_length,
+                    memories=memorii,
+                    biblioteca_path=self.settings.biblioteca_path,
+                    profil_rol=await self._profilul_de_rol(profile, session_obj.id),
+                )
+                request = GenerationRequest(
+                    messages=tuple(self._istoricul_unei_meserii(existing_turns, text, "actor")),
+                    system_instruction=prompt_actor,
+                    purpose=GenerationPurpose.actor,
+                    max_output_tokens=self.settings.vertex_max_output_tokens,
+                    temperature=0.7,
+                    thinking_budget=self.settings.thinking_budget_actor,
+                )
             if doua_apeluri:
                 # Fiecare apel isi vede NUMAI propriul trecut — plicul 117.
                 #
@@ -1085,7 +1113,12 @@ class PracticeSessionService:
                 text=text_final,
                 # Cele doua bucati, pentru istoricul de data viitoare — plicul 117. La un
                 # singur apel raman nule, si atunci istoricul se face din `text`, ca pana acum.
-                text_actor=(result.text or "").strip() if cerere_evaluator is not None else None,
+                # La pornire (plicul 152) bucata actorului se salveaza si ea: randul nu mai e
+                # „vechi", deci la replica urmatoare evaluatorul primeste scena ca vorba celuilalt.
+                text_actor=(
+                    (result.text or "").strip()
+                    if cerere_evaluator is not None or pornire_doar_actor else None
+                ),
                 text_evaluator=(
                     (rezultat_evaluator.text or "").strip()
                     if cerere_evaluator is not None and rezultat_evaluator is not None
