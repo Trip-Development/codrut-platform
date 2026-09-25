@@ -87,6 +87,39 @@ services:
       CODRUT_EMAIL_BREVO_API_KEY: ${CODRUT_EMAIL_BREVO_API_KEY:?Set CODRUT_EMAIL_BREVO_API_KEY to the production Brevo API key}
       CODRUT_EMAIL_WEBHOOK_TOKEN: ${CODRUT_EMAIL_WEBHOOK_TOKEN:?Set CODRUT_EMAIL_WEBHOOK_TOKEN to an independent bearer token for Brevo callbacks}
       CODRUT_PASSWORD_BREACH_CHECK_ENABLED: ${CODRUT_PASSWORD_BREACH_CHECK_ENABLED:-true}
+      # Cody pe productie — plicul 151, hotararea lui Andrei: „sa functioneze totul ok".
+      #
+      # Valorile corecte stau AICI, ca implicite, nu in `.env`: la fiecare urcare `_deploy-vps.yml`
+      # rescrie `.env` numai din secretele GitHub, iar acolo nu e nicio setare Cody. Cu `:?` in loc
+      # de `:-`, urcarea automata si validarea din CI ar pica. Fara randurile astea, aplicatia
+      # pornea tacut pe furnizorul `local` (texte false, fara Google) — plicul 146.
+      # Valorile sunt cele de pe proba, folosite si masurate acolo (plicurile 84–86, 112, 120, 96).
+      CODRUT_GENERATION_PROVIDER: ${CODRUT_GENERATION_PROVIDER:-vertex}
+      CODRUT_VERTEX_PROJECT_ID: ${CODRUT_VERTEX_PROJECT_ID:-codrut-cody}
+      CODRUT_VERTEX_REGION: ${CODRUT_VERTEX_REGION:-eu}
+      CODRUT_VERTEX_CREDENTIALS_PATH: /etc/codrut/cody-vertex.json
+      CODRUT_VERTEX_ACTOR_MODEL: ${CODRUT_VERTEX_ACTOR_MODEL:-gemini-3.1-flash-lite}
+      CODRUT_VERTEX_EVALUATOR_MODEL: ${CODRUT_VERTEX_EVALUATOR_MODEL:-gemini-3.8-flash}
+      CODRUT_PRACTICE_TWO_CALLS: ${CODRUT_PRACTICE_TWO_CALLS:-true}
+      CODRUT_VERTEX_TIMEOUT_SECONDS: ${CODRUT_VERTEX_TIMEOUT_SECONDS:-120}
+      # Setarea e citita FARA prefix (config.py, `AliasChoices("BIBLIOTECA_PATH", ...)`).
+      BIBLIOTECA_PATH: /app/BIBLIOTECA
+    # Cheia Google si materialul lui Cody, citire-numai. `create_host_path: false`: daca fisierul
+    # sau dosarul lipseste de pe server, pornirea se OPRESTE cu eroare, in loc sa faca un dosar gol
+    # si sa mearga fara cheie sau fara material. Deci se pun pe server INAINTE de urcare.
+    volumes:
+      - type: bind
+        source: /etc/codrut/cody-vertex.json
+        target: /etc/codrut/cody-vertex.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CODRUT_BIBLIOTECA_HOST_PATH:-/opt/codrut-platform/BIBLIOTECA}
+        target: /app/BIBLIOTECA
+        read_only: true
+        bind:
+          create_host_path: false
     labels:
       traefik.http.routers.codrut-api.rule: Host(`${CODRUT_HOST}`) && PathPrefix(`/api`)
       traefik.http.routers.codrut-api.entrypoints: websecure
