@@ -1,0 +1,18 @@
+# gitleaks — plicul 155, cererea chatului Aplicatiei (26 septembrie).
+#
+# Regulile implicite ale gitleaks raman TOATE (useDefault = true); nicio regula dezactivata.
+# Exceptie NUMAI pe doua cai, verificate una cate una, fara sa le tiparim valorile:
+#   · backend/tests/test_practice_transcribe.py — 4 `jwt_secret="test-…"`, valori de test;
+#   · infra/test/env.test.example — `CODRUT_SESSION_SECRET=GENEREAZA_SECRET_…`, text-inlocuitor.
+# Pe CAI, nu pe amprente de comit: caile supravietuiesc squash-ului catre prod, amprentele nu.
+# `gitleaks git` (security-secrets.yml, fara --config) ia singur fisierul asta din radacina.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Numai cele doua fisiere cu valori de test / text-inlocuitor (plicul 155)"
+paths = [
+  '''^backend/tests/test_practice_transcribe\.py$''',
+  '''^infra/test/env\.test\.example$''',
+]

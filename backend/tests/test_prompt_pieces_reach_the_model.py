@@ -6,12 +6,24 @@ in nicio suita, pentru ca fiecare piesa avea ramura ei si ramura nu se atingea.
 
 import inspect
 
+import pytest
+
 from codrut.modules.practice.prompts import (
     ACTOR_PROMPT,
     CODY_PROMPT_VERSION,
     EVALUARE_PROMPT,
     get_system_prompt_for_kind,
+    resolve_biblioteca_dir,
 )
+
+
+def _fara_material_sari() -> None:
+    """Testul cere materialul pe disc. Fara el, sare — cu motivul scris, nu picat si nu ascuns."""
+    if resolve_biblioteca_dir() is None:
+        pytest.skip(
+            "BIBLIOTECA (materialul lui Cody) nu e pe disc: in CI nu exista, nu e in depozit. "
+        "Pe productie o verifica verifica-cody-dupa-urcare.sh (miezul, 1812 fisiere). Plicul 155."
+        )
 
 
 def test_la_roleplay_evaluarea_merge_impreuna_cu_actorul():
@@ -659,6 +671,7 @@ CURS_DOI = "FEEDBACK LIKE A PRO"
 
 def test_cursurile_ajung_la_quiz():
     """Cele doua suporturi de curs si regula care spune de unde se iau intrebarile."""
+    _fara_material_sari()
     prompt = get_system_prompt_for_kind(
         "knowledge", name="Andrei", history_length=3, quiz_competency="mix"
     )
@@ -699,6 +712,7 @@ def test_prefixul_dinaintea_quizului_e_acelasi_ca_la_role_play():
     Verificat pe text, nu pe ochi: cursul se lipeste DUPA reguli_generale, tocmai ca
     partea dinainte sa ramana bit cu bit aceeasi si memoria de context sa se prinda pe ea.
     """
+    _fara_material_sari()
     quiz = get_system_prompt_for_kind(
         "knowledge", name="Andrei", history_length=3, quiz_competency="mix"
     )

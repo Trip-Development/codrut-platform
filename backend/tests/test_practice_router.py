@@ -375,7 +375,13 @@ async def test_trainer_direct_entry_succeeds_when_enabled():
 
 def test_cody_prompt_content_and_version():
     """Verify that prompts contain the exact SYSTEM_PROMPT_CORE without meta notes."""
-    from codrut.modules.practice.prompts import get_system_prompt_for_kind
+    from codrut.modules.practice.prompts import get_system_prompt_for_kind, resolve_biblioteca_dir
+    if resolve_biblioteca_dir() is None:
+        # textul „Ești Cody" vine din material; fara el testul n-are ce verifica — sare, cu motivul
+        pytest.skip(
+            "BIBLIOTECA (materialul lui Cody) nu e pe disc: in CI nu exista, nu e in depozit. "
+        "Pe productie o verifica verifica-cody-dupa-urcare.sh (miezul, 1812 fisiere). Plicul 155."
+        )
     assert CODY_PROMPT_VERSION == "v3.11"
     roleplay_prompt = get_system_prompt_for_kind("roleplay")
     # Plicul 43: numele a fost inlocuit peste tot, 169 de aparitii. Textul e al lui
