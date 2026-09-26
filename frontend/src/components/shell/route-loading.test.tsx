@@ -58,6 +58,40 @@ describe("route loading", () => {
     },
   );
 
+  it("nu arata exersarea cat timp nu se stie tipul proiectului", () => {
+    // Ecranul „Pregatim spatiul participant" apare inaintea datelor, deci de multe ori
+    // fara tipul proiectului.
+    //
+    // Pana la plicul 33 se punea cu mana meniul de coaching, iar omul de la training vedea
+    // „Chestionare" si „Rezultate" la fiecare intrare; atunci s-a intors spre meniul de
+    // training, si era bine — el era pe atunci o SUBMULTIME a celuilalt.
+    //
+    // De la plicul 113 nu mai e: are „Tablou Competente" si „Exerseaza (Cody)". Deci de la
+    // plicul 116 alegerea s-a intors inapoi, cu ochii deschisi: un om din afara trainingului
+    // NU are voie sa vada tabul Cody, nici macar o clipa. Pretul, scris ca sa se stie:
+    // omul de la training vede pentru o clipa „Chestionare" si „Rezultate" — ecrane pe care
+    // le are oricum inchise pe server.
+    render(<ParticipantRouteLoading title="Acasă" activeHref="/participant" kind="home" />);
+
+    expect(screen.queryByRole("link", { name: "Exersează (Cody)" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Tablou Competențe" })).toBeNull();
+    expect(screen.getAllByRole("link", { name: "Chestionare" }).length).toBeGreaterThan(0);
+  });
+
+  it("pastreaza meniul de coaching la un proiect care nu e de training", () => {
+    render(
+      <ParticipantRouteLoading
+        title="Rezultate"
+        activeHref="/participant/results"
+        kind="results"
+        projectType="coaching_echipa"
+      />,
+    );
+
+    expect(screen.getAllByRole("link", { name: "Chestionare" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Rezultate" }).length).toBeGreaterThan(0);
+  });
+
   it("renders reusable company, project, and tab skeleton frames", () => {
     const { container, rerender } = render(<TabBarSkeleton count={3} />);
     expect(screen.getByRole("navigation", { name: "Pregătim navigarea" }).children[0].children).toHaveLength(3);

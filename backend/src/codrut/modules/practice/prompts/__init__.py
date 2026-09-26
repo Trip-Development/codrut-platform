@@ -1,0 +1,772 @@
+from __future__ import annotations
+
+import logging
+import os
+from pathlib import Path
+from typing import Any
+
+from codrut.modules.practice.models import SessionKind
+
+logger = logging.getLogger(__name__)
+
+# v2.1 (plicul 37): la role-play perechea actor+evaluare a fost pusa la loc, blocul de
+# quiz si memoria chiar ajung la model. Compozitia promptului s-a schimbat, deci
+# sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
+# v3.11 — plicul 143 (codul ca eticheta, fara adresare), dupa 138 (codul in loc de nume) si 142
+# (fara functie). Sare peste v3.10, care a fost a candidatului 2 (vocea la Cody, scoasa la 137).
+CODY_PROMPT_VERSION = "v3.11"
+
+# Comanda care declanseaza pornirea, pusa ULTIMA in prompt — plicul 45.
+#
+# Regula din `actor.md` sta la coada unui prompt de ~125.000 de octeti, dupa o suta de
+# kiloocteti de material despre conversatii de coaching. Opt randuri nu bat o suta de
+# kiloocteti, si de aceea intrarea in rol era la voia intamplarii: 2 din 6.
+#
+# Ce e scris ultimul cantareste cel mai mult. Nu ne certam cu modelul, ii structuram tura:
+# omul a confirmat, deci momentul nu mai e de judecat, e de executat.
+COMANDA_DE_PORNIRE = {
+    "roleplay": (
+        "\n\n---\n"
+        "ACUM: următorul tău mesaj începe cu SETUP-ul. Nicio întrebare de explorare, "
+        "nicio frază de tranziție. Descrii contextul, spui obiectivul participantului, "
+        "intri în rol."
+    ),
+    "knowledge": (
+        "\n\n---\n"
+        "ACUM: următorul tău mesaj e „Întrebarea 1/10:\", cu cele patru variante. "
+        "Nicio întrebare de explorare, nicio frază de tranziție."
+    ),
+}
+
+# Cine e celalalt personaj din scena — plicul 47.
+#
+# Datele exista deja in platforma: `ParticipantProfile.role_group` e normalizat in doua
+# galeti (`leadership` / `member`) de `_normalize_role_group` din companies/service.py,
+# iar `position` e functia scrisa de trainer la import.
+#
+# Textul asta se lipeste de COMANDA_DE_PORNIRE, deci sta ULTIMUL in prompt — acolo unde
+# masuratoarea din plicul 45 a aratat ca instructiunea chiar se executa.
+DIRECTII_SCENA = {
+    "jos": (
+        "Celălalt personaj e un om DIN ECHIPA participantului, cineva pe care el îl "
+        "conduce."
+    ),
+    "lateral": (
+        "Celălalt personaj e un COLEG de același nivel — nimeni nu e șeful nimănui în "
+        "scena asta."
+    ),
+    "sus": (
+        "Celălalt personaj e ȘEFUL participantului. Participantul e cel care are ceva "
+        "de spus în sus."
+    ),
+    "client": (
+        "Celălalt personaj e un CLIENT sau un partener din afara companiei."
+    ),
+}
+
+# Ordinea in care se rotesc. Cine nu conduce oameni nu primeste niciodata „jos".
+ROTATIE_CONDUCE = ("jos", "lateral", "sus", "client")
+ROTATIE_NU_CONDUCE = ("lateral", "sus", "client")
+
+# Numele personajului se alege in cod — plicul 68.
+#
+# Doua masuratori, pe sesiunile lui Andrei din 12 septembrie:
+#   · „domnul Popescu" a aparut de PATRU ori — Andrei: „sa mai variem si noi personajele"
+#   · intr-un scenariu, personajul a fost semnat „Andrei (eu, colega ta)", adica exact
+#     numele participantului, desi setup-ul spunea ca o cheama Elena. Regula impotriva
+#     exista deja in reguli-generale.md si NU s-a tinut.
+#
+# Deci nu-i mai cerem sa aleaga si nu ne mai bazam pe o interdictie. Alegem noi, dupa
+# acelasi numarator care tine rotatia scenei, si ii dam UN nume. Lista are 12 intrari iar
+# rotatia scenei are 3 sau 4 — numerele nu se divid, deci perechea nume-directie nu se
+# repeta la fiecare tura.
+#
+# Popescu lipseste dinadins: modelul se intoarce singur la el.
+NUME_PERSONAJ = (
+    "Elena Marin",
+    "Tudor Crețu",
+    "Ioana Barbu",
+    "Mihai Șerban",
+    "Carmen Dobre",
+    "Alex Pîrvu",
+    "Raluca Neagu",
+    "Sorin Moraru",
+    "Diana Ilie",
+    "Vlad Constantin",
+    "Simona Rusu",
+    "Cătălin Lungu",
+)
+
+
+def _numele_personajului(n: int, prenume: str) -> str:
+    """Un nume pentru personaj, diferit de al participantului."""
+    curat = (prenume or "").strip().lower()
+    # Numele interzis iese din lista, apoi se roteste pe ce ramane — plicul 97. Pana acum se
+    # sarea la urmatorul, iar sesiunea de dupa ajungea la acelasi urmator: pe Mihai il juca de
+    # doua ori la rand Carmen Dobre. Interdictia de la plicul 48 ramane aceeasi.
+    lista = [x for x in NUME_PERSONAJ if x.split(" ")[0].lower() != curat] or list(NUME_PERSONAJ)
+    return lista[n % len(lista)]
+
+
+def bloc_de_distributie(profil_rol: dict[str, Any] | None, prenume: str = "") -> str:
+    """Spune modelului cine e celalalt din scena, si ii interzice sa mute omul din
+    pozitia lui reala.
+
+    Fara profil — la o proba tehnica, sau daca trainerul n-a completat nimic — se merge
+    pe rotatia celui care NU conduce oameni. E alegerea sigura: un om care conduce si
+    primeste o scena cu un coleg pierde putin, un om care nu conduce si e pus „manager
+    de echipa" joaca o minciuna.
+    """
+    if not profil_rol:
+        profil_rol = {}
+    conduce = bool(profil_rol.get("conduce_oameni"))
+    rotatie = ROTATIE_CONDUCE if conduce else ROTATIE_NU_CONDUCE
+    n = int(profil_rol.get("nr_roleplay_anterioare") or 0)
+    directie = rotatie[n % len(rotatie)]
+
+    # Functia omului NU mai intra aici — plicul 142, hotararea lui Andrei din 23 septembrie: spre
+    # Google pleaca numai daca omul conduce oameni sau nu. Scrisa intreg, la 19 oameni, functia
+    # poate spune cine e omul. (Intra de la plicul 47.)
+    interdictia = (
+        ""
+        if conduce
+        else " INTERZIS să-l pui pe participant în poziție de manager sau de șef de "
+        "echipă — nu conduce pe nimeni."
+    )
+    nume = _numele_personajului(n, prenume)
+    return (
+        f"\nDISTRIBUȚIA SCENEI: {DIRECTII_SCENA[directie]}"
+        f"{interdictia} Competența exersată rămâne aceeași; se schimbă doar cu cine."
+        f"\nPERSONAJUL SE NUMEȘTE {nume}. Ăsta e numele lui în tot scenariul — în setup, "
+        f"în etichetele replicilor și în dialog. Nu-i da alt nume și nu inventa altul."
+    )
+
+
+# Salutul se alege in cod — plicul 54.
+#
+# Plicul 53 a dat modelului o lista si i-a cerut sa se uite in istoric ca sa nu repete.
+# La primul mesaj al unei sesiuni noi istoricul e GOL, deci n-are la ce sa se uite, si
+# ia primul element din lista: sase din opt sesiuni au inceput identic.
+#
+# Deci nu-i mai cerem sa aleaga. Alegem noi, dupa a cata sesiune e omul — acelasi
+# numarator care tine rotatia scenei la 8 din 8. Ultima e goala dinadins: un salut sec
+# e bun din cand in cand, asa vorbesc oamenii.
+# Cele trei intrebari cu care incepe STRATEGIA, dupa salut — plicul 128, partea C.
+#
+# Cuvant cu cuvant ale lui Andrei, 22 septembrie. Schimba hotararea lui din 31 august, cand
+# strategia incepea cu „Cum iti merge ziua pana acum?". Se rotesc dupa cate sedinte are omul in
+# urma, la fel cum se roteau vorbele de salut inainte de plicul asta.
+INTREBARI_DE_STRATEGIE = (
+    "Pentru ce situație vrei să facem o strategie azi?",
+    "Ce situație ai pe masă, pentru care vrei să pregătim o strategie?",
+    "Spune-mi situația pe care vrei s-o pregătim împreună.",
+)
+
+
+def intrebarea_de_strategie(profil_rol: dict[str, Any] | None) -> str:
+    n = int((profil_rol or {}).get("nr_sesiuni_anterioare") or 0)
+    return INTREBARI_DE_STRATEGIE[n % len(INTREBARI_DE_STRATEGIE)]
+
+
+def formula_de_salut() -> str:
+    """Salutul: `Salut.` si atat — plicul 128, partea A.
+
+    Andrei, 22 septembrie, dupa prima lui proba pe server: „Cand incep conversatia, imi spune:
+    Salut user. Refa sa spuna doar salut."
+
+    Pana azi formula cerea `Salut, {prenume}.` plus o vorba dintr-o lista de sapte. Numele venea
+    din profil, iar pe contul lui de proba profilul se cheama „user 1" — deci prenumele era
+    „user". Numele nu era gresit citit: era gresit ARATAT. Un salut nu e locul lui.
+
+    Nu mai primeste nimic: nici numele, nici numarul de sedinte. De aceea nici nu mai are
+    parametri — nu se poate gresi ce nu se poate trimite.
+
+    Regula cu numele de la plicul 76 (`- NUMELE OMULUI`) ramane neatinsa: acolo numele e un fapt
+    pe care Cody il poate folosi la nevoie, nu o formula pe care e obligat s-o scrie.
+    """
+    return (
+        '\n- SALUTUL: mesajul tău începe cu exact aceste cuvinte, copiate ca atare: '
+        'Salut. Apoi vine direct întrebarea, nimic între. INTERZIS să pui vreun nume în salut '
+        'și INTERZIS să lași un loc gol de tipul „[Nume]".'
+    )
+
+# Replica la care omul raspunde intrebarii de pornire. Salutul se genereaza la
+# `history_length` 0; primul mesaj al omului aduce numaratoarea la 2.
+REPLICA_DE_CONFIRMARE = 2
+
+_PROMPTS_DIR = Path(__file__).parent
+
+REGULI_GENERALE_TEMPLATE = (_PROMPTS_DIR / "reguli-generale.md").read_text(encoding="utf-8").strip()
+# Doar la coaching. Cele doua reguli de aici — contextul si regula de aur — lucreaza
+# impotriva celorlalte doua moduri: la role-play il fac sa intrebe ce situatie vrea, desi
+# `actor.md` interzice exact asta, iar la quiz ii interzic sa dea raspunsul corect, care
+# e chiar ce trebuie sa faca acolo.
+REGULI_COACHING_PROMPT = (_PROMPTS_DIR / "reguli-coaching.md").read_text(encoding="utf-8").strip()
+ACTOR_PROMPT = (_PROMPTS_DIR / "actor.md").read_text(encoding="utf-8").strip()
+EVALUARE_PROMPT = (_PROMPTS_DIR / "evaluare.md").read_text(encoding="utf-8").strip()
+
+# Promptul ACTORULUI la doua apeluri — plicul 119, partea B.
+#
+# `actor.md` incepe, din lumea dinainte de despartire, cu: „Esti simultan actor si
+# Cody-ca-profesor." Cand evaluarea o face alt apel, randul ala nu mai e adevarat — si actorul
+# facea exact ce i se cerea: la plicul 118 a iesit din rol la 10 pasi din 40, iar la o sedinta
+# la TOTI cei patru pasi de joc.
+#
+# Se schimba NUMAI primele doua randuri, si NUMAI pe drumul cu doua apeluri. `ACTOR_PROMPT`
+# ramane neatins, caracter cu caracter, fiindca pe el se sprijina drumul cu un singur apel —
+# aparat de un lacat propriu (`test_promptul_de_la_un_apel_nu_se_atinge.py`).
+_ACTOR_CAP_VECHI = (
+    "MODUL ROLE-PLAY — PROTOCOL STRICT:\n"
+    "Ești simultan actor și Cody-ca-profesor. Cele două roluri sunt complet separate "
+    "și nu se amestecă niciodată."
+)
+_ACTOR_CAP_NOU = (
+    "MODUL ROLE-PLAY — PROTOCOL STRICT:\n"
+    "Ești personajul din scenă, atât. NU ești Cody-ca-profesor: evaluarea o scrie altcineva, "
+    "în altă parte, și nu e treaba ta. NU IEȘI DIN ROL NICIODATĂ — nu comentezi, nu dai lecții, "
+    "nu spui „ies din rol” sau „pauză de rol”, și nu scrii niciodată „***”."
+)
+ACTOR_PROMPT_DOUA_APELURI = ACTOR_PROMPT.replace(_ACTOR_CAP_VECHI, _ACTOR_CAP_NOU, 1)
+
+COACHING_PROMPT = (_PROMPTS_DIR / "coaching.md").read_text(encoding="utf-8").strip()
+QUIZ_PROMPT = (_PROMPTS_DIR / "quiz.md").read_text(encoding="utf-8").strip()
+REZUMAT_TEMPLATE = (_PROMPTS_DIR / "rezumat.md").read_text(encoding="utf-8").strip()
+
+CORE_SLOTS = [
+    # Cine e Codrut. Astea patru au fost singurele pana la plicul 38.
+    ("PROFIL-ANDREI", ["codrut-profil-v2.md", "codrut-profil-mod-de-lucru-v3-0.md"]),
+    ("FILOZOFIE", ["codrut-filozofie-v2.md"]),
+    ("TON-SI-COMPORTAMENT", ["ton-si-comportament.md"]),
+    # Cum SUNA Andrei, nu cum e descris ca suna. Pasaje verbatim din reel-urile lui,
+    # alese pentru ritm. Lista de expresii caracteristice era singura mostra de vorbire
+    # din tot promptul; asta o completeaza.
+    ("MOSTRE-DE-VOCE", ["mostre-de-voce.md"]),
+    # Gandirea lui, in cuvintele lui: cele 92 de replici ale lui Andrei din conversatia
+    # de filozofie din 11 martie, traduse si curatate de artefactele dictarii.
+    #
+    # A fost scos la plicul 44 ca proba, banuit ca strica role-play-ul. NU el era
+    # vinovatul: fara el, tot 2 din 6. Cauza era locul instructiunii, nu materialul, si
+    # s-a reparat la plicul 45 — comanda de pornire pusa ULTIMA in prompt.
+    ("FILOZOFIE-CONVERSATII", ["conversatii-filozofie-ANDREI-ro.md"]),
+    ("REGULI-COMPORTAMENT", ["reguli-comportament.md"]),
+    # Ce preda Andrei. Statea in acelasi dosar si nu intra niciodata in prompt, deci
+    # Codrut stia cine e, dar nu si cursul pe care il tine.
+    #
+    # Slotul vine ULTIMUL dinadins: prefixul constant ramane neschimbat, ca memoria de
+    # context sa se prinda pe el.
+    #
+    # Deliberat NU intra restul teoriei (cum-primesti-feedback,
+    # cum-imi-controlez-reactiile, cum-gestionam-teama-in-comunicare,
+    # cum-transmit-informatia) si niciunul din cele 41 de fisiere reel-*.md: cu tot,
+    # promptul ar sari de la 87 KB la 159 KB, adica de doua ori cat aplicatia veche.
+    # 35 KB e proportia din vechi.
+    ("TEORIA-TEMEI", [
+        "codrut-comunicare-asertiva-v1-0.md",
+        "feedback-theory-partea-1.md",
+        "feedback-theory-part-2.md",
+        "cum-spui-nu.md",
+    ]),
+]
+
+# Cursurile lui Andrei, pentru QUIZ SI NUMAI PENTRU QUIZ — plicul 67.
+#
+# Alese de Andrei pe 12 septembrie: „intra cursul de asertivitate si cursul de feedback".
+# Sunt suporturile lui de curs, convertite din PDF in biblioteca:
+#   · CURS COMUNICARE ASERTIVA TRIP DEVELOPMENT — 6.763 cuvinte, 65.539 octeti
+#   · FEEDBACK LIKE A PRO, trainer Andrei Vacaru — 2.853 cuvinte, 28.041 octeti
+#
+# NU intra in role-play si nici in coaching: acolo promptul e masurat si reglat pe sase
+# sesiuni, iar 93 KB in plus la fiecare replica nu ajuta cu nimic si strica prefixul
+# constant pe care se prinde memoria de context.
+#
+# Caile sunt relative la PARINTELE lui 00-miez, nu la 00-miez.
+CURSURILE_TEMEI = [
+    ("CURS-COMUNICARE-ASERTIVA", "02-asertivitate/curs-comunicare-asertiva-trip-development.md"),
+    ("CURS-FEEDBACK", "03-feedback/feedback-training-1-zi.md"),
+]
+
+_CURS_CACHE: dict[str, tuple[str, int]] = {}
+
+_MATERIAL_CACHE: dict[str, tuple[str, int]] = {}
+
+
+def resolve_biblioteca_dir(configured_path: str = "") -> Path | None:
+    candidates: list[Path] = []
+    if configured_path:
+        candidates.append(Path(configured_path))
+    env_p = os.environ.get("BIBLIOTECA_PATH")
+    if env_p:
+        candidates.append(Path(env_p))
+    candidates.extend([
+        Path("/opt/codrut-platform/BIBLIOTECA"),
+        Path("/opt/cody-test/BIBLIOTECA"),
+        Path("/app/BIBLIOTECA"),
+        Path.cwd() / "BIBLIOTECA",
+        Path.cwd().parent / "BIBLIOTECA",
+    ])
+    for parent in _PROMPTS_DIR.parents:
+        candidates.append(parent / "BIBLIOTECA")
+
+    for c in candidates:
+        miez = c / "02-pachete" / "comunicare-asertiva-si-feedback" / "00-miez"
+        if miez.exists() and miez.is_dir():
+            return miez
+    return None
+
+
+# Care felie a materialului tine de care meserie — plicul 112.
+#
+# Actorul joaca un personaj si trebuie sa sune ca Cody: profilul, filozofia, tonul, mostrele de
+# voce, conversatiile si regulile de comportament. Evaluatorul judeca o replica: ii trebuie
+# teoria temei. Impartirea nu dubleaza nimic: 105.213 caractere la actor, 32.378 la evaluator,
+# exact cele 137.591 care se trimiteau intr-un singur apel.
+#
+# Ce n-a fost limpede a ramas la ACTOR, cum cere plicul: `REGULI-COMPORTAMENT` — sunt reguli de
+# purtare (actorul), dar sectiunea 12A e si locul unde Sandwich e dat ca exemplu (evaluatorul).
+FELII = {
+    "actor": (
+        "PROFIL-ANDREI", "FILOZOFIE", "TON-SI-COMPORTAMENT", "MOSTRE-DE-VOCE",
+        "FILOZOFIE-CONVERSATII", "REGULI-COMPORTAMENT",
+    ),
+    "evaluator": ("TEORIA-TEMEI",),
+}
+
+
+def get_core_material(biblioteca_path: str = "", felie: str | None = None) -> tuple[str, int]:
+    cache_key = f"{biblioteca_path or 'default'}|{felie or 'tot'}"
+    if cache_key in _MATERIAL_CACHE:
+        return _MATERIAL_CACHE[cache_key]
+
+    miez_dir = resolve_biblioteca_dir(biblioteca_path)
+    if not miez_dir:
+        logger.warning("Folderul BIBLIOTECA 00-miez nu a fost gasit.")
+        return "", 0
+
+    cerute = FELII.get(felie) if felie else None
+    sections: list[str] = []
+    for label, fnames in CORE_SLOTS:
+        if cerute is not None and label not in cerute:
+            continue
+        parts: list[str] = []
+        for fn in fnames:
+            fp = miez_dir / fn
+            if fp.exists():
+                parts.append(fp.read_text(encoding="utf-8").strip())
+            else:
+                logger.warning(f"Fisierul {fn} lipseste din {miez_dir}")
+        full_content = "\n\n".join(parts)
+        if full_content:
+            sections.append(f"\n\n--- {label} ---\n{full_content}")
+
+    combined = "".join(sections)
+    byte_count = len(combined.encode("utf-8"))
+    _MATERIAL_CACHE[cache_key] = (combined, byte_count)
+    return combined, byte_count
+
+
+def get_material_de_curs(biblioteca_path: str = "") -> tuple[str, int]:
+    """Suporturile de curs ale lui Andrei. Se folosesc DOAR la quiz — plicul 67."""
+    cache_key = biblioteca_path or "default"
+    if cache_key in _CURS_CACHE:
+        return _CURS_CACHE[cache_key]
+
+    miez_dir = resolve_biblioteca_dir(biblioteca_path)
+    if not miez_dir:
+        logger.warning("Folderul BIBLIOTECA nu a fost gasit — quizul ramane fara curs.")
+        return "", 0
+
+    pachet_dir = miez_dir.parent
+    sections: list[str] = []
+    for label, rel in CURSURILE_TEMEI:
+        fp = pachet_dir / rel
+        if fp.exists():
+            sections.append(f"\n\n--- {label} ---\n{fp.read_text(encoding='utf-8').strip()}")
+        else:
+            logger.warning(f"Cursul {rel} lipseste din {pachet_dir}")
+
+    combined = "".join(sections)
+    byte_count = len(combined.encode("utf-8"))
+    _CURS_CACHE[cache_key] = (combined, byte_count)
+    return combined, byte_count
+
+
+def build_quiz_block(
+    quiz_competency: str = "mix",
+    is_first: bool = True,
+    project_competencies: list[str] | None = None,
+) -> str:
+    is_mix = quiz_competency == "mix"
+    # Zece, mereu — decizia lui Andrei, 31 august: „ca sa poti mereu sa numeri multiplu
+    # de zece puncte la finalul quiz-ului", deci scorul se citeste direct in procente.
+    # Erau 7 la mix si 5 altfel, copiate din aplicatia veche.
+    nr = 10
+    comps = (
+        ", ".join(project_competencies) if project_competencies
+        else "toate competentele de comunicare"
+    )
+    target = f"toate competențele: {comps}" if is_mix else f'competența "{quiz_competency}"'
+
+    if is_first:
+        return (
+            f"\n\n---\nMOD QUIZ ACTIV — {('Mix complet' if is_mix else quiz_competency)}\n\n"
+            f"REGULI ABSOLUTE:\n"
+            f"1. NUMĂR FIX: Generezi EXACT {nr} întrebări numerotate 1-{nr}. "
+            f"La a {nr}-a întrebare, "
+            f"după răspuns, afișezi scorul și te oprești.\n"
+            f'2. FORMAT: "Întrebarea N/{nr}: [întrebare]\\nA. ...\\nB. ...\\nC. ...\\nD. ..."\n'
+            f"3. DISTRIBUȚIE VARIANTE CORECTE: Distribuie răspunsurile corecte între A, B, C, D. "
+            f"Max 2 la aceeași literă.\n"
+            f'4. DUPĂ FIECARE RĂSPUNS: corect/greșit + 1 frază explicație. '
+            f'Apoi IMEDIAT "Întrebarea [N+1]/{nr}:".\n'
+            f"5. DUPĂ PRIMUL SCHIMB DE REPLICI (small talk): anunți scurt și începi — "
+            f"„Hai să vedem ce-ai reținut.” Nu aștepți răspuns, nu întrebi ce vrea să "
+            f'lucreze. Treci DIRECT la "Întrebarea 1/{nr}:", în aceeași replică.\n'
+            f'6. SCOR FINAL: "🏆 Scor final: X/{nr} (Y%)"\n'
+            f"7. INTERZIS: coaching, întrebări deschise, ieșire din quiz.\n"
+            f"8. DE UNDE IEI ÎNTREBĂRILE — regula cea mai importantă: EXCLUSIV din cele "
+            f"două cursuri de mai sus (CURS-COMUNICARE-ASERTIVA și CURS-FEEDBACK). Fiecare "
+            f"întrebare verifică ceva ce SCRIE ACOLO. Dacă un răspuns nu se poate găsi în "
+            f"cursuri, întrebarea nu e bună.\n"
+            f"9. AMESTEC: aproximativ jumătate întrebări punctuale din curs (o regulă, un "
+            f"pas, o distincție, o greșeală tipică) și jumătate întrebări care pornesc de la "
+            f"o SITUAȚIE DE LA LOCUL DE MUNCĂ, descrisă în două rânduri, și întreabă ce e de "
+            f"făcut sau de spus. Variantele A-D sunt lucruri pe care un om chiar le-ar zice "
+            f"sau le-ar face.\n"
+            f"10. INTERZIS SĂ ÎNTREBI DESPRE TINE, DESPRE ANDREI SAU DESPRE METODA TA. "
+            f"Nicio întrebare nu conține „Cody”, „Andrei”, „filozofia lui”, „abordarea ta”. "
+            f"Omul e verificat pe materia de la curs, nu pe cum ești tu construit.\n"
+            f"11. LIMBAJUL E AL OMULUI, NU AL MANUALULUI DE CONSTRUCȚIE. INTERZIS: "
+            f"„deconstrucție”, „narativ”, „trade-off”, „PCM”, „stare de Adult”. Termenii din "
+            f"curs (asertiv, pasiv, agresiv, EEC și ceilalți) se folosesc, fiindcă omul i-a "
+            f"învățat acolo — dar explicați în cuvinte simple, nu presupuși.\n"
+            f"Tema: {target}.\n---"
+        )
+    return (
+        f"\n\n---\n⚠️ MOD QUIZ ACTIV\n"
+        f"COMPETENȚĂ: {target}\n"
+        f"NR TOTAL: {nr}\n"
+        f'După răspuns: "✓/✗ + explicație" → "[🏆 Scor: X pct]" → "Întrebarea [N+1]/{nr}:"\n'
+        f"ÎNTREBĂRILE IES EXCLUSIV DIN CELE DOUĂ CURSURI, amestecat: punctuale din curs și "
+        f"situații de la locul de muncă. INTERZIS întrebări despre Cody, despre Andrei sau "
+        f"despre metodă; interzis jargonul de manual.\n"
+        f"INTERZIS: coaching, fraze de tranziție, ieșire din quiz.\n---"
+    )
+
+
+def format_participant_memory(memories: list[dict[str, Any]]) -> str:
+    if not memories:
+        return ""
+    blocks: list[str] = []
+    for idx, m in enumerate(memories):
+        date_str = m.get("created_at", "")
+        if isinstance(date_str, str) and len(date_str) >= 10:
+            date_str = date_str[:10]
+        else:
+            date_str = "?"
+        relevance = m.get("relevance_score", 100)
+        comps = m.get("relevant_competencies", [])
+        comps_str = f", competente: {', '.join(comps)}" if comps else ""
+
+        ctx = m.get("personal_context") or {}
+        ctx_lines: list[str] = []
+        if ctx.get("role"):
+            ctx_lines.append(f"  Rol: {ctx['role']}")
+        if ctx.get("team_size"):
+            ctx_lines.append(f"  Echipa: {ctx['team_size']}")
+        if ctx.get("current_situation"):
+            ctx_lines.append(f"  Situatie curenta: {ctx['current_situation']}")
+
+        evo = m.get("evolution_signals") or {}
+        evo_lines: list[str] = []
+        if evo.get("progress"):
+            evo_lines.append(f"  Progres: {'; '.join(evo['progress'])}")
+        if evo.get("blockers"):
+            evo_lines.append(f"  Blocaje: {'; '.join(evo['blockers'])}")
+        if evo.get("recurring_patterns"):
+            evo_lines.append(f"  Patternuri: {'; '.join(evo['recurring_patterns'])}")
+
+        quotes = m.get("key_quotes") or []
+        if quotes:
+            formatted_quotes = [f'"{q}"' for q in quotes]
+            quotes_text = f"  Citate: {' | '.join(formatted_quotes)}"
+        else:
+            quotes_text = ""
+
+        block = (
+            f"Sesiune {idx + 1} ({date_str}, relevanta {relevance}/100{comps_str}):\n"
+            f"  {m.get('summary', '')}"
+        )
+        if ctx_lines:
+            block += "\n" + "\n".join(ctx_lines)
+        if evo_lines:
+            block += "\n" + "\n".join(evo_lines)
+        if quotes_text:
+            block += "\n" + quotes_text
+        blocks.append(block)
+
+    memory_text = "\n\n".join(blocks)
+    return (
+        f"\n\n--- CE STIE CODRUT DESPRE ACEST PARTICIPANT (din sesiunile anterioare) ---\n"
+        f"{memory_text}\n\n"
+        f"FOLOSESTE aceasta memorie natural in conversatie: recunoaste contextul, fa referinta "
+        f"la ce s-a discutat anterior cand e relevant, dar nu o cita textual ca un robot. "
+        f"Daca e prima sesiune (memorie goala), nu mentiona nimic.\n"
+        f"--- SFARSIT MEMORIE ---"
+    )
+
+
+
+# Interdictia scenei, pentru EVALUATOR — plicul 115, singura schimbare fata de prima incercare.
+#
+# La prima despartire (plicul 112) evaluatorul a scris replica de scena la 40 din 40 de pasi de
+# joc, iar la 10 dintre ele cu ALT personaj decat actorul: omul ar fi vazut doua scene una sub
+# alta. Scoaterea lui `actor.md` din promptul lui nu ajunge — transcriptul insusi il invata
+# scena, iar nimic nu-i interzicea s-o joace.
+#
+# Sta ULTIMA in promptul evaluatorului: ce e scris ultimul cantareste cel mai mult (plicul 45).
+FARA_SCENA = (
+    "\n\n---\n"
+    "NU EȘTI ÎN SCENĂ. Primești scena doar ca s-o judeci. NU SCRII NICIODATĂ o replică a "
+    "vreunui personaj — nici a celui din scenă, nici a altuia. NU ÎNCEPI NICIODATĂ un rând cu "
+    "un nume urmat de două puncte. Dacă vrei să arăți ce ar fi putut spune omul, folosești "
+    "forma pe care o știi: „Ai fi putut spune: …”."
+)
+
+
+def _bucatile_comune(
+    kind_val: str,
+    name: str,
+    history_length: int,
+    profil_rol: dict[str, Any] | None,
+    memories: list[dict[str, Any]] | None = None,
+) -> tuple[str, str, str]:
+    """Bucatile pe care le folosesc si promptul de azi, si cele doua ale despartirii.
+
+    Stau intr-un singur loc dinadins — plicul 112. Daca ar fi doua copii, promptul cu un
+    apel si cele cu doua ar devia unul de altul fara ca nimeni sa vada cand.
+
+    Intoarce `(reguli_generale, memory_block, comanda)`.
+    """
+    # Salutul se face pe prenume. In profil numele e intreg („Ion Popescu"), iar „Salut,
+    # Ion Popescu" suna a formular, nu a om.
+    prenume = (name or "").strip().split(" ")[0] or name
+    # „coaching" si orice altceva nerecunoscut cad pe ramura de coaching mai jos, deci
+    # asta e aceeasi impartire, scrisa o singura data.
+    e_coaching = kind_val not in ("roleplay", "knowledge")
+
+    # Dynamic rules for first message vs subsequent transitions
+    if history_length <= 1:
+        # Pornirea in doi pasi, plicul 45.
+        #
+        # Pana acum prima replica era aceeasi peste tot: salut plus „Cum iti merge ziua
+        # pana acum?". La coaching e buna si ramane — e decizia lui Andrei din 31 august.
+        #
+        # La role-play si la quiz nu era: dupa ea, modelul trebuia sa JUDECE singur cand
+        # s-au terminat politeturile si sa intre in scena. Masurat, judecata aia rateaza
+        # in patru din sase porniri, si atunci raspunde cu o intrebare de coaching.
+        # Deci prima replica pune o intrebare cu raspuns clar, iar confirmarea omului
+        # devine semnalul — vezi `COMANDA_DE_PORNIRE` mai jos.
+        if kind_val == "roleplay":
+            dyn_rules = (
+                '- REGULA PRIMULUI MESAJ: după salut îl întrebi dacă e gata să înceapă '
+                'un joc de rol. O SINGURĂ întrebare în '
+                'mesaj. INTERZIS orice frază de tranziție și INTERZIS să întrebi ce '
+                'situație sau ce temă vrea — situația o alegi tu, la pasul următor.'
+            )
+        elif kind_val == "knowledge":
+            dyn_rules = (
+                '- REGULA PRIMULUI MESAJ: după salut îl întrebi dacă e gata să-și '
+                'verifice cunoștințele. O SINGURĂ întrebare în '
+                'mesaj. INTERZIS orice frază de tranziție și INTERZIS să întrebi ce temă '
+                'vrea.'
+            )
+        else:
+            # Strategia intreaba de situatie, nu de ziua lui — plicul 128, partea C.
+            #
+            # Hotararea lui Andrei din 22 septembrie o inlocuieste pe a lui din 31 august. Cele
+            # trei formulari sunt ale lui, cuvant cu cuvant, si se rotesc dupa cate sedinte are
+            # omul in urma — ca sa nu sune la fel a cincea oara.
+            dyn_rules = (
+                '- REGULA PRIMULUI MESAJ: DOAR saluți și îl întrebi, cuvânt cu cuvânt: '
+                f'"{intrebarea_de_strategie(profil_rol)}". '
+                'INTERZIS orice frază de tranziție la subiect.'
+            )
+        # Toate trei modurile saluta, deci variatia merge la toate trei. Mai tarziu in
+        # conversatie nu se aplica — acolo ramane regula anti-salut, neatinsa.
+        dyn_rules += formula_de_salut()
+    else:
+        dyn_rules = '- REGULA ANTI-SALUT: INTERZIS să mai folosești "Salut", "Bună".'
+        # Biblioteca de tranzitii e de coaching: intreaba omul ce vrea sa discute.
+        #
+        # Nu are ce cauta in celelalte doua moduri. La role-play `actor.md` cere exact
+        # opusul — „nu ceri permisiunea, nu intrebi ce situatie vrea. Treci DIRECT la
+        # SETUP" — iar tranzitia E chiar SETUP-ul. La quiz, tranzitia e chiar prima
+        # intrebare; plicul 40 a scos-o doar din role-play, si asa Cody raspundea la
+        # quiz cu „Ce este cel mai important pentru tine sa exploram in aceasta
+        # sesiune?".
+        #
+        # Pana la plicul 37 nu ajungeau nicaieri in afara de coaching, fiindca
+        # `reguli_generale` nu se trimitea in alta parte.
+        if e_coaching:
+            dyn_rules += (
+                '\n- BIBLIOTECA DE TRANZIȚII (ROTAȚIE RANDOM): '
+                'Folosește OBLIGATORIU o singură dată una din: '
+                '"Ce ai zice să trecem la subiectul principal de azi?" / '
+                '"Spre ce provocare vrei să ne îndreptăm atenția acum?" / '
+                '"Ce este cel mai important pentru tine să explorăm în această sesiune?" / '
+                '"Hai să vedem, ce situație concretă vrei să abordăm împreună astăzi?" / '
+                '"Cu ce crezi că ar fi cel mai util să începem discuția noastră?"\n'
+                '- SENZORUL ANTI-PAPAGAL: Verifică istoricul. '
+                'Dacă ai mai folosit recent o frază de '
+                'tranziție, alege obligatoriu alta.'
+            )
+
+    # Numele omului, ca fapt, la FIECARE replica si in TOATE trei modurile — plicul 76.
+    #
+    # Pana acum numele ajungea in prompt numai prin salut (`formula_de_salut`, doar la
+    # `history_length <= 1`); la role-play mai ajungea o data prin blocul de distributie,
+    # la replica de confirmare. La quiz si la coaching, dupa salut, promptul nu-l mai continea
+    # nicaieri — modelul trebuia sa si-l aminteasca din istoric, iar cand nu reusea punea ce
+    # stia el. Andrei, 18 septembrie: „la role play mi-a spus pe nume, dar la quiz mi-a zis
+    # «user»".
+    #
+    # Randul spune CARE e numele, nu CAT DE DES sa-l zica: o forma impusa la fiecare replica
+    # da recitare (plicul 59). Salutul ramane cum e.
+    #
+    # Plicul 143, hotararea lui Andrei: de la 138 spre model pleaca un COD (`Fox 34`), nu un
+    # nume, iar Cody ajunsese sa-i spuna omului „Falcon 48, in acest exercitiu…". Codul e o
+    # eticheta, nu un nume: apare numai pe ecran. Modelul il primeste ca eticheta, cu interdictia
+    # scrisa de a-l folosi ca forma de adresare.
+    if name:
+        dyn_rules += (
+            f"\n- CODUL OMULUI: omul intră în aplicație sub codul „{name.strip()}”. Codul e o "
+            f"etichetă, NU un nume: INTERZIS să i te adresezi pe cod sau pe nume, INTERZIS "
+            f"„user”, „participant”, „[Nume]”. Îi vorbești direct, la persoana a II-a, fără "
+            f"apelativ."
+        )
+
+    reguli_generale = REGULI_GENERALE_TEMPLATE.replace("{dynamic_rules}", dyn_rules)
+
+    memory_block = ""
+    if memories and history_length <= 2:
+        memory_block = format_participant_memory(memories)
+
+    # Ultimul lucru din prompt, si numai la replica in care omul tocmai a confirmat.
+    comanda = (
+        COMANDA_DE_PORNIRE.get(kind_val, "")
+        if history_length == REPLICA_DE_CONFIRMARE
+        else ""
+    )
+    # Distributia se lipeste de comanda de pornire: acelasi moment, aceeasi pozitie.
+    if comanda and kind_val == "roleplay":
+        comanda += bloc_de_distributie(profil_rol, prenume)
+
+    return reguli_generale, memory_block, comanda
+
+
+def get_system_prompt_for_kind(
+    kind: SessionKind | str,
+    name: str = "Participant",
+    history_length: int = 0,
+    quiz_competency: str | None = None,
+    project_competencies: list[str] | None = None,
+    memories: list[dict[str, Any]] | None = None,
+    biblioteca_path: str = "",
+    profil_rol: dict[str, Any] | None = None,
+) -> str:
+    material, _ = get_core_material(biblioteca_path)
+    kind_val = kind.value if isinstance(kind, SessionKind) else str(kind)
+    reguli_generale, memory_block, comanda = _bucatile_comune(
+        kind_val, name, history_length, profil_rol, memories
+    )
+    if kind_val == "roleplay":
+        # Actorul si evaluarea merg impreuna, ca in aplicatia veche si ca in plicul 22:
+        # „peste el vine coach.md SAU PERECHEA actor.md + evaluare.md, dupa mod".
+        #
+        # Pana la plicul 37 exista aici un comutator, `is_actor_role`, care la role-play
+        # era intotdeauna adevarat — deci ramura cu evaluarea nu se atingea niciodata in
+        # folosire reala. Asa s-a pierdut feedbackul imediat de dupa fiecare replica,
+        # impreuna cu regula care ii interzice lui Codrut sa dea participantului fraza
+        # gata formulata, si cu lista de jargon interzis din reguli-generale.
+        #
+        # Grija ca actorul sa nu iasa din rol in mijlocul scenei e deja in textul
+        # evaluarii („IESI COMPLET DIN ROL" dupa replica participantului), deci nu are
+        # nevoie de un comutator in cod.
+        return (
+            f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n"
+            f"{ACTOR_PROMPT}\n\n---\n\n{EVALUARE_PROMPT}{memory_block}{comanda}"
+        )
+
+    elif kind_val == "knowledge":
+        # Quiz mode
+        quiz_block = ""
+        if quiz_competency:
+            quiz_block = build_quiz_block(
+                quiz_competency=quiz_competency,
+                # Blocul de pornire tine pana cand quizul chiar incepe.
+                #
+                # Era `<= 1`, corect in aplicatia veche unde la quiz nu exista salut: a
+                # doua replica ERA prima intrebare. De la plicul 38 exista salut, deci la
+                # `history_length == 2` — momentul in care quizul trebuie sa porneasca —
+                # se trimitea deja blocul de continuare, care nu spune nicaieri sa
+                # inceapa. Asa Cody raspundea cu „Ce vrei sa gandim impreuna?".
+                is_first=(history_length <= 2),
+                project_competencies=project_competencies,
+            )
+        curs, _ = get_material_de_curs(biblioteca_path)
+        return (
+            f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n"
+            f"{curs}\n\n---\n\n{QUIZ_PROMPT}{quiz_block}{memory_block}{comanda}"
+        )
+
+    else:
+        # Coaching (strategie) or default. Singurul loc unde intra regulile de coaching.
+        return (
+            f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n"
+            f"{REGULI_COACHING_PROMPT}\n\n---\n\n{COACHING_PROMPT}{memory_block}"
+        )
+
+
+def get_prompts_pe_meserii(
+    name: str = "Participant",
+    history_length: int = 0,
+    memories: list[dict[str, Any]] | None = None,
+    biblioteca_path: str = "",
+    profil_rol: dict[str, Any] | None = None,
+) -> tuple[str, str]:
+    """Cele doua prompturi ale despartirii actor/evaluator — plicul 112, decizia 7.
+
+    Intoarce `(promptul actorului, promptul evaluatorului)`. Amandoua primesc acelasi
+    transcript, dar fiecare numai materialul meseriei lui. Ordinea „intai personajul, apoi
+    evaluarea" nu mai e o instructiune pentru model: actorul NU primeste regulile de evaluare,
+    deci nu are cum sa evalueze, iar evaluatorul NU primeste `actor.md`, deci n-are personaj.
+
+    Singurul lucru trimis de doua ori, in afara de transcript, e `reguli-generale.md` (3.918
+    caractere): acolo stau numele omului (poarta 5, ceruta de amandoua ieșirile) si interdictia
+    metodelor (poarta 7). Se scrie in raport ca atare.
+    """
+    reguli_generale, memory_block, comanda = _bucatile_comune(
+        "roleplay", name, history_length, profil_rol, memories
+    )
+
+    material_actor, _ = get_core_material(biblioteca_path, felie="actor")
+    material_evaluator, _ = get_core_material(biblioteca_path, felie="evaluator")
+
+    prompt_actor = (
+        f"{material_actor}\n\n---\n\n{reguli_generale}\n\n---\n\n"
+        f"{ACTOR_PROMPT_DOUA_APELURI}{memory_block}{comanda}"
+    )
+    prompt_evaluator = (
+        f"{material_evaluator}\n\n---\n\n{reguli_generale}\n\n---\n\n"
+        f"{EVALUARE_PROMPT}{FARA_SCENA}"
+    )
+    return prompt_actor, prompt_evaluator
+
+
+def get_summary_prompt(name: str, opt_text: str, history: str) -> str:
+    return REZUMAT_TEMPLATE.format(name=name, opt_text=opt_text, history=history)
+
+
+# Compatibilitate
+CODY_SYSTEM_PROMPT = get_system_prompt_for_kind("roleplay")
+

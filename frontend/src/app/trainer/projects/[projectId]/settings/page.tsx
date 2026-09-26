@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getCompanyProjectById, getProjectLifecycleEvents } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { LazyProjectSettingsForm } from "./LazyProjectSettingsForm";
+import { PracticeSetupSection } from "./PracticeSetupSection";
 
 export default async function ProjectSettingsPage({
   params,
@@ -25,5 +26,12 @@ export default async function ProjectSettingsPage({
     requestOptions,
   );
 
-  return <LazyProjectSettingsForm project={project} lifecycleEvents={lifecycleEvents} />;
+  return (
+    <div className="flex flex-col gap-5">
+      <LazyProjectSettingsForm project={project} lifecycleEvents={lifecycleEvents} />
+      {project.project_type === "training" ? (
+        <PracticeSetupSection projectId={project.id} />
+      ) : null}
+    </div>
+  );
 }

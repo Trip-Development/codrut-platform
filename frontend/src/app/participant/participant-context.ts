@@ -2,7 +2,11 @@ import type {
   ParticipantWorkspaceContext,
   ParticipantWorkspaceSummary,
 } from "@/api/participants";
-import { participantNavItems, type ShellNavItem } from "@/components/shell/nav";
+import {
+  participantNavItemsForType,
+  TRAINING_PROJECT_TYPE,
+  type ShellNavItem,
+} from "@/components/shell/nav";
 
 export type ParticipantRouteSearchParams = {
   profile?: string | string[];
@@ -73,13 +77,29 @@ export function participantCanViewResults(summary: {
   return false;
 }
 
+/**
+ * Meniul participantului, din DOUĂ reguli care nu se calcă una pe alta — plicul 131.
+ *
+ * - `projectType` alege LISTA: un proiect de training primește meniul de exersare
+ *   (plicul 113, ramura lui Cody).
+ * - `showResults` scoate „Rezultate" din lista aleasă, DACĂ lista îl are — când trainerul n-a
+ *   publicat rezultatele (partea chatului Aplicației).
+ *
+ * Meniul de training n-are „Rezultate", deci a doua regulă n-are ce scoate acolo. Pentru orice
+ * alt proiect, lista e cea de dinainte și regula rezultatelor lucrează exact ca înainte.
+ * Niciuna dintre purtări nu s-a schimbat; s-au pus doar amândouă în aceeași funcție.
+ */
 export function participantScopedNavItems(
   params: URLSearchParams,
-  showResults: boolean = true,
+  {
+    projectType,
+    showResults = true,
+  }: { projectType?: string | null; showResults?: boolean } = {},
 ): ShellNavItem[] {
+  const lista = participantNavItemsForType(projectType);
   const items = showResults
-    ? participantNavItems
-    : participantNavItems.filter((item) => item.href !== "/participant/results");
+    ? lista
+    : lista.filter((item) => item.href !== "/participant/results");
   return items.map((item) => ({
     ...item,
     href: item.href === "/participant/results"
@@ -121,4 +141,53 @@ export function participantDefaultContext(contexts: ParticipantWorkspaceContext[
     Number(right.current) - Number(left.current)
     || right.recency - left.recency
   ))[0] ?? null;
+}
+
+type ProiectDinSumar = {
+  id: string;
+  projectType?: string | null;
+  status?: string | null;
+  historyBucket?: string | null;
+};
+
+/**
+ * Tipul proiectului în care se află acum participantul, din sumarul lui.
+ *
+ * `summary.projects` e construită din structurile de coaching — cicluri și
+ * chestionare. Un proiect de training n-are așa ceva, deci lista aia rămâne
+ * **goală** chiar dacă proiectul există. Până la plicul 34 funcția întorcea `null`,
+ * iar `participantNavItemsForType(null)` dădea meniul de coaching: omul de la
+ * training vedea „Chestionare" și „Rezultate" pe pagina de exersare.
+ *
+ * Proiectul e totuși acolo, complet, în `summary.contexts[].projects`. Când lista
+ * de sus e goală, se caută acolo — întâi după `projectId`, altfel primul proiect
+ * curent. Nimic nu se schimbă pe server și nimic nu se atinge la coaching, unde
+ * `summary.projects` e plină și prima ramură răspunde ca înainte.
+ */
+export function participantActiveProjectType(
+  summary: {
+    projectId?: string | null;
+    projects?: ProiectDinSumar[];
+    contexts?: { projects?: ProiectDinSumar[] }[];
+  },
+): string | null {
+  const alege = (proiecte: ProiectDinSumar[]): ProiectDinSumar | undefined => {
+    if (proiecte.length === 0) return undefined;
+    const dupaId = summary.projectId
+      ? proiecte.find((p) => p.id === summary.projectId)
+      : undefined;
+    if (dupaId) return dupaId;
+    return proiecte.find((p) => p.historyBucket === "current") ?? proiecte[0];
+  };
+
+  const dinLista = alege(summary.projects ?? []);
+  if (dinLista) return dinLista.projectType ?? null;
+
+  const dinContexte = alege((summary.contexts ?? []).flatMap((c) => c.projects ?? []));
+  return dinContexte?.projectType ?? null;
+}
+
+/** Un meniu ascuns nu e o regulă, e o sugestie: paginile de coaching se închid. */
+export function participantIsTraining(projectType?: string | null): boolean {
+  return projectType === TRAINING_PROJECT_TYPE;
 }

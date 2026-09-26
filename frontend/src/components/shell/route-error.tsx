@@ -10,7 +10,11 @@ import {
 
 import { BrandMark } from "@/components/brand/brand-mark";
 import { AppShell } from "@/components/shell/app-shell";
-import { participantNavItems, trainerNavItems } from "@/components/shell/nav";
+import {
+  participantNavItems,
+  participantNavItemsForType,
+  trainerNavItems,
+} from "@/components/shell/nav";
 import { Button } from "@/components/ui/button";
 
 type RouteError = Error & { digest?: string };
@@ -98,9 +102,11 @@ export function TrainerRouteError({
 export function ParticipantRouteError({
   error,
   reset,
+  projectType,
 }: {
   error: RouteError;
   reset: () => void;
+  projectType?: string | null;
 }) {
   return (
     <AppShell
@@ -108,7 +114,14 @@ export function ParticipantRouteError({
       eyebrow=""
       title="Pagina nu s-a încărcat"
       description=""
-      navItems={participantNavItems}
+      navItems={
+        // Acelasi motiv ca la ecranul de incarcare (plicul 116): cand tipul nu se
+        // stie, meniul FARA exersare. De la plicul 113, cel de training nu mai e o
+        // submultime a celuilalt — are tabloul si exersarea, pe care celalalt nu le are.
+        projectType == null
+          ? participantNavItems
+          : participantNavItemsForType(projectType)
+      }
       activeHref="/participant"
       accountIdentityPending
       showHeader={false}

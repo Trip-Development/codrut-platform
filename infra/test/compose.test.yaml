@@ -1,0 +1,305 @@
+x-logging: &test-logging
+  driver: json-file
+  options:
+    max-size: 50m
+    max-file: "5"
+
+services:
+  testtraefik:
+    image: traefik:v3.7.1
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --log.level=DEBUG
+      - --certificatesresolvers.letsencrypt.acme.email=${TRAEFIK_ACME_EMAIL:-andrei.vacaru@tripdevelopment.ro}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - testtraefik_letsencrypt:/letsencrypt
+    networks:
+      - interna
+    logging: *test-logging
+    restart: unless-stopped
+
+  testdb:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-codytest}
+      POSTGRES_USER: ${POSTGRES_USER:-codytest}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - cody_test_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-codytest} -d ${POSTGRES_DB:-codytest}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 512M
+    mem_limit: 512M
+    networks:
+      - interna
+    logging: *test-logging
+    restart: unless-stopped
+
+  testredis:
+    image: redis:7-bookworm
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - cody_test_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+    mem_limit: 128M
+    networks:
+      - interna
+    logging: *test-logging
+    restart: unless-stopped
+
+  testbackend:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE in .env}
+    command:
+      - uvicorn
+      - codrut.main:create_app
+      - --factory
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "${CODRUT_API_WORKERS:-2}"
+      - --no-access-log
+    environment:
+      CODRUT_ENV: ${CODRUT_ENV:-production}
+      CODRUT_DATABASE_URL: ${CODRUT_DATABASE_URL:?Set CODRUT_DATABASE_URL in .env}
+      CODRUT_DB_POOL_SIZE: ${CODRUT_DB_POOL_SIZE:-3}
+      CODRUT_DB_MAX_OVERFLOW: ${CODRUT_DB_MAX_OVERFLOW:-2}
+      CODRUT_DB_POOL_TIMEOUT_SECONDS: ${CODRUT_DB_POOL_TIMEOUT_SECONDS:-10}
+      CODRUT_WORKER_MAX_JOBS: ${CODRUT_WORKER_MAX_JOBS:-2}
+      CODRUT_EMAIL_OUTBOX_CONCURRENCY: ${CODRUT_EMAIL_OUTBOX_CONCURRENCY:-2}
+      CODRUT_EMAIL_OUTBOX_BATCH_SIZE: ${CODRUT_EMAIL_OUTBOX_BATCH_SIZE:-10}
+      CODRUT_REDIS_URL: ${CODRUT_REDIS_URL:-redis://testredis:6379/0}
+      CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:?Set CODRUT_SESSION_SECRET in .env}
+      CODRUT_LOCAL_AUTH_BYPASS: "false"
+      CODRUT_TASK_LINK_SECRET: ${CODRUT_TASK_LINK_SECRET:?Set CODRUT_TASK_LINK_SECRET in .env}
+      CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET: ${CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET:?Set CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET in .env}
+      CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET: ${CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET:?Set CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET in .env}
+      CODRUT_CORS_ORIGINS: ${CODRUT_CORS_ORIGINS:-["https://test.cody.andreivacaru.ro"]}
+      CODRUT_PUBLIC_APP_URL: ${CODRUT_PUBLIC_APP_URL:-https://test.cody.andreivacaru.ro}
+      CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER:-brevo}
+      CODRUT_EMAIL_BREVO_SANDBOX_ENABLED: ${CODRUT_EMAIL_BREVO_SANDBOX_ENABLED:-true}
+      CODRUT_EMAIL_BREVO_API_KEY: ${CODRUT_EMAIL_BREVO_API_KEY:-CHEIE-INVALIDA-INTENTIONAT}
+      # Plafonul zilnic: 20 pe proba. Zero insemna "niciun email", si asa a stat.
+      CODRUT_EMAIL_DAILY_SEND_CAP: ${CODRUT_EMAIL_DAILY_SEND_CAP:-20}
+      # Al doilea gard, mai important decat sandbox-ul: cand lista asta nu e goala,
+      # pleaca email DOAR catre adresele din ea. Un participant de proba adaugat
+      # din greseala cu adresa lui adevarata NU primeste nimic.
+      CODRUT_EMAIL_ALLOWED_RECIPIENTS: ${CODRUT_EMAIL_ALLOWED_RECIPIENTS:-["andrei.vacaru@tripdevelopment.ro","andreyvacaru@gmail.com","andrei@andreivacaru.ro"]}
+      CODRUT_EMAIL_FROM_ADDRESS: ${CODRUT_EMAIL_FROM_ADDRESS:-test@andreivacaru.ro}
+      CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME:-Cody Test}
+      CODRUT_EMAIL_WEBHOOK_TOKEN: ${CODRUT_EMAIL_WEBHOOK_TOKEN:?Set CODRUT_EMAIL_WEBHOOK_TOKEN in .env}
+      CODRUT_RATE_LIMIT_ENABLED: "true"
+      CODRUT_RATE_LIMIT_BACKEND: redis
+      CODRUT_RATE_LIMIT_INVITE_EXCHANGE_MAX_REQUESTS: 2000
+      CODRUT_RATE_LIMIT_TRUSTED_PROXIES: ${CODRUT_RATE_LIMIT_TRUSTED_PROXIES:-["127.0.0.1/32","172.16.0.0/12","10.0.0.0/8"]}
+      CODRUT_MAINTENANCE_MODE: "false"
+      CODRUT_PASSWORD_BREACH_CHECK_ENABLED: "false"
+      CODRUT_CAMPAIGN_ASSET_DIR: ${CODRUT_CAMPAIGN_ASSET_DIR:-/app/var/campaign-assets}
+      CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH: ${CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH:-/api/campaign-assets}
+      CODRUT_READINESS_TIMEOUT_SECONDS: ${CODRUT_READINESS_TIMEOUT_SECONDS:-3}
+      CODRUT_GENERATION_PROVIDER: ${CODRUT_GENERATION_PROVIDER:-local}
+      CODRUT_VERTEX_PROJECT_ID: ${CODRUT_VERTEX_PROJECT_ID:-codrut-cody}
+      CODRUT_VERTEX_REGION: ${CODRUT_VERTEX_REGION:-europe-west4}
+      CODRUT_VERTEX_CREDENTIALS_PATH: ${CODRUT_VERTEX_CREDENTIALS_PATH:-/etc/codrut/cody-vertex.json}
+      CODRUT_VERTEX_ACTOR_MODEL: ${CODRUT_VERTEX_ACTOR_MODEL:?Set CODRUT_VERTEX_ACTOR_MODEL in .env}
+      CODRUT_VERTEX_EVALUATOR_MODEL: ${CODRUT_VERTEX_EVALUATOR_MODEL:?Set CODRUT_VERTEX_EVALUATOR_MODEL in .env}
+      # Despartirea actor/evaluator — plicul 112, comutatorul din `config.py`.
+      #
+      # Lipsea de aici, si de aceea nu se putea aprinde: lista asta e INCHISA, deci un rand
+      # pus in `.env` nu ajungea niciodata la proces. Masurat la plicul 125: `.env` avea
+      # `CODRUT_PRACTICE_TWO_CALLS=true`, iar procesul viu raspundea `False`.
+      #
+      # Implicit STINS, ca in cod. Se aprinde din `.env`-ul serverului.
+      CODRUT_PRACTICE_TWO_CALLS: ${CODRUT_PRACTICE_TWO_CALLS:-false}
+      # Cat asteapta aplicatia o replica — plicul 96. Implicit ca in cod (60); pe proba
+      # .env il ridica la 120: cea mai lenta replica buna masurata a venit la 80,5 s.
+      CODRUT_VERTEX_TIMEOUT_SECONDS: ${CODRUT_VERTEX_TIMEOUT_SECONDS:-60}
+      # Preturile modelului, in dolari pe milion de unitati — plicul 101. Implicit ca in cod
+      # (gemini-3.8-flash). Se schimba odata cu modelul.
+      CODRUT_PRICE_INPUT_PER_MILLION_USD: ${CODRUT_PRICE_INPUT_PER_MILLION_USD:-0.75}
+      CODRUT_PRICE_CACHED_PER_MILLION_USD: ${CODRUT_PRICE_CACHED_PER_MILLION_USD:-0.075}
+      CODRUT_PRICE_OUTPUT_PER_MILLION_USD: ${CODRUT_PRICE_OUTPUT_PER_MILLION_USD:-3.75}
+      CODRUT_PRICE_THOUGHT_PER_MILLION_USD: ${CODRUT_PRICE_THOUGHT_PER_MILLION_USD:-3.75}
+      CODRUT_PRACTICE_TRAINER_DIRECT_ENTRY: ${CODRUT_PRACTICE_TRAINER_DIRECT_ENTRY:-false}
+      CODRUT_BIBLIOTECA_PATH: /app/BIBLIOTECA
+    volumes:
+      - cody_test_campaign_assets:/app/var/campaign-assets
+      - /etc/codrut/cody-vertex.json:/etc/codrut/cody-vertex.json:ro
+      - /opt/cody-test/BIBLIOTECA:/app/BIBLIOTECA:ro
+      - /opt/cody-test/ARHIVA-SUPABASE:/app/ARHIVA-SUPABASE:ro
+    depends_on:
+      testdb:
+        condition: service_healthy
+      testredis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=5).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 768M
+    mem_limit: 768M
+    networks:
+      interna:
+        aliases:
+          - backend
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: cody-test_interna
+      traefik.http.routers.codytest-api.rule: Host(`${CODRUT_HOST:-test.cody.andreivacaru.ro}`) && PathPrefix(`/api`)
+      traefik.http.routers.codytest-api.entrypoints: websecure
+      traefik.http.routers.codytest-api.tls.certresolver: letsencrypt
+      traefik.http.routers.codytest-api.priority: "100"
+      traefik.http.routers.codytest-api.service: codytest-api
+      traefik.http.services.codytest-api.loadbalancer.server.port: "8000"
+    logging: *test-logging
+    restart: unless-stopped
+
+  testworker:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE in .env}
+    command: ["python", "-m", "codrut.workers.main"]
+    environment:
+      CODRUT_ENV: ${CODRUT_ENV:-production}
+      CODRUT_DATABASE_URL: ${CODRUT_DATABASE_URL:?Set CODRUT_DATABASE_URL in .env}
+      CODRUT_DB_POOL_SIZE: ${CODRUT_DB_POOL_SIZE:-3}
+      CODRUT_DB_MAX_OVERFLOW: ${CODRUT_DB_MAX_OVERFLOW:-2}
+      CODRUT_DB_POOL_TIMEOUT_SECONDS: ${CODRUT_DB_POOL_TIMEOUT_SECONDS:-10}
+      CODRUT_WORKER_MAX_JOBS: ${CODRUT_WORKER_MAX_JOBS:-2}
+      CODRUT_EMAIL_OUTBOX_CONCURRENCY: ${CODRUT_EMAIL_OUTBOX_CONCURRENCY:-2}
+      CODRUT_EMAIL_OUTBOX_BATCH_SIZE: ${CODRUT_EMAIL_OUTBOX_BATCH_SIZE:-10}
+      CODRUT_REDIS_URL: ${CODRUT_REDIS_URL:-redis://testredis:6379/0}
+      CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:?Set CODRUT_SESSION_SECRET in .env}
+      CODRUT_TASK_LINK_SECRET: ${CODRUT_TASK_LINK_SECRET:?Set CODRUT_TASK_LINK_SECRET in .env}
+      CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET: ${CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET:?Set CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET in .env}
+      CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET: ${CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET:?Set CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET in .env}
+      CODRUT_CORS_ORIGINS: ${CODRUT_CORS_ORIGINS:-["https://test.cody.andreivacaru.ro"]}
+      CODRUT_PUBLIC_APP_URL: ${CODRUT_PUBLIC_APP_URL:-https://test.cody.andreivacaru.ro}
+      CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER:-brevo}
+      CODRUT_EMAIL_BREVO_SANDBOX_ENABLED: ${CODRUT_EMAIL_BREVO_SANDBOX_ENABLED:-true}
+      CODRUT_EMAIL_BREVO_API_KEY: ${CODRUT_EMAIL_BREVO_API_KEY:-CHEIE-INVALIDA-INTENTIONAT}
+      # Plafonul zilnic: 20 pe proba. Zero insemna "niciun email", si asa a stat.
+      CODRUT_EMAIL_DAILY_SEND_CAP: ${CODRUT_EMAIL_DAILY_SEND_CAP:-20}
+      # Al doilea gard, mai important decat sandbox-ul: cand lista asta nu e goala,
+      # pleaca email DOAR catre adresele din ea. Un participant de proba adaugat
+      # din greseala cu adresa lui adevarata NU primeste nimic.
+      CODRUT_EMAIL_ALLOWED_RECIPIENTS: ${CODRUT_EMAIL_ALLOWED_RECIPIENTS:-["andrei.vacaru@tripdevelopment.ro","andreyvacaru@gmail.com","andrei@andreivacaru.ro"]}
+      CODRUT_EMAIL_FROM_ADDRESS: ${CODRUT_EMAIL_FROM_ADDRESS:-test@andreivacaru.ro}
+      CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME:-Cody Test}
+      CODRUT_EMAIL_WEBHOOK_TOKEN: ${CODRUT_EMAIL_WEBHOOK_TOKEN:?Set CODRUT_EMAIL_WEBHOOK_TOKEN in .env}
+      CODRUT_CAMPAIGN_ASSET_DIR: ${CODRUT_CAMPAIGN_ASSET_DIR:-/app/var/campaign-assets}
+      CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH: ${CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH:-/api/campaign-assets}
+      CODRUT_READINESS_TIMEOUT_SECONDS: ${CODRUT_READINESS_TIMEOUT_SECONDS:-3}
+      CODRUT_GENERATION_PROVIDER: ${CODRUT_GENERATION_PROVIDER:-local}
+      CODRUT_VERTEX_PROJECT_ID: ${CODRUT_VERTEX_PROJECT_ID:-codrut-cody}
+      CODRUT_VERTEX_REGION: ${CODRUT_VERTEX_REGION:-europe-west4}
+      CODRUT_VERTEX_CREDENTIALS_PATH: ${CODRUT_VERTEX_CREDENTIALS_PATH:-/etc/codrut/cody-vertex.json}
+      CODRUT_VERTEX_ACTOR_MODEL: ${CODRUT_VERTEX_ACTOR_MODEL:?Set CODRUT_VERTEX_ACTOR_MODEL in .env}
+      CODRUT_VERTEX_EVALUATOR_MODEL: ${CODRUT_VERTEX_EVALUATOR_MODEL:?Set CODRUT_VERTEX_EVALUATOR_MODEL in .env}
+      # Despartirea actor/evaluator — plicul 112, comutatorul din `config.py`.
+      #
+      # Lipsea de aici, si de aceea nu se putea aprinde: lista asta e INCHISA, deci un rand
+      # pus in `.env` nu ajungea niciodata la proces. Masurat la plicul 125: `.env` avea
+      # `CODRUT_PRACTICE_TWO_CALLS=true`, iar procesul viu raspundea `False`.
+      #
+      # Implicit STINS, ca in cod. Se aprinde din `.env`-ul serverului.
+      CODRUT_PRACTICE_TWO_CALLS: ${CODRUT_PRACTICE_TWO_CALLS:-false}
+      # Cat asteapta aplicatia o replica — plicul 96. Implicit ca in cod (60); pe proba
+      # .env il ridica la 120: cea mai lenta replica buna masurata a venit la 80,5 s.
+      CODRUT_VERTEX_TIMEOUT_SECONDS: ${CODRUT_VERTEX_TIMEOUT_SECONDS:-60}
+      # Preturile modelului, in dolari pe milion de unitati — plicul 101. Implicit ca in cod
+      # (gemini-3.8-flash). Se schimba odata cu modelul.
+      CODRUT_PRICE_INPUT_PER_MILLION_USD: ${CODRUT_PRICE_INPUT_PER_MILLION_USD:-0.75}
+      CODRUT_PRICE_CACHED_PER_MILLION_USD: ${CODRUT_PRICE_CACHED_PER_MILLION_USD:-0.075}
+      CODRUT_PRICE_OUTPUT_PER_MILLION_USD: ${CODRUT_PRICE_OUTPUT_PER_MILLION_USD:-3.75}
+      CODRUT_PRICE_THOUGHT_PER_MILLION_USD: ${CODRUT_PRICE_THOUGHT_PER_MILLION_USD:-3.75}
+    volumes:
+      - cody_test_campaign_assets:/app/var/campaign-assets
+      - /etc/codrut/cody-vertex.json:/etc/codrut/cody-vertex.json:ro
+    depends_on:
+      testdb:
+        condition: service_healthy
+      testredis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 512M
+    mem_limit: 512M
+    networks:
+      - interna
+    logging: *test-logging
+    restart: unless-stopped
+
+  testfrontend:
+    image: ${FRONTEND_IMAGE:?Set FRONTEND_IMAGE in .env}
+    environment:
+      NODE_ENV: production
+      INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL:-http://testbackend:8000/api}
+      NEXT_PUBLIC_API_BASE_URL: /api
+      CODRUT_FRONTEND_DEMO_FALLBACK: "false"
+      NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK: "false"
+      CODRUT_LOCAL_AUTH_BYPASS: "false"
+      NEXT_PUBLIC_CODRUT_LOCAL_AUTH_BYPASS: "false"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    mem_limit: 512M
+    networks:
+      - interna
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: cody-test_interna
+      traefik.http.routers.codytest-frontend.rule: Host(`${CODRUT_HOST:-test.cody.andreivacaru.ro}`)
+      traefik.http.routers.codytest-frontend.entrypoints: websecure
+      traefik.http.routers.codytest-frontend.tls.certresolver: letsencrypt
+      traefik.http.routers.codytest-frontend.priority: "1"
+      traefik.http.routers.codytest-frontend.service: codytest-frontend
+      traefik.http.services.codytest-frontend.loadbalancer.server.port: "3000"
+    logging: *test-logging
+    restart: unless-stopped
+
+networks:
+  interna:
+
+volumes:
+  cody_test_postgres_data:
+  cody_test_redis_data:
+  cody_test_campaign_assets:
+  testtraefik_letsencrypt:

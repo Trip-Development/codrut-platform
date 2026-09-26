@@ -48,6 +48,11 @@ services:
       CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID: ${CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID:-}
       CODRUT_REDIS_URL: ${CODRUT_REDIS_URL:-redis://redis:6379/0}
       CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:-change-me-in-env}
+      # Modelul Vertex — plicul 114, pasul 3. De cand valorile implicite au disparut din
+      # `core/config.py`, o instalare care nu-si spune modelul nu mai porneste. Aici e scris
+      # pentru pornirile locale; se poate schimba din mediu, fara comitere.
+      CODRUT_VERTEX_ACTOR_MODEL: ${CODRUT_VERTEX_ACTOR_MODEL:-gemini-3.8-flash}
+      CODRUT_VERTEX_EVALUATOR_MODEL: ${CODRUT_VERTEX_EVALUATOR_MODEL:-gemini-3.8-flash}
       CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET: ${CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET:-local-email-suppression-fingerprint-secret}
       CODRUT_CORS_ORIGINS: ${CODRUT_CORS_ORIGINS:-["http://localhost","http://localhost:3000","http://localhost:8000"]}
       CODRUT_PUBLIC_APP_URL: ${CODRUT_PUBLIC_APP_URL:-http://localhost:3000}
@@ -98,6 +103,11 @@ services:
       CODRUT_DATABASE_URL: ${CODRUT_DATABASE_URL:-postgresql+asyncpg://codrut:codrut@db:5432/codrut}
       CODRUT_REDIS_URL: ${CODRUT_REDIS_URL:-redis://redis:6379/0}
       CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:-change-me-in-env}
+      # Modelul Vertex — plicul 114, pasul 3. De cand valorile implicite au disparut din
+      # `core/config.py`, o instalare care nu-si spune modelul nu mai porneste. Aici e scris
+      # pentru pornirile locale; se poate schimba din mediu, fara comitere.
+      CODRUT_VERTEX_ACTOR_MODEL: ${CODRUT_VERTEX_ACTOR_MODEL:-gemini-3.8-flash}
+      CODRUT_VERTEX_EVALUATOR_MODEL: ${CODRUT_VERTEX_EVALUATOR_MODEL:-gemini-3.8-flash}
       CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET: ${CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET:-local-email-suppression-fingerprint-secret}
       CODRUT_PUBLIC_APP_URL: ${CODRUT_PUBLIC_APP_URL:-http://localhost:3000}
       CODRUT_EMAIL_BREVO_SANDBOX_ENABLED: ${CODRUT_EMAIL_BREVO_SANDBOX_ENABLED:-false}

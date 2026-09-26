@@ -1,0 +1,554 @@
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { PracticeWorkspace } from "./PracticeWorkspace";
+
+// Plicul 83: pastram optiunile primite de hook, ca testul sa poata simula o trimitere prin voce.
+const voce = vi.hoisted(() => ({ optiuni: null as null | { onAutoSubmit: (text: string) => void } }));
+
+vi.mock("@/hooks/useVoiceToText", () => ({
+  useVoiceToText: (optiuni: { onAutoSubmit: (text: string) => void }) => {
+    voce.optiuni = optiuni;
+    return {
+    isListening: false,
+    isTranscribing: false,
+    startListening: vi.fn(),
+    stopListening: vi.fn(),
+    error: null,
+    };
+  },
+}));
+
+const api = vi.hoisted(() => ({
+  getPracticeConsent: vi.fn(),
+  givePracticeConsent: vi.fn(),
+  startPracticeSession: vi.fn(),
+  submitPracticeTurn: vi.fn(),
+  endPracticeSession: vi.fn(),
+}));
+
+const { PracticeError } = vi.hoisted(() => ({
+  PracticeError: class extends Error {
+    code: string;
+    details: Record<string, unknown>;
+    constructor(message: string, code: string, details: Record<string, unknown>) {
+      super(message);
+      this.code = code;
+      this.details = details;
+    }
+  },
+}));
+
+vi.mock("@/api/practice", () => ({ ...api, PracticeError }));
+
+const ACORD = {
+  acordat: false,
+  cod: "Fox 34",
+  titlu: "Exersează cu Cody",
+  paragrafe: [
+    "Cody e un asistent de exersare construit de Andrei Văcaru.",
+    "Aici intri sub un cod: Fox 34. Numele tău nu e trimis sistemului AI.",
+  ],
+  bifa: "Am înțeles și vreau să încep.",
+  amprenta: "amprenta-textului",
+};
+
+const SESIUNE_DESCHISA = {
+  id: "sesiune-1",
+  kind: "roleplay" as const,
+  state: "open" as const,
+  turnCount: 0,
+};
+
+beforeEach(() => {
+  // jsdom nu are scrollIntoView, iar componenta il cheama la fiecare replica noua.
+  Element.prototype.scrollIntoView = vi.fn();
+  api.startPracticeSession.mockReset();
+  api.submitPracticeTurn.mockReset();
+  api.endPracticeSession.mockReset();
+  api.startPracticeSession.mockResolvedValue(SESIUNE_DESCHISA);
+  // implicit omul și-a dat deja acordul (plicul 139); testele acordului îl iau înapoi
+  api.getPracticeConsent.mockReset();
+  api.givePracticeConsent.mockReset();
+  api.getPracticeConsent.mockResolvedValue({ ...ACORD, acordat: true });
+  api.givePracticeConsent.mockResolvedValue({ ...ACORD, acordat: true });
+});
+
+afterEach(cleanup);
+
+async function porneste() {
+  render(<PracticeWorkspace projectId="proiect-1" />);
+  fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
+  await waitFor(() => expect(api.startPracticeSession).toHaveBeenCalled());
+}
+
+describe("PracticeWorkspace — meniul principal", () => {
+  it("nu mai are deschideri directe: situația se alege după ce intri în mod", () => {
+    // Andrei, 22 septembrie, după prima lui probă pe server: „Toate astea trebuie să iasă.
+    // Situația se stabilește după ce se intră în role-play sau în strategie, nu în meniul
+    // principal." Plicul 128, partea B.
+    render(<PracticeWorkspace projectId="proiect-1" />);
+
+    expect(screen.getByText("Alege modul de antrenament")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Începe conversația" })).toBeTruthy();
+
+    expect(screen.queryByText(/Sau alege o situație de deschidere directă/)).toBeNull();
+    for (const eticheta of [
+      /Colegul care întârzie/,
+      /Feedbackul vag/,
+      /Victima organizațională/,
+      /Mesaj fără context/,
+    ]) {
+      expect(screen.queryByRole("button", { name: eticheta })).toBeNull();
+    }
+  });
+
+  it("pornirea nu mai trimite niciun text gata scris", async () => {
+    // Deschiderile directe porneau sesiunea SI trimiteau pe loc replica scrisa de noi.
+    render(<PracticeWorkspace projectId="proiect-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
+    await waitFor(() => expect(api.startPracticeSession).toHaveBeenCalled());
+
+    expect(api.submitPracticeTurn).not.toHaveBeenCalled();
+  });
+});
+
+describe("PracticeWorkspace — modul de verificare a cunoștințelor", () => {
+  // Plicul 128, partea E. Hotărârea lui Andrei: quizul e al cursurilor, nu al team coachingului.
+  it("stins pe proiect: se vede, dar nu se poate apăsa", () => {
+    render(<PracticeWorkspace projectId="proiect-1" quizEnabled={false} />);
+
+    const cardul = screen.getByText("Verificăm cât ai reținut");
+    expect(cardul).toBeTruthy();
+
+    fireEvent.click(cardul);
+    // nu s-a selectat: „Selectat" rămâne pe role-play
+    expect(screen.getAllByText("Selectat").length).toBe(1);
+    expect(screen.getByText("Role-Play").closest("div")).toBeTruthy();
+  });
+
+  it("aprins pe proiect: se poate alege, ca oricare alt mod", () => {
+    render(<PracticeWorkspace projectId="proiect-1" quizEnabled={true} />);
+
+    fireEvent.click(screen.getByText("Verificăm cât ai reținut"));
+
+    expect(screen.getAllByText("Selectat").length).toBe(1);
+  });
+
+  it("stins, pornirea rămâne pe role-play, nu pe quiz", async () => {
+    render(<PracticeWorkspace projectId="proiect-1" quizEnabled={false} />);
+
+    fireEvent.click(screen.getByText("Verificăm cât ai reținut"));
+    fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
+
+    await waitFor(() => expect(api.startPracticeSession).toHaveBeenCalled());
+    expect(api.startPracticeSession).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "roleplay" }),
+    );
+  });
+});
+
+describe("PracticeWorkspace — închiderea fără evaluare", () => {
+  it("spune omului, cu cuvintele lui Andrei, că evaluarea n-a putut fi făcută", async () => {
+    // Plicul 129, E.3: când plafonul de buget se atinge chiar la închidere, ședința se
+    // închide oricum, fără sinteză. Textul e al lui Andrei — plicul 131.
+    api.endPracticeSession.mockResolvedValue({
+      session: { ...SESIUNE_DESCHISA, state: "closed" },
+      summary: null,
+    });
+    await porneste();
+
+    fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
+
+    expect(
+      await screen.findByText(
+        "Sesiunea s-a încheiat, dar evaluarea nu s-a putut face acum. Spune-i trainerului tău.",
+      ),
+    ).toBeTruthy();
+  });
+});
+
+describe("PracticeWorkspace — drumul înapoi", () => {
+  it("dintr-o sesiune deschisă se poate ieși la alegerea modului fără a o închide", async () => {
+    // Pana la plicul 34 singura iesire dintr-o sesiune pornita era „Incheie
+    // sesiunea". Butonul care ducea inapoi aparea abia dupa ce sesiunea era inchisa.
+    await porneste();
+
+    fireEvent.click(screen.getByRole("button", { name: /Înapoi/ }));
+
+    expect(screen.getByText("Alege modul de antrenament")).toBeTruthy();
+    // sesiunea NU s-a inchis
+    expect(api.endPracticeSession).not.toHaveBeenCalled();
+    // si se poate intoarce la ea
+    expect(screen.getByText("Ai o sesiune deschisă.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Întoarce-te la sesiune" }));
+    expect(screen.queryByText("Alege modul de antrenament")).toBeNull();
+  });
+
+  it("după încheiere, drumul înapoi e primul lucru de pe ecran, iar sinteza rămâne", async () => {
+    api.endPracticeSession.mockResolvedValue({
+      session: { ...SESIUNE_DESCHISA, state: "closed" },
+      summary: "Ai condus discuția calm și ai propus un pas concret.",
+    });
+    await porneste();
+
+    fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
+    await waitFor(() => expect(api.endPracticeSession).toHaveBeenCalled());
+
+    const toate = await screen.findAllByRole("button", { name: /Înapoi la alegerea modului/ });
+    const sinteza = screen.getByText("Ai condus discuția calm și ai propus un pas concret.");
+    const stareaSesiunii = screen.getByText("Sesiune încheiată");
+
+    // sinteza ramane vizibila
+    expect(sinteza).toBeTruthy();
+    // drumul inapoi vine INAINTEA ei pe ecran
+    const primul = toate[0];
+    expect(primul.compareDocumentPosition(sinteza) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // si sta sus, in bara de stare, langa eticheta sesiunii — nu doar in caseta de jos,
+    // unde plicul 36 spune ca omul a derulat si tot nu l-a gasit
+    expect(
+      primul.compareDocumentPosition(stareaSesiunii) & Node.DOCUMENT_POSITION_PRECEDING,
+    ).toBeTruthy();
+
+    fireEvent.click(primul);
+    expect(screen.getByText("Alege modul de antrenament")).toBeTruthy();
+  });
+
+  it("cand sesiunea e inchisa, corpul nu mai spune ca e deschisa", async () => {
+    // Ecranul se contrazicea singur: sus „Sesiune încheiată", in corp „Sesiunea este
+    // deschisă". Textul din corp era cel de stare goala si se arata in ambele cazuri.
+    api.endPracticeSession.mockResolvedValue({
+      session: { ...SESIUNE_DESCHISA, state: "closed" },
+      summary: null,
+    });
+    await porneste();
+
+    expect(screen.getByText("Sesiunea este deschisă.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
+    await waitFor(() => expect(api.endPracticeSession).toHaveBeenCalled());
+
+    expect(await screen.findByText("Sesiune încheiată")).toBeTruthy();
+    expect(screen.queryByText("Sesiunea este deschisă.")).toBeNull();
+    expect(screen.getByText("Sesiunea s-a încheiat fără nicio replică.")).toBeTruthy();
+  });
+});
+
+describe("PracticeWorkspace — refuzul spune de ce", () => {
+  it("la plafonul zilnic scrie in romana cate sesiuni are si cate a facut", async () => {
+    // Pana la plicul 35 clientul citea `err.detail`, camp care nu exista in plicul de
+    // eroare al aplicatiei. Asa ca orice refuz ajungea pe ecran ca acelasi text
+    // generic: omul apasa si parea ca nu se intampla nimic.
+    api.startPracticeSession.mockRejectedValue(
+      new PracticeError("Daily practice session limit of 5 reached", "practice_daily_limit", {
+        max_sessions_per_day: 5,
+        sessions_today: 5,
+      }),
+    );
+    render(<PracticeWorkspace projectId="proiect-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
+
+    const text = await screen.findByText(/limita de sesiuni pe ziua de azi/i);
+    expect(text.textContent).toContain("5 sesiuni pe zi");
+    expect(text.textContent).toContain("azi ai făcut 5");
+    expect(text.textContent).toContain("Numărătoarea se reia mâine");
+    // si NU textul tehnic in engleza
+    expect(text.textContent).not.toContain("Daily practice session limit");
+  });
+
+  it("la orice alta eroare arata mesajul venit de la server", async () => {
+    api.startPracticeSession.mockRejectedValue(new Error("Programul nu e pornit."));
+    render(<PracticeWorkspace projectId="proiect-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
+
+    expect(await screen.findByText("Programul nu e pornit.")).toBeTruthy();
+  });
+});
+
+describe("PracticeWorkspace — ecranul de final", () => {
+  it("titlurile sintezei se vad ca titluri, nu ca text cu diez", async () => {
+    // Pe ecran scria literal „##Concluzie" si „##Recomandări", cu diez cu tot, pentru
+    // ca sunt titluri de markdown pe care caseta nu le interpreta.
+    api.endPracticeSession.mockResolvedValue({
+      session: { ...SESIUNE_DESCHISA, state: "closed" },
+      summary:
+        "##Concluzie\nAi condus discuția calm.\n\n##Recomandări\nPune mai multe întrebări deschise.",
+    });
+    await porneste();
+
+    fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
+    await waitFor(() => expect(api.endPracticeSession).toHaveBeenCalled());
+
+    expect(await screen.findByRole("heading", { name: "Concluzie" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Recomandări" })).toBeTruthy();
+    expect(screen.getByText("Ai condus discuția calm.")).toBeTruthy();
+    expect(screen.getByText("Pune mai multe întrebări deschise.")).toBeTruthy();
+    // si niciun diez ramas la vedere
+    expect(screen.queryByText(/##/)).toBeNull();
+  });
+
+  it("nu pierde text cand sinteza n-are titluri", async () => {
+    api.endPracticeSession.mockResolvedValue({
+      session: { ...SESIUNE_DESCHISA, state: "closed" },
+      summary: "O sinteză scrisă fără niciun titlu.",
+    });
+    await porneste();
+
+    fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
+    await waitFor(() => expect(api.endPracticeSession).toHaveBeenCalled());
+
+    expect(await screen.findByText("O sinteză scrisă fără niciun titlu.")).toBeTruthy();
+  });
+
+  it("cât se generează sinteza, ecranul spune ce se întâmplă", async () => {
+    // Dupa „Încheie sesiunea" trec cateva secunde bune — doua cereri catre model — si
+    // ecranul nu spunea nimic (plicul 39).
+    //
+    // Textul s-a schimbat la plicul 129, partea B, la hotararea lui Andrei: spunea „câteva
+    // secunde", iar masurat la plicul 128 inchiderea a durat intre 17 si 72 de secunde. Un text
+    // care promite mai putin decat se intampla e mai rau decat niciunul.
+    let deblocheaza: (v: unknown) => void = () => {};
+    api.endPracticeSession.mockReturnValue(
+      new Promise((resolve) => {
+        deblocheaza = resolve;
+      }),
+    );
+    await porneste();
+
+    fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
+
+    expect(await screen.findByText("Pregătesc evaluarea ta.")).toBeTruthy();
+    expect(screen.getByText("Durează până la un minut.")).toBeTruthy();
+
+    deblocheaza({
+      session: { ...SESIUNE_DESCHISA, state: "closed" },
+      summary: "Gata.",
+    });
+    await waitFor(() => expect(screen.queryByText("Pregătesc evaluarea ta.")).toBeNull());
+  });
+});
+
+describe("PracticeWorkspace — pornirea în doi pași", () => {
+  const SCENA = {
+    id: "cody-2",
+    sessionId: "sesiune-1",
+    ordinal: 3,
+    role: "actor" as const,
+    text: "Setup: ești managerul lui Vali. Obiectivul tău: să ceri raportul asertiv.",
+    createdAt: "2026-09-04T10:00:05Z",
+    expiresAt: "2026-10-04T10:00:05Z",
+  };
+  const SALUT = {
+    id: "cody-1",
+    sessionId: "sesiune-1",
+    ordinal: 1,
+    role: "actor" as const,
+    text: "Salut! Ești gata să începem un joc de rol?",
+    createdAt: "2026-09-04T09:59:00Z",
+    expiresAt: "2026-10-04T09:59:00Z",
+  };
+
+  async function pornesteCuIntrebarea(kind: "roleplay" | "coaching" | "knowledge" = "roleplay") {
+    api.startPracticeSession.mockResolvedValue({ ...SESIUNE_DESCHISA, kind, firstTurn: SALUT });
+    render(<PracticeWorkspace projectId="proiect-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
+    await waitFor(() => expect(api.startPracticeSession).toHaveBeenCalled());
+  }
+
+  it("cele două butoane apar sub PRIMA replică, nu sub cea care pornește scena", async () => {
+    await pornesteCuIntrebarea();
+
+    expect(await screen.findByRole("button", { name: "Da, hai" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Vreau să spun eu tema" })).toBeTruthy();
+  });
+
+  it("butonul Da, hai trimite confirmarea", async () => {
+    await pornesteCuIntrebarea();
+    api.submitPracticeTurn.mockResolvedValue({
+      participantTurn: {
+        ...SALUT, id: "om-1", ordinal: 2, role: "participant" as const, text: "Da, hai.",
+      },
+      actorTurn: SCENA,
+      sessionState: "open" as const,
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Da, hai" }));
+
+    await waitFor(() =>
+      expect(api.submitPracticeTurn).toHaveBeenCalledWith("sesiune-1", "Da, hai."),
+    );
+    // si dispar dupa ce a apasat
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Da, hai" })).toBeNull());
+  });
+
+  it("butonul Vreau sa spun eu tema pune textul in caseta si NU trimite", async () => {
+    await pornesteCuIntrebarea();
+    api.submitPracticeTurn.mockClear();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Vreau să spun eu tema" }));
+
+    const caseta = screen.getByPlaceholderText(/Scrie un mesaj/) as HTMLTextAreaElement;
+    expect(caseta.value).toBe("Vreau să exersăm altceva: ");
+    expect(api.submitPracticeTurn).not.toHaveBeenCalled();
+  });
+
+  it("nu apar la coaching sau la quiz", async () => {
+    for (const kind of ["coaching", "knowledge"] as const) {
+      cleanup();
+      await pornesteCuIntrebarea(kind);
+      expect(screen.queryByRole("button", { name: "Da, hai" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Vreau să spun eu tema" })).toBeNull();
+    }
+  });
+});
+
+
+// --- plicul 83: raspunsul participantului ramane pe ecran ---
+//
+// Pana acum caseta se golea la trimitere, iar replica aparea in fir abia dupa raspunsul
+// serverului. Cat se astepta replica lui Cody, textul omului nu era nicaieri pe ecran.
+
+function raspunsAmanat() {
+  let rezolva!: (valoare: unknown) => void;
+  let respinge!: (motiv: unknown) => void;
+  const promisiune = new Promise((ok, eroare) => {
+    rezolva = ok;
+    respinge = eroare;
+  });
+  return { promisiune, rezolva, respinge };
+}
+
+function raspunsCu(text: string) {
+  return {
+    participantTurn: {
+      id: "om-salvat", sessionId: "sesiune-1", ordinal: 1, role: "participant" as const,
+      text, createdAt: "2026-09-19T10:00:00Z", expiresAt: "2026-10-19T10:00:00Z",
+    },
+    actorTurn: {
+      id: "cody-1", sessionId: "sesiune-1", ordinal: 2, role: "actor" as const,
+      text: "Replica lui Cody.", createdAt: "2026-09-19T10:00:05Z", expiresAt: "2026-10-19T10:00:05Z",
+    },
+    sessionState: "open" as const,
+  };
+}
+
+describe("PracticeWorkspace — raspunsul omului ramane pe ecran (plicul 83)", () => {
+  it("textul scris sta in fir cat se asteapta raspunsul, si nu se dubleaza dupa", async () => {
+    await porneste();
+    const amanat = raspunsAmanat();
+    api.submitPracticeTurn.mockReturnValue(amanat.promisiune);
+    const caseta = await screen.findByPlaceholderText(/Scrie un mesaj/);
+
+    fireEvent.change(caseta, { target: { value: "Am nevoie de raportul pana vineri." } });
+    fireEvent.click(screen.getByRole("button", { name: "Trimite" }));
+
+    // cat se asteapta: textul e in fir, caseta e goala
+    expect(await screen.findByText("Am nevoie de raportul pana vineri.")).toBeTruthy();
+    expect((caseta as HTMLTextAreaElement).value).toBe("");
+
+    await act(async () => amanat.rezolva(raspunsCu("Am nevoie de raportul pana vineri.")));
+
+    expect(await screen.findByText("Replica lui Cody.")).toBeTruthy();
+    expect(screen.getAllByText("Am nevoie de raportul pana vineri.")).toHaveLength(1);
+  });
+
+  it("textul venit prin microfon sta la fel in fir cat se asteapta", async () => {
+    await porneste();
+    const amanat = raspunsAmanat();
+    api.submitPracticeTurn.mockReturnValue(amanat.promisiune);
+    await screen.findByPlaceholderText(/Scrie un mesaj/);
+
+    await act(async () => voce.optiuni?.onAutoSubmit("Vorbit la microfon."));
+
+    expect(await screen.findByText("Vorbit la microfon.")).toBeTruthy();
+    await act(async () => amanat.rezolva(raspunsCu("Vorbit la microfon.")));
+    expect(screen.getAllByText("Vorbit la microfon.")).toHaveLength(1);
+  });
+
+  it("la eroare, replica iese din fir si textul se intoarce in caseta, ca inainte", async () => {
+    await porneste();
+    const amanat = raspunsAmanat();
+    api.submitPracticeTurn.mockReturnValue(amanat.promisiune);
+    const caseta = await screen.findByPlaceholderText(/Scrie un mesaj/);
+
+    fireEvent.change(caseta, { target: { value: "Text care nu pleaca." } });
+    fireEvent.click(screen.getByRole("button", { name: "Trimite" }));
+    expect(await screen.findByText("Text care nu pleaca.")).toBeTruthy();
+
+    await act(async () => amanat.respinge(new Error("Serverul nu raspunde.")));
+
+    await waitFor(() => expect((caseta as HTMLTextAreaElement).value).toBe("Text care nu pleaca."));
+    // in fir nu mai e; singurul loc unde se vede e caseta, unde s-a intors
+    expect(
+      screen.queryAllByText("Text care nu pleaca.", { ignore: "script, style, textarea" }),
+    ).toHaveLength(0);
+  });
+});
+
+
+describe("PracticeWorkspace — acordul la prima intrare (plicul 139)", () => {
+  it("fără acord: textul și codul se văd, iar butonul se aprinde numai cu bifa", async () => {
+    api.getPracticeConsent.mockResolvedValue(ACORD);
+    render(<PracticeWorkspace projectId="proiect-1" />);
+
+    expect(await screen.findByText("Exersează cu Cody")).toBeTruthy();
+    expect(screen.getByText(/Aici intri sub un cod: Fox 34/)).toBeTruthy();
+    const incepe = screen.getByRole("button", { name: "Începe conversația" });
+    expect((incepe as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect((incepe as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(incepe);
+    await waitFor(() => expect(api.startPracticeSession).toHaveBeenCalled());
+    expect(api.givePracticeConsent).toHaveBeenCalledWith("proiect-1", "amprenta-textului");
+    expect(api.givePracticeConsent.mock.invocationCallOrder[0]).toBeLessThan(
+      api.startPracticeSession.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("cu acord: nu se mai arată nimic în plus", async () => {
+    render(<PracticeWorkspace projectId="proiect-1" />);
+    await waitFor(() => expect(api.getPracticeConsent).toHaveBeenCalled());
+    expect(screen.queryByText("Exersează cu Cody")).toBeNull();
+    expect(
+      (screen.getByRole("button", { name: "Începe conversația" }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it("la role-play, rândul cu /feedback stă lângă locul unde omul scrie", async () => {
+    await porneste();
+    expect(
+      await screen.findByText("Vrei să discuți nota sau evaluarea? Scrie /feedback și mesajul tău."),
+    ).toBeTruthy();
+  });
+});
+
+describe("PracticeWorkspace — ședința prea scurtă (plicul 144)", () => {
+  // exact ce trimite serverul sub prag: textul lui Andrei, cu titlurile din `rezumat.md`
+  const TEXTUL =
+    "##Concluzie\n" +
+    "Ai început să interacționezi cu Cody — primul pas e făcut.\n\n" +
+    "Sesiunea a fost prea scurtă pentru o evaluare reală. Pentru ca antrenamentul să producă " +
+    "insight, ai nevoie de cel puțin 5-6 schimburi pe aceeași situație.\n\n" +
+    "##Recomandări\n" +
+    "Reia sesiunea cu o situație concretă din viața ta — ceva care încă te macină. Mergi în " +
+    "detaliu cu Cody, nu te grăbi să închizi.";
+
+  it("omul vede textul lui Andrei sub cele două titluri, fără diezi", async () => {
+    api.endPracticeSession.mockResolvedValue({
+      session: { ...SESIUNE_DESCHISA, state: "closed" },
+      summary: TEXTUL,
+    });
+    await porneste();
+    fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
+    await waitFor(() => expect(api.endPracticeSession).toHaveBeenCalled());
+
+    expect(await screen.findByText("Concluzie")).toBeTruthy();
+    expect(screen.getByText("Recomandări")).toBeTruthy();
+    expect(screen.getByText(/Sesiunea a fost prea scurtă pentru o evaluare reală\./)).toBeTruthy();
+    expect(screen.getByText(/Reia sesiunea cu o situație concretă din viața ta/)).toBeTruthy();
+    expect(screen.queryByText(/##/)).toBeNull();
+  });
+});

@@ -1,0 +1,525 @@
+from __future__ import annotations
+
+import json
+import uuid
+from decimal import Decimal
+from unittest.mock import MagicMock
+
+import httpx
+import pytest
+from sqlalchemy import select
+
+from codrut.contracts.generation import (
+    GenerationError,
+    GenerationProviderKey,
+    GenerationPurpose,
+    GenerationRequest,
+    TokenUsage,
+)
+from codrut.core.config import Settings
+from codrut.core.database import SessionLocal
+from codrut.core.errors import DomainError
+from codrut.modules.companies.models import (
+    Company,
+    CompanyProject,
+    CompanyProjectStatus,
+)
+from codrut.modules.identity.models import User  # noqa: F401
+from codrut.modules.practice import generation_provider as modul_furnizor
+from codrut.modules.practice.budget import (
+    BudgetExceeded,
+    release,
+    reserve,
+    settle,
+)
+from codrut.modules.practice.generation_provider import (
+    LocalGenerationProvider,
+    VertexGenerationProvider,
+    build_generation_provider,
+)
+from codrut.modules.practice.models import (
+    BudgetReservationState,
+    PracticeBudgetReservation,
+    PracticeProgramSettings,
+    PracticeTheme,
+    ProgramMode,
+)
+from codrut.modules.practice.pricing import (
+    estimate_cost,
+    estimate_pessimistic_cost,
+)
+
+
+def test_estimate_cost_with_thinking_measured_case() -> None:
+    """Costul cu gândire: 54 intrate, 34 ieșite, 902 gândite.
+
+    Prețurile sunt ale modelului pe care rulăm, `gemini-3.8-flash` (plicul 101; până atunci
+    testul ăsta cerea 0,0024, prețurile lui `gemini-2.5-flash`, care se retrage pe 16 octombrie):
+    54 / 1M * 0,75 + (34 + 902) / 1M * 3,75 = 0,0035505 -> 0,003551 USD.
+    """
+    settings = Settings()
+    usage = TokenUsage(prompt_tokens=54, output_tokens=34, thought_tokens=902)
+    cost = estimate_cost(usage, settings)
+
+    assert cost == Decimal("0.003551")
+
+
+def test_estimate_cost_without_thinking_measured_case() -> None:
+    """Costul fără gândire: 54 intrate, 34 ieșite.
+
+    Tot pe prețurile de azi: 54 / 1M * 0,75 + 34 / 1M * 3,75 = 0,0001680 USD.
+    """
+    settings = Settings()
+    usage = TokenUsage(prompt_tokens=54, output_tokens=34, thought_tokens=0)
+    cost = estimate_cost(usage, settings)
+
+    assert cost == Decimal("0.000168")
+
+
+def test_estimate_pessimistic_cost() -> None:
+    settings = Settings()
+    cost = estimate_pessimistic_cost(
+        prompt_tokens=100,
+        max_output_tokens=1024,
+        thinking_budget=1024,
+        settings=settings,
+    )
+    # 100 / 1M * 0,75 + (1024 + 1024) / 1M * 3,75, pe prețurile de azi (plicul 101)
+    assert cost == Decimal("0.007755")
+
+
+@pytest.mark.asyncio
+async def test_local_generation_provider_returns_result_without_network() -> None:
+    settings = Settings(generation_provider="local")
+    provider = build_generation_provider(settings)
+
+    assert isinstance(provider, LocalGenerationProvider)
+    assert provider.key == GenerationProviderKey.local
+
+    request = GenerationRequest(
+        messages=(),
+        system_instruction="Ești un coleg cooperant.",
+        purpose=GenerationPurpose.actor,
+        max_output_tokens=1024,
+        temperature=0.7,
+        thinking_budget=0,
+    )
+
+    result = await provider.generate(request)
+
+    assert result.provider == GenerationProviderKey.local
+    assert result.finish_reason == "STOP"
+    assert result.text == "Local generation response for actor."
+    assert result.usage.prompt_tokens > 0
+    assert result.usage.output_tokens > 0
+    assert result.usage.thought_tokens == 0
+    assert result.estimated_usd >= Decimal("0.0000")
+
+
+def test_build_generation_provider_missing_credentials_raises_error() -> None:
+    settings = Settings(
+        generation_provider="vertex",
+        vertex_credentials_path="/nonexistent/path/cody-vertex.json",
+    )
+    with pytest.raises(DomainError) as exc_info:
+        build_generation_provider(settings)
+
+    assert exc_info.value.code == "credentials_missing"
+
+
+@pytest.mark.asyncio
+async def test_vertex_generation_provider_with_mock_client() -> None:
+    settings = Settings(
+        generation_provider="vertex",
+        vertex_project_id="test-project",
+        vertex_region="europe-west4",
+        # Modelul pe care rulăm. Era `gemini-2.5-flash` — se retrage pe 16 octombrie, nu mai e
+        # în tabelul de prețuri (plicul 120) și de aceea ar fi plătit la cel mai scump preț știut.
+        vertex_actor_model="gemini-3.8-flash",
+    )
+
+    mock_credentials = MagicMock()
+    mock_credentials.valid = True
+    mock_credentials.token = "mock-bearer-token-12345"  # noqa: S105
+
+    fake_response_payload = {
+        "candidates": [
+            {
+                "content": {
+                    "role": "model",
+                    "parts": [
+                        {"text": "Răspuns generat de test."}
+                    ]
+                },
+                "finishReason": "STOP",
+            }
+        ],
+        "usageMetadata": {
+            "promptTokenCount": 54,
+            "candidatesTokenCount": 34,
+            "thoughtsTokenCount": 902,
+        },
+    }
+
+    captured_requests: list[httpx.Request] = []
+
+    def mock_handler(req: httpx.Request) -> httpx.Response:
+        captured_requests.append(req)
+        return httpx.Response(200, json=fake_response_payload)
+
+    transport = httpx.MockTransport(mock_handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        provider = VertexGenerationProvider(
+            settings=settings,
+            credentials=mock_credentials,
+            client=client,
+        )
+
+        request = GenerationRequest(
+            messages=(),
+            system_instruction="Instrucțiuni de sistem",
+            purpose=GenerationPurpose.actor,
+            max_output_tokens=512,
+            temperature=0.5,
+            thinking_budget=1024,
+        )
+
+        result = await provider.generate(request)
+
+        assert result.provider == GenerationProviderKey.vertex
+        assert result.model == "gemini-3.8-flash"
+        assert result.region == "europe-west4"
+        assert result.finish_reason == "STOP"
+        assert result.text == "Răspuns generat de test."
+        assert result.usage.prompt_tokens == 54
+        assert result.usage.output_tokens == 34
+        assert result.usage.thought_tokens == 902
+        # aceleași 54/34/902, pe prețurile de azi
+        assert result.estimated_usd == Decimal("0.003551")
+
+        assert len(captured_requests) == 1
+        http_req = captured_requests[0]
+        assert http_req.headers["authorization"] == "Bearer mock-bearer-token-12345"
+        body = json.loads(http_req.content.decode("utf-8"))
+        assert body["generationConfig"]["thinkingConfig"]["thinkingBudget"] == 1024
+        assert body["generationConfig"]["temperature"] == 0.5
+        assert body["generationConfig"]["maxOutputTokens"] == 512
+        assert body["systemInstruction"]["parts"][0]["text"] == "Instrucțiuni de sistem"
+
+
+@pytest.mark.asyncio
+async def test_vertex_generation_provider_abnormal_finish_reason_raises_error() -> None:
+    settings = Settings(generation_provider="vertex")
+    mock_credentials = MagicMock()
+    mock_credentials.valid = True
+    mock_credentials.token = "mock-token"  # noqa: S105
+
+    fake_response_payload = {
+        "candidates": [
+            {
+                "content": {"role": "model", "parts": []},
+                "finishReason": "SAFETY",
+            }
+        ],
+    }
+
+    transport = httpx.MockTransport(lambda req: httpx.Response(200, json=fake_response_payload))
+    async with httpx.AsyncClient(transport=transport) as client:
+        provider = VertexGenerationProvider(
+            settings=settings,
+            credentials=mock_credentials,
+            client=client,
+        )
+
+        request = GenerationRequest(
+            messages=(),
+        )
+
+        with pytest.raises(GenerationError) as exc_info:
+            await provider.generate(request)
+
+        assert exc_info.value.code == "vertex_finish_reason_error"
+        assert "SAFETY" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_budget_reservation_lifecycle() -> None:
+    """Test budget reservation, cap enforcement, settlement, and release with cap_usd."""
+    async with SessionLocal() as session:
+        test_suffix = uuid.uuid4().hex[:8]
+        company = Company(name=f"Budget Test Co {test_suffix}")
+        session.add(company)
+        await session.flush()
+
+        project = CompanyProject(
+            company_id=company.id,
+            name=f"Budget Test Project {test_suffix}",
+            status=CompanyProjectStatus.active,
+        )
+        session.add(project)
+        await session.flush()
+
+        theme = PracticeTheme(
+            slug=f"theme-{test_suffix}",
+            name="Theme Test",
+        )
+        session.add(theme)
+        await session.flush()
+
+        program_settings = PracticeProgramSettings(
+            project_id=project.id,
+            mode=ProgramMode.training,
+            theme_id=theme.id,
+            usd_cap_per_participant=Decimal("3.00"),
+        )
+        session.add(program_settings)
+        await session.flush()
+
+        prog_id = program_settings.id
+        cap_usd = Decimal("6.0000")
+
+        # 1. Test cap enforcement: Attempting to reserve 6.01 USD against cap 6.00 must fail.
+        with pytest.raises(BudgetExceeded):
+            await reserve(
+                session,
+                prog_id,
+                estimated_usd=Decimal("6.0100"),
+                cap_usd=cap_usd,
+            )
+
+        # Verify NO reservation row was written on failure
+        stmt_check = select(PracticeBudgetReservation).where(
+            PracticeBudgetReservation.program_settings_id == prog_id
+        )
+        rows = (await session.execute(stmt_check)).scalars().all()
+        assert len(rows) == 0
+
+        # 2. Reserve 4.00 USD (under 6.00 USD cap) -> Succeeds
+        res1_id = await reserve(
+            session,
+            prog_id,
+            estimated_usd=Decimal("4.0000"),
+            cap_usd=cap_usd,
+        )
+        assert res1_id is not None
+
+        # 3. Attempt to reserve another 2.50 USD (4.00 + 2.50 = 6.50 > 6.00) -> Fails
+        with pytest.raises(BudgetExceeded):
+            await reserve(
+                session,
+                prog_id,
+                estimated_usd=Decimal("2.5000"),
+                cap_usd=cap_usd,
+            )
+
+        # 4. Settle res1 with actual cost 1.50 USD
+        await settle(session, res1_id, actual_usd=Decimal("1.5000"))
+
+        # Check row state
+        stmt_res1 = select(PracticeBudgetReservation).where(PracticeBudgetReservation.id == res1_id)
+        res1_row = (await session.execute(stmt_res1)).scalar_one()
+        assert res1_row.state == BudgetReservationState.settled
+        assert res1_row.actual_usd == Decimal("1.5000")
+
+        # 5. Now spent is 1.50 USD. Reserving 2.50 USD (1.50 + 2.50 = 4.00 <= 6.00) -> Succeeds!
+        res2_id = await reserve(
+            session,
+            prog_id,
+            estimated_usd=Decimal("2.5000"),
+            cap_usd=cap_usd,
+        )
+        assert res2_id is not None
+
+        # 6. Release res2 -> State becomes 'released', freed from budget
+        await release(session, res2_id)
+        stmt_res2 = select(PracticeBudgetReservation).where(PracticeBudgetReservation.id == res2_id)
+        res2_row = (await session.execute(stmt_res2)).scalar_one()
+        assert res2_row.state == BudgetReservationState.released
+
+        await session.rollback()
+
+
+@pytest.mark.asyncio
+async def test_budget_reconciliation_refusal_on_released_or_settled_reservation() -> None:
+    """Verifies that settle() and release() reject reservations not in 'reserved' state."""
+    async with SessionLocal() as session:
+        test_suffix = uuid.uuid4().hex[:8]
+        company = Company(name=f"Reconcile Guard Co {test_suffix}")
+        session.add(company)
+        await session.flush()
+
+        project = CompanyProject(
+            company_id=company.id,
+            name=f"Reconcile Guard Project {test_suffix}",
+            status=CompanyProjectStatus.active,
+        )
+        session.add(project)
+        await session.flush()
+
+        theme = PracticeTheme(
+            slug=f"theme-guard-{test_suffix}",
+            name="Theme Guard Test",
+        )
+        session.add(theme)
+        await session.flush()
+
+        program_settings = PracticeProgramSettings(
+            project_id=project.id,
+            mode=ProgramMode.training,
+            theme_id=theme.id,
+            usd_cap_per_participant=Decimal("3.00"),
+        )
+        session.add(program_settings)
+        await session.flush()
+
+        prog_id = program_settings.id
+        cap_usd = Decimal("10.0000")
+
+        # 1. Test against already released reservation
+        res_released_id = await reserve(
+            session,
+            prog_id,
+            estimated_usd=Decimal("1.0000"),
+            cap_usd=cap_usd,
+        )
+        await release(session, res_released_id)
+
+        with pytest.raises(DomainError) as exc_settle:
+            await settle(session, res_released_id, actual_usd=Decimal("0.8000"))
+        assert exc_settle.value.code == "invalid_reservation_state"
+
+        with pytest.raises(DomainError) as exc_release:
+            await release(session, res_released_id)
+        assert exc_release.value.code == "invalid_reservation_state"
+
+        # 2. Test against already settled reservation
+        res_settled_id = await reserve(
+            session,
+            prog_id,
+            estimated_usd=Decimal("2.0000"),
+            cap_usd=cap_usd,
+        )
+        await settle(session, res_settled_id, actual_usd=Decimal("1.5000"))
+
+        with pytest.raises(DomainError) as exc_settle_again:
+            await settle(session, res_settled_id, actual_usd=Decimal("1.8000"))
+        assert exc_settle_again.value.code == "invalid_reservation_state"
+
+        with pytest.raises(DomainError) as exc_release_settled:
+            await release(session, res_settled_id)
+        assert exc_release_settled.value.code == "invalid_reservation_state"
+
+        await session.rollback()
+
+
+# --- plicul 63: cand furnizorul e aglomerat, mai incercam ---
+#
+# Masurat pe 7 septembrie: sase din noua cereri catre Vertex au primit 429 intr-o
+# fereastra de sase minute, iar omul a vazut „Nu am putut trimite mesajul" de fiecare
+# data, fiindca cererea se trimitea o singura data.
+
+
+def _furnizor_de_proba(client: httpx.AsyncClient) -> VertexGenerationProvider:
+    settings = Settings(
+        generation_provider="vertex",
+        vertex_project_id="test-project",
+        vertex_region="europe-west4",
+        vertex_actor_model="gemini-3.8-flash",
+    )
+    mock_credentials = MagicMock()
+    mock_credentials.valid = True
+    mock_credentials.token = "mock-token"  # noqa: S105
+    return VertexGenerationProvider(
+        settings=settings,
+        credentials=mock_credentials,
+        client=client,
+    )
+
+
+@pytest.mark.asyncio
+async def test_cand_furnizorul_e_aglomerat_replica_tot_ajunge(monkeypatch) -> None:
+    """503, apoi 429, apoi 200: generate intoarce textul, nu arunca."""
+    pauze: list[float] = []
+
+    async def fara_asteptare(secunde: float) -> None:
+        pauze.append(secunde)
+
+    monkeypatch.setattr(modul_furnizor.asyncio, "sleep", fara_asteptare)
+
+    raspuns_bun = {
+        "candidates": [
+            {
+                "content": {"role": "model", "parts": [{"text": "A ajuns."}]},
+                "finishReason": "STOP",
+            }
+        ],
+        "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5},
+    }
+    coduri = [503, 429, 200]
+    cereri: list[httpx.Request] = []
+
+    def raspunde(req: httpx.Request) -> httpx.Response:
+        cereri.append(req)
+        cod = coduri[len(cereri) - 1]
+        if cod == 200:
+            return httpx.Response(200, json=raspuns_bun)
+        return httpx.Response(cod, json={"error": "busy"})
+
+    transport = httpx.MockTransport(raspunde)
+    async with httpx.AsyncClient(transport=transport) as client:
+        rezultat = await _furnizor_de_proba(client).generate(GenerationRequest(messages=()))
+
+    assert rezultat.text == "A ajuns."
+    assert len(cereri) == 3, "cererea trebuie reincercata, nu trimisa o singura data"
+    assert pauze == [2.0, 5.0], "pauzele scurte, in ordinea din plicul 63"
+
+
+@pytest.mark.asyncio
+async def test_aglomerat_de_trei_ori_are_cod_separat(monkeypatch) -> None:
+    """429 de trei ori: cod `vertex_rate_limited`, nu `vertex_http_error`.
+
+    Interfata trebuie sa poata spune „e aglomerat acum", nu „nu am putut trimite".
+    """
+
+    async def fara_asteptare(secunde: float) -> None:
+        return None
+
+    monkeypatch.setattr(modul_furnizor.asyncio, "sleep", fara_asteptare)
+
+    cereri: list[httpx.Request] = []
+
+    def raspunde(req: httpx.Request) -> httpx.Response:
+        cereri.append(req)
+        return httpx.Response(429, json={"error": "busy"})
+
+    transport = httpx.MockTransport(raspunde)
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(GenerationError) as exc_info:
+            await _furnizor_de_proba(client).generate(GenerationRequest(messages=()))
+
+    assert exc_info.value.code == "vertex_rate_limited"
+    assert len(cereri) == 3, "trei incercari inainte de a renunta"
+
+
+@pytest.mark.asyncio
+async def test_o_eroare_adevarata_nu_se_reincearca(monkeypatch) -> None:
+    """500 nu e aglomeratie: se opreste din prima, cu `vertex_http_error`."""
+
+    async def fara_asteptare(secunde: float) -> None:
+        raise AssertionError("nu se asteapta pentru o eroare care nu e aglomeratie")
+
+    monkeypatch.setattr(modul_furnizor.asyncio, "sleep", fara_asteptare)
+
+    cereri: list[httpx.Request] = []
+
+    def raspunde(req: httpx.Request) -> httpx.Response:
+        cereri.append(req)
+        return httpx.Response(500, json={"error": "stricat"})
+
+    transport = httpx.MockTransport(raspunde)
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(GenerationError) as exc_info:
+            await _furnizor_de_proba(client).generate(GenerationRequest(messages=()))
+
+    assert exc_info.value.code == "vertex_http_error"
+    assert len(cereri) == 1

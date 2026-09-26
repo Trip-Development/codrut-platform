@@ -40,6 +40,10 @@ export type ParticipantWorkspaceSummary = {
 export type ParticipantWorkspaceProject = {
   id: string;
   name: string;
+  /** Tipul proiectului e comutatorul meniului, nu o etichetă. */
+  projectType?: string | null;
+  /** „Verificăm cât ai reținut" e aprins pe proiectul ăsta? — plicul 128, partea E. */
+  quizEnabled?: boolean;
   status?: "active" | "completed" | "archived";
   historyBucket?: "current" | "history";
   deadlineLabel: string;
@@ -155,6 +159,8 @@ type BackendParticipantWorkspaceSummary = {
 type BackendParticipantWorkspaceProject = {
   id: string;
   name: string;
+  project_type?: string | null;
+  quiz_enabled?: boolean;
   status?: "active" | "completed" | "archived";
   history_bucket?: "current" | "history";
   deadline_label: string;
@@ -307,7 +313,7 @@ export function mapParticipantWorkspaceSummary(
     anonymousName: data.anonymous_name,
     pcmBase: data.pcm_base,
     pcmPhase: data.pcm_phase,
-    projectName: data.project_name ?? "Selectează programul",
+    projectName: data.project_name ?? (data.context_selection_required ? "Selectează programul" : ""),
     projectId: data.project_id,
     assessmentCycleId: data.assessment_cycle_id,
     contextSelectionRequired: data.context_selection_required ?? false,
@@ -354,6 +360,8 @@ function mapParticipantWorkspaceProject(
     id: project.id,
     name: project.name,
     status: project.status ?? "active",
+    projectType: project.project_type ?? null,
+    quizEnabled: project.quiz_enabled ?? false,
     historyBucket: project.history_bucket ?? "current",
     deadlineLabel: project.deadline_label,
     deadlineAt: project.deadline_at,

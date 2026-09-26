@@ -1,0 +1,42 @@
+name: Build Test Image (feat/practice-schema)
+
+on:
+  push:
+    branches:
+      - feat/practice-schema
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: test-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  images:
+    name: candidate / test-images
+    uses: ./.github/workflows/_image-build.yml
+    with:
+      push: true
+      tag: test-${{ github.sha }}
+      ref: ${{ github.sha }}
+      cache_scope: practice-test
+    secrets: inherit
+
+  summary:
+    name: candidate / image-summary
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Write Step Summary
+        run: |
+          echo "### 🚀 Imagini Test Construite cu Succes" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Backend Image:** \`${{ needs.images.outputs.backend-image }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Frontend Image:** \`${{ needs.images.outputs.frontend-image }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Release SHA:** \`${{ needs.images.outputs.release-sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Copiază aceste imagini în \`infra/test/.env\` pe server." >> "$GITHUB_STEP_SUMMARY"

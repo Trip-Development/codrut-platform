@@ -32,7 +32,10 @@ export function AccountWorkspace({ session, summary }: AccountWorkspaceProps) {
   const showPcm = summary.showParticipantResults !== false && Boolean(summary.pcmBase || summary.pcmPhase);
   const contextRows: AccountSettingsDetailRow[] = [
     { label: "Companie", value: company },
-    { label: "Proiect", value: summary.projectName },
+    // Randul "Proiect": numai daca omul are proiect (ramura lui Cody, c6d7526).
+    // Randurile PCM: numai cand `showPcm` (partea chatului Aplicatiei). Fiecare rand
+    // isi pastreaza regula partii lui — plicul 131.
+    ...(summary.projectName ? [{ label: "Proiect", value: summary.projectName }] : []),
     ...(showPcm ? pcmRow("Bază PCM", summary.pcmBase) : []),
     ...(showPcm ? pcmRow("Fază PCM", summary.pcmPhase) : []),
   ];

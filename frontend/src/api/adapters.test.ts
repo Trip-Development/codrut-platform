@@ -878,10 +878,16 @@ describe("frontend API adapter stubs", () => {
 
     const summary = await getParticipantWorkspaceSummary({ headers: { "X-Test": "true" } });
 
+    // `projectType` și `quizEnabled` vin din ramura lui Cody (plicurile 113 și 128): tipul
+    // proiectului alege meniul, iar quizul se aprinde pe proiect. Proiectele de aici nu au tip și
+    // nu au quiz, deci sosesc `null` și `false`. Plicul 131: testul era roșu pe ramura lui Cody de
+    // când s-au adăugat câmpurile — nu din cauza a ceva stricat, ci a obiectului comparat exact.
     expect(summary.projects).toEqual([
       {
         id: "project-1",
         name: "Leadership de bază",
+        projectType: null,
+        quizEnabled: false,
         status: "active",
         historyBucket: "current",
         deadlineLabel: "1 august",
@@ -891,6 +897,8 @@ describe("frontend API adapter stubs", () => {
       {
         id: "project-2",
         name: "Leadership avansat",
+        projectType: null,
+        quizEnabled: false,
         status: "active",
         historyBucket: "current",
         deadlineLabel: "15 august",

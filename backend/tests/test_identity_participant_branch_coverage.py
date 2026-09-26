@@ -499,7 +499,8 @@ def test_workspace_context_handles_no_project_and_multiple_projects() -> None:
         project_b: SimpleNamespace(id=project_b, name="Project B", due_at=None),
     }
 
-    assert service._workspace_project(company, [], projects) == (None, "Synthetic company")
+    # Plicul 78, decizia lui Andrei: fara proiect, fara rand — nu numele firmei in locul lui.
+    assert service._workspace_project(company, [], projects) == (None, None)
     assert service._workspace_project(
         company,
         [_assignment(project_id=project_a), _assignment(project_id=project_b)],

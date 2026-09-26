@@ -16,7 +16,9 @@ import {
   getCompanyProjectById,
   getProjectParticipants,
 } from "@/api/companies";
+import { getTrainingRoom } from "@/api/practice";
 import { getServerApiRequestOptions } from "@/api/server-request";
+import { TrainingRoom } from "./TrainingRoom";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { ProjectStatusBadge, projectTypeLabel } from "@/components/projects/project-display";
 import { cn } from "@/utils/cn";
@@ -64,6 +66,28 @@ export default async function ProjectOverviewPage({
   ).length;
   const pendingInvites = Math.max(0, participants.length - invited);
   const basePath = `/trainer/projects/${project.id}`;
+  const isTrainingProject = project.project_type === "training";
+
+  // La un proiect de training se intra in CAMERA aplicatiei vechi: structura ei,
+  // ecranele ei, sectiunile ei. Filele de coaching nu se mai arata.
+  // Andrei: „E ca si cum ai intra in alta camera."
+  if (isTrainingProject) {
+    const room = await getTrainingRoom(projectId, requestOptions);
+    if (!room) {
+      return (
+        <div className="flex flex-col gap-5">
+          {loadErrors.map((error) => (
+            <InlineFeedback key={error} tone="danger">{error}</InlineFeedback>
+          ))}
+          <InlineFeedback tone="danger">
+            Nu am putut încărca camera de training. Proiectul și participanții sunt
+            neatinși — e doar afișarea.
+          </InlineFeedback>
+        </div>
+      );
+    }
+    return <TrainingRoom room={room} basePath={basePath} />;
+  }
   const workflows: WorkflowStep[] = [
     {
       href: `${basePath}/participants`,
@@ -99,15 +123,28 @@ export default async function ProjectOverviewPage({
       locked: participants.length === 0,
       attention: deliveryFailures > 0 || pendingInvites > 0,
     },
-    {
-      href: `${basePath}/reports`,
-      title: "Rezultate",
-      metric: `${completionRate}% completare`,
-      state: completionRate >= 80 ? "Raportabil" : "În colectare",
-      icon: BarChart3Icon,
-      locked: participants.length === 0,
-      attention: completionRate < 80,
-    },
+    // Filele raman exact cele de acum. Doar ultima se schimba, si NUMAI la
+    // `training`: acolo „Rezultate" (ecranul de coaching) devine „Evolutie
+    // competente". La orice alt tip de proiect ramane cum e azi.
+    isTrainingProject
+      ? {
+          href: `${basePath}/evolutie`,
+          title: "Evoluție competențe",
+          metric: `${participants.length} participanți`,
+          state: "Din sesiunile cu Cody",
+          icon: BarChart3Icon,
+          locked: participants.length === 0,
+          attention: false,
+        }
+      : {
+          href: `${basePath}/reports`,
+          title: "Rezultate",
+          metric: `${completionRate}% completare`,
+          state: completionRate >= 80 ? "Raportabil" : "În colectare",
+          icon: BarChart3Icon,
+          locked: participants.length === 0,
+          attention: completionRate < 80,
+        },
   ];
 
   return (

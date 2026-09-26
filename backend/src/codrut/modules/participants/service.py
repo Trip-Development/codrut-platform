@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import exists, or_, select
+from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.contracts.scoring import (
@@ -35,6 +35,7 @@ from codrut.modules.forms.models import (
     QuestionnaireResponse,
     QuestionnaireResponseStatus,
 )
+from codrut.modules.identity.models import User
 from codrut.modules.identity.schemas import InviteTask
 from codrut.modules.identity.service import _invite_task_copy
 from codrut.modules.participants.schemas import (
@@ -49,13 +50,18 @@ from codrut.modules.participants.schemas import (
     ParticipantWorkspaceResult,
     ParticipantWorkspaceSummary,
 )
-from codrut.modules.scoring.models import (
+
+# Textele lui Andrei, 18 septembrie — plicul 78. Cuvant cu cuvant; nu se rescriu.
+# Omul are profil, dar nicio inscriere si nicio sarcina: n-are ce vedea inca.
+NEINSCRIS_TITLU = "Nu ești încă înscris într-un proiect."
+NEINSCRIS_DESCRIERE = "Trainerul tău te adaugă, și apoi poți începe."
+from codrut.modules.scoring.models import (  # noqa: E402
     ResultPublication,
     ResultPublicationKind,
     ScoringResult,
 )
-from codrut.modules.scoring.publication import definition_publication_checksum
-from codrut.modules.scoring.scale import derive_definition_score_scale
+from codrut.modules.scoring.publication import definition_publication_checksum  # noqa: E402
+from codrut.modules.scoring.scale import derive_definition_score_scale  # noqa: E402
 
 COMPLETED_ASSIGNMENT_STATUSES = {
     AssignmentStatus.submitted,
@@ -91,6 +97,28 @@ class ParticipantWorkspaceService:
             participant_profile_id=participant_profile_id,
         )
         contexts = await self._get_authorized_contexts(profile_rows)
+
+        # Omul fara niciun context real primeste o stare, nu o eroare — plicul 78.
+        #
+        # Contextele fara legatura reala nu mai intra in lista (vezi _get_authorized_contexts).
+        # Profilurile lor ies si din `profile_rows`, ca alegerea contextului de mai jos sa nu
+        # mai poata ajunge la un profil fara context. Daca nu ramane niciunul, omul e logat,
+        # are profil, dar nu e inscris nicaieri: vede mesajul lui Andrei. Nu 500, nu un selector
+        # gol, si nu „profilul nu e legat de acest cont" — aici profilul chiar e gasit.
+        # Stare, nu exceptie: si previzualizarea trainerului cheama functia asta.
+        cu_context = {context.participant_profile_id for context in contexts}
+        toate_profilurile = profile_rows
+        profile_rows = [row for row in profile_rows if row[0].id in cu_context]
+        if not profile_rows:
+            primul = toate_profilurile[0][0]
+            return ParticipantWorkspaceSummary(
+                participant_full_name=primul.full_name,
+                anonymous_name=primul.anonymous_name,
+                empty_state=ParticipantWorkspaceCard(
+                    title=NEINSCRIS_TITLU,
+                    description=NEINSCRIS_DESCRIERE,
+                ),
+            )
         questionnaire_projects = await self._get_questionnaire_projects(
             profile_rows,
             contexts,
@@ -823,6 +851,28 @@ class ParticipantWorkspaceService:
         *,
         participant_profile_id: UUID | None = None,
     ) -> list[tuple[ParticipantProfile, Company]]:
+        # Aceeasi regula ca la exersare: profilul e al omului dupa CONT sau dupa ADRESA — plicul 75.
+        #
+        # Pana acum aici se cauta numai dupa cont (`user_id`). Un profil venit din import de
+        # lista, cu adresa dar nelegat inca de cont, era GASIT de exersare si NEGASIT aici: omul
+        # vedea „profilul nu e legat de acest cont", desi profilul lui exista. Legarea automata
+        # se face doar la crearea contului si la deschiderea unei invitatii, nu la intrare —
+        # deci cine avea deja cont cand a fost importat ramanea nelegat. Masurat pe proba la
+        # plicul 75: 4 profiluri din 8 (50%), nelegate de 18 zile.
+        #
+        # Pe ramura adresei se iau doar profilurile NELEGATE: un profil legat de alt cont nu
+        # devine vizibil aici doar fiindca are aceeasi adresa.
+        al_omului = ParticipantProfile.user_id == user_id
+        if user_id is not None:
+            adresa = (
+                await self.session.execute(select(User.email).where(User.id == user_id))
+            ).scalar_one_or_none()
+            if adresa:
+                al_omului = or_(
+                    ParticipantProfile.user_id == user_id,
+                    and_(ParticipantProfile.user_id.is_(None), ParticipantProfile.email == adresa),
+                )
+
         if participant_profile_id is not None:
             stmt = (
                 select(ParticipantProfile, Company)
@@ -830,7 +880,7 @@ class ParticipantWorkspaceService:
                 .where(ParticipantProfile.id == participant_profile_id)
             )
             if user_id is not None:
-                stmt = stmt.where(ParticipantProfile.user_id == user_id)
+                stmt = stmt.where(al_omului)
             result = await self.session.execute(stmt)
             rows = list(result.all())
             if not rows:
@@ -849,8 +899,14 @@ class ParticipantWorkspaceService:
         result = await self.session.execute(
             select(ParticipantProfile, Company)
             .join(Company, Company.id == ParticipantProfile.company_id)
-            .where(ParticipantProfile.user_id == user_id)
-            .order_by(ParticipantProfile.created_at.asc(), ParticipantProfile.id.asc())
+            .where(al_omului)
+            # ordonare ferma, ca la exersare: legat de cont inaintea celui doar cu adresa,
+            # intre egali cel mai vechi; id-ul ramane ultimul departajator, ca inainte
+            .order_by(
+                ParticipantProfile.user_id.is_(None),
+                ParticipantProfile.created_at.asc(),
+                ParticipantProfile.id.asc(),
+            )
         )
         rows = list(result.all())
         if not rows:
@@ -887,24 +943,58 @@ class ParticipantWorkspaceService:
             )
         return rows[0]
 
+    async def are_legatura_reala(self, user_id: UUID) -> bool:
+        """Omul e „inscris" in sensul plicului 78: are cel putin un context real.
+
+        Un context real se sprijina pe o inscriere (activa sau nu), o sarcina sau un rezultat
+        publicat nerevocat — vezi `_get_authorized_contexts`. Tabloul exersarii foloseste
+        aceeasi definitie (plicul 98), ca sa nu existe doua raspunsuri la aceeasi intrebare.
+        Fara niciun profil, omul nu e inscris nicaieri.
+        """
+        try:
+            randuri = await self._list_profiles_and_companies(user_id)
+        except DomainError:
+            return False
+        return bool(await self._get_authorized_contexts(randuri))
+
     async def _get_authorized_contexts(
         self,
         profile_rows: list[tuple[ParticipantProfile, Company]],
     ) -> list[ParticipantWorkspaceContext]:
         profile_ids = {profile.id for profile, _company in profile_rows}
+        # Toate inscrierile, active sau nu — plicul 78: una dezactivata e tot o legatura reala.
+        # Proiectele din context raman, ca inainte, numai din cele active.
         membership_result = await self.session.execute(
             select(ProjectMembership).where(
                 ProjectMembership.participant_profile_id.in_(profile_ids),
-                ProjectMembership.active.is_(True),
             )
         )
-        memberships = list(membership_result.scalars().all())
+        toate_inscrierile = list(membership_result.scalars().all())
+        memberships = [membership for membership in toate_inscrierile if membership.active]
         assignment_result = await self.session.execute(
             select(QuestionnaireAssignment).where(
                 QuestionnaireAssignment.respondent_profile_id.in_(profile_ids)
             )
         )
         assignments = list(assignment_result.scalars().all())
+
+        # Un context se sprijina pe ceva: o inscriere (activa sau nu), o sarcina, sau un rezultat
+        # publicat catre el si nerevocat (asa primeste omul feedbackul 360 despre el) — plicul 78.
+        #
+        # Pana la plicul 78 se adauga cate un context pentru FIECARE profil, chiar gol. Pe proba,
+        # 3 conturi din 6 aveau asa ceva: proba1 („alege un context" dintr-o lista goala), proba3
+        # (numele firmei afisat drept proiect) si proba2 — al carui context gol venise din
+        # reparatia plicului 75, care gaseste acum profilurile si dupa adresa.
+        publicari_result = await self.session.execute(
+            select(ResultPublication.participant_profile_id)
+            .where(ResultPublication.participant_profile_id.in_(profile_ids))
+            .where(ResultPublication.revoked_at.is_(None))
+        )
+        cu_legatura = (
+            {membership.participant_profile_id for membership in toate_inscrierile}
+            | {assignment.respondent_profile_id for assignment in assignments}
+            | {participant_profile_id for (participant_profile_id,) in publicari_result.all()}
+        )
 
         project_ids_by_profile: dict[UUID, set[UUID]] = {
             profile_id: set() for profile_id in profile_ids
@@ -922,11 +1012,26 @@ class ParticipantWorkspaceService:
         }
         projects: dict[UUID, CompanyProject] = {}
         cycles_by_project: dict[UUID, list[AssessmentCycle]] = {}
+        setari_practica: dict[UUID, bool] = {}
         if project_ids:
             project_result = await self.session.execute(
                 select(CompanyProject).where(CompanyProject.id.in_(project_ids))
             )
             projects = {project.id: project for project in project_result.scalars().all()}
+            # Butonul de quiz, pe proiect — plicul 128, partea E. O singura interogare pentru
+            # toate proiectele omului; proiectele fara exersare configurata raman stinse.
+            from codrut.modules.practice.models import PracticeProgramSettings
+
+            setari_practica = {
+                rand.project_id: bool(rand.quiz_enabled)
+                for rand in (
+                    await self.session.execute(
+                        select(PracticeProgramSettings).where(
+                            PracticeProgramSettings.project_id.in_(project_ids)
+                        )
+                    )
+                ).scalars().all()
+            }
             published_cycle_result = await self.session.execute(
                 select(
                     ResultPublication.participant_profile_id,
@@ -952,6 +1057,8 @@ class ParticipantWorkspaceService:
 
         contexts: list[ParticipantWorkspaceContext] = []
         for profile, company in profile_rows:
+            if profile.id not in cu_legatura:
+                continue
             context_projects: list[ParticipantWorkspaceProject] = []
             for context_project_id in sorted(
                 project_ids_by_profile[profile.id],
@@ -970,7 +1077,9 @@ class ParticipantWorkspaceService:
                     ParticipantWorkspaceProject(
                         id=project.id,
                         name=project.name,
+                        project_type=project.project_type,
                         status=project.status.value,
+                        quiz_enabled=setari_practica.get(project.id, False),
                         history_bucket=(
                             "current"
                             if project.status == CompanyProjectStatus.active
@@ -1154,11 +1263,20 @@ class ParticipantWorkspaceService:
                 "Participant context does not belong to this account.",
                 code="participant_context_forbidden",
             )
+        # Rezerva — plicul 78: fara ea, un profil fara context dadea StopIteration, adica 500.
         selected_context = next(
-            context
-            for context in contexts
-            if context.participant_profile_id == effective_profile_id
+            (
+                context
+                for context in contexts
+                if context.participant_profile_id == effective_profile_id
+            ),
+            None,
         )
+        if selected_context is None:
+            raise DomainError(
+                "Participant context does not belong to this account.",
+                code="participant_context_forbidden",
+            )
         if effective_project_id is None:
             if len(selected_context.projects) > 1:
                 return None, None, None, cycle_id
@@ -1552,7 +1670,7 @@ class ParticipantWorkspaceService:
         company: Company,
         assignments: list[QuestionnaireAssignment],
         projects: dict[UUID, CompanyProject],
-    ) -> tuple[UUID | None, str]:
+    ) -> tuple[UUID | None, str | None]:
         project_ids = [
             assignment.project_id
             for assignment in assignments
@@ -1564,7 +1682,10 @@ class ParticipantWorkspaceService:
             return project_id, projects[project_id].name
         if len(unique_project_ids) > 1:
             return None, "Toate proiectele active"
-        return None, company.name
+        # Fara proiect, fara rand — plicul 78. Aici se punea numele firmei in locul proiectului
+        # („proiect: Pilot Cody" la proba3, care nu e inscris nicaieri). Lipsa se trimite ca
+        # lipsa, iar ecranul nu mai deseneaza randul.
+        return None, None
 
     def _workspace_projects(
         self,
@@ -1594,6 +1715,7 @@ class ParticipantWorkspaceService:
                 ParticipantWorkspaceProject(
                     id=project.id,
                     name=project.name,
+                    project_type=project.project_type,
                     status=project.status.value,
                     history_bucket=(
                         "current" if project.status == CompanyProjectStatus.active else "history"

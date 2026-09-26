@@ -15,6 +15,7 @@ from codrut.core.rate_limit import install_rate_limit_middleware
 from codrut.core.request_id import install_request_id_middleware
 from codrut.core.request_limits import install_request_limit_middleware
 from codrut.core.security_headers import install_security_headers_middleware
+from codrut.core.urma_erorilor import install_failed_request_log
 from codrut.modules.identity.session_cookie import SESSION_COOKIE_NAME
 
 
@@ -44,6 +45,8 @@ def create_app() -> FastAPI:
     install_maintenance_middleware(app, settings)
     install_csrf_middleware(app, session_cookie_name=SESSION_COOKIE_NAME)
     install_security_headers_middleware(app)
+    # Înăuntrul lui `request_id`, ca rândul să aibă identificatorul cererii — plicul 140.
+    install_failed_request_log(app)
     install_request_id_middleware(app)
     install_exception_handlers(app, settings=settings)
     Path(settings.campaign_asset_dir).mkdir(parents=True, exist_ok=True)
