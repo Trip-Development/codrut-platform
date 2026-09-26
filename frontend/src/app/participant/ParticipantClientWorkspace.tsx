@@ -31,6 +31,7 @@ import {
   participantResultsHref,
   participantScopeParams,
   participantScopedHref,
+  participantActiveProjectType,
   participantScopedNavItems,
 } from "./participant-context";
 import { countAvailableParticipantResults, mergeParticipantFeedbackGroups } from "./result-state";
@@ -68,12 +69,20 @@ type ParticipantClientWorkspaceProps = {
     };
   };
   readOnly?: boolean;
+  /**
+   * Legatura spre chestionarul ramas de completat, sau `null` daca nu e niciunul — plicul 127.
+   *
+   * Pana azi, un chestionar necompletat inchidea usa: paginile faceau `redirect` si omul nu mai
+   * ajungea nicaieri. Acum ajunge aici, ca anunt.
+   */
+  onboardingHref?: string | null;
 };
 
 export function ParticipantClientWorkspace({
   session,
   summaryData,
   readOnly = false,
+  onboardingHref = null,
 }: ParticipantClientWorkspaceProps) {
   const participantIdentity =
     summaryData.participantFullName?.trim() || summaryData.anonymousName?.trim() || "Participant";
@@ -113,7 +122,10 @@ export function ParticipantClientWorkspace({
   const questionnairesHref = participantScopedHref("/participant/questionnaires", scopeParams);
   const resultsHref = participantResultsHref(scopeParams);
   const showResults = participantCanViewResults(summaryData);
-  const navItems = readOnly ? [] : participantScopedNavItems(scopeParams, showResults);
+  const projectType = participantActiveProjectType(summaryData);
+  const navItems = readOnly
+    ? []
+    : participantScopedNavItems(scopeParams, { projectType, showResults });
 
   return (
     <AppShell
@@ -131,6 +143,13 @@ export function ParticipantClientWorkspace({
         selectedProfileId={summaryData.participantProfileId}
         selectedProjectId={summaryData.projectId}
       />
+      {onboardingHref ? (
+        <div className="mb-6 rounded-lg border border-border bg-muted/40 px-4 py-3">
+          <a className="text-sm font-medium underline underline-offset-4" href={onboardingHref}>
+            Ai un chestionar de completat
+          </a>
+        </div>
+      ) : null}
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_16rem] xl:gap-10">
         <section
           className="min-w-0"
@@ -157,9 +176,11 @@ export function ParticipantClientWorkspace({
                   <h2 id="participant-tasks-title" className="text-xl font-semibold tracking-tight text-foreground">
                     {pendingActiveTasks.length > 0 ? "De completat" : "Chestionare"}
                   </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {hasMultipleProjects ? projectCountCopy : summaryData.projectName}
-                  </p>
+                  {hasMultipleProjects || summaryData.projectName ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {hasMultipleProjects ? projectCountCopy : summaryData.projectName}
+                    </p>
+                  ) : null}
                 </div>
                 {pendingActiveTasks.length > 0 ? (
                   <div

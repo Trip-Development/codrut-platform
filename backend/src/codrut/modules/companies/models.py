@@ -12,13 +12,14 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     ForeignKeyConstraint,
+    Integer,
     String,
     Text,
     UniqueConstraint,
     func,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from codrut.core.database import Base, TimestampMixin
 
@@ -204,6 +205,10 @@ class ParticipantProfile(TimestampMixin, Base):
             name="uq_participant_profiles_anonymous_name",
         ),
         UniqueConstraint(
+            "cody_alias",
+            name="uq_participant_profiles_cody_alias",
+        ),
+        UniqueConstraint(
             "company_id",
             "id",
             name="uq_participant_profiles_company_id_id",
@@ -222,6 +227,18 @@ class ParticipantProfile(TimestampMixin, Base):
     )
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+
+    # Adresa se scrie cu litere mici AICI, o singura data — plicul 81.
+    #
+    # Pana la plicul 81, regula era respectata in sapte locuri (fiecare cale facea `.lower()`)
+    # si tinuta in niciunul: o cale noua care uita `.lower()` strica fara sa se vada, fiindca
+    # legarea automata compara fara majuscule iar exersarea si spatiul participantului exact.
+    # Vezi SPEC-CODY/RAPOARTE/plic-80-raport.md. Cu normalizarea pe model, uitarea nu mai
+    # are cum sa strice nimic. `None` ramane `None`.
+    @validates("email")
+    def _adresa_cu_litere_mici(self, _key: str, value: str | None) -> str | None:
+        return value.strip().lower() if value is not None else None
+
     reports_to_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     position: Mapped[str | None] = mapped_column(String(255), nullable=True)
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -230,6 +247,12 @@ class ParticipantProfile(TimestampMixin, Base):
     pcm_base: Mapped[str | None] = mapped_column(String(80), nullable=True)
     pcm_phase: Mapped[str | None] = mapped_column(String(80), nullable=True)
     anonymous_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # Codul cu care Cody il stie pe om (`Fox 34`) — plicul 138. Spre model pleaca numai el,
+    # niciodata numele. Separat de `anonymous_name` (chestionarele), dinadins: cele doua nu au
+    # voie sa poata fi puse unul langa altul. Se da o singura data, la prima sedinta de exersare.
+    cody_alias: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    xp: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
     company: Mapped[Company] = relationship(back_populates="participants")
     user: Mapped[User | None] = relationship(

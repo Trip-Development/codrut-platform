@@ -71,6 +71,8 @@ def error_response(
         "code": code,
         "message": message,
     }
+    # Numai codul, pentru rândul din jurnal al cererii care pică — plicul 140.
+    request.state.cod_eroare = code
     request_id = request_id_from_request(request)
     response_headers = dict(headers or {})
     if request_id:

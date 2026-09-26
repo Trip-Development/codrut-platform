@@ -1541,6 +1541,362 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/practice/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Participant Practice Dashboard
+         * @description Get participant practice stats, XP, streak, and competency evidence levels.
+         */
+        get: operations["get_participant_practice_dashboard_api_practice_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/participant/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Participant Practice Dashboard
+         * @description Get participant practice stats, XP, streak, and competency evidence levels.
+         */
+        get: operations["get_participant_practice_dashboard_api_practice_participant_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/projects/{project_id}/acord": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Practice Consent
+         * @description Textul acordului, cu codul omului in el, si daca l-a bifat deja pe proiectul asta.
+         */
+        get: operations["get_practice_consent_api_practice_projects__project_id__acord_get"];
+        put?: never;
+        /**
+         * Give Practice Consent
+         * @description Omul a bifat: se tine minte cine, ce proiect, cand si ce text.
+         */
+        post: operations["give_practice_consent_api_practice_projects__project_id__acord_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/projects/{project_id}/evolution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project Evolution
+         * @description Evolutia competentelor pe echipa — fila trainerului la proiectele de training.
+         */
+        get: operations["get_project_evolution_api_practice_projects__project_id__evolution_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/projects/{project_id}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Training Invitations
+         * @description Cine e invitat, cine a intrat, cine a facut testul de intrare.
+         */
+        get: operations["list_training_invitations_api_practice_projects__project_id__invitations_get"];
+        put?: never;
+        /**
+         * Send Training Invitations
+         * @description Face invitatiile pentru oamenii bifati si incearca emailul.
+         *
+         *     Calea obisnuita de invitatii cere o asignare de chestionar, pe care un
+         *     proiect de training n-o are — de aceea trainingul are calea lui. Linkul se
+         *     intoarce si cand emailul nu pleaca.
+         */
+        post: operations["send_training_invitations_api_practice_projects__project_id__invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/projects/{project_id}/participants/{profile_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project Person
+         * @description Pagina omului — al doilea ecran al camerei de training.
+         */
+        get: operations["get_project_person_api_practice_projects__project_id__participants__profile_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/projects/{project_id}/participants/{profile_id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Trainer Note
+         * @description Nota trainerului despre un participant. Andrei scrie, se salveaza.
+         */
+        post: operations["add_trainer_note_api_practice_projects__project_id__participants__profile_id__notes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/projects/{project_id}/room": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project Room
+         * @description Camera de training — ecranul proiectului, cu toate sectiunile lui.
+         */
+        get: operations["get_project_room_api_practice_projects__project_id__room_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/projects/{project_id}/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Practice Setup
+         * @description Cum e configurata exersarea pe proiect: tema si competentele bifate.
+         */
+        get: operations["get_practice_setup_api_practice_projects__project_id__setup_get"];
+        /**
+         * Configure Practice Setup
+         * @description Configureaza exersarea si scrie competentele alese. Se poate reveni oricand.
+         */
+        put: operations["configure_practice_setup_api_practice_projects__project_id__setup_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Practice Session
+         * @description Start a new practice session for an authenticated participant.
+         */
+        post: operations["start_practice_session_api_practice_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Practice Session History
+         * @description Retrieve practice session details and its ordered conversation history.
+         */
+        get: operations["get_practice_session_history_api_practice_sessions__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/sessions/{session_id}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End Practice Session
+         * @description Explicitly end a practice session, generate summary, and record outcome.
+         */
+        post: operations["end_practice_session_api_practice_sessions__session_id__end_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/sessions/{session_id}/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Practice Turn
+         * @description Submit a participant turn, trigger actor generation, and return turn results.
+         */
+        post: operations["submit_practice_turn_api_practice_sessions__session_id__turns_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/stare-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Stare Summary
+         * @description Get system health and Cody prompt/stat summary for the /stare page.
+         */
+        get: operations["get_stare_summary_api_practice_stare_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/themes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Practice Themes
+         * @description Temele din care poate alege trainerul, fiecare cu competentele ei.
+         */
+        get: operations["list_practice_themes_api_practice_themes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/trainer/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Trainer Practice Session
+         * @description Start a practice session directly for a trainer (only when enabled).
+         */
+        post: operations["start_trainer_practice_session_api_practice_trainer_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/transcribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transcribe Practice Audio
+         * @description Transcribe an audio recording into text with Vertex AI Gemini.
+         */
+        post: operations["transcribe_practice_audio_api_practice_transcribe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/scoring/assignments/{assignment_id}/result": {
         parameters: {
             query?: never;
@@ -1951,6 +2307,11 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
+        };
+        /** Body_transcribe_practice_audio_api_practice_transcribe_post */
+        Body_transcribe_practice_audio_api_practice_transcribe_post: {
+            /** File */
+            file: string;
         };
         /** BrevoWebhookEvent */
         BrevoWebhookEvent: {
@@ -2761,6 +3122,29 @@ export interface components {
              */
             stage: "setup" | "invites" | "completion" | "reporting";
         };
+        /** CompetencyDashboardItem */
+        CompetencyDashboardItem: {
+            /** Average Score */
+            average_score: number;
+            /** Color */
+            color: string;
+            /** Days Span 70 */
+            days_span_70: number;
+            /** Distinct Days 70 */
+            distinct_days_70: number;
+            /** Level */
+            level: string;
+            /** Level Description */
+            level_description: string;
+            /** Name */
+            name: string;
+            /** Scores 70 Count */
+            scores_70_count: number;
+            /** Total Roleplays */
+            total_roleplays: number;
+            /** Why Not Higher */
+            why_not_higher: string;
+        };
         /** ConsentRequest */
         ConsentRequest: {
             /**
@@ -2789,6 +3173,18 @@ export interface components {
             compatible: boolean;
             /** Questionnaire Key */
             questionnaire_key: string;
+        };
+        /** DashboardEmptyState */
+        DashboardEmptyState: {
+            /** Description */
+            description: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "neinscris" | "neexersat";
+            /** Title */
+            title: string;
         };
         /** DriverRankSummaryResponse */
         DriverRankSummaryResponse: {
@@ -2977,6 +3373,87 @@ export interface components {
             /** @description Standard API error envelope. */
             error: components["schemas"]["ErrorPayload"];
         };
+        /** EvolutionCompetencyItem */
+        EvolutionCompetencyItem: {
+            /**
+             * Color
+             * @default
+             */
+            color: string;
+            /** Current Average */
+            current_average?: number | null;
+            /** Growth */
+            growth?: number | null;
+            /** Level */
+            level: string;
+            /**
+             * Level Description
+             * @default
+             */
+            level_description: string;
+            /** Name */
+            name: string;
+            /**
+             * Scores Count
+             * @default 0
+             */
+            scores_count: number;
+            /** Test In Average */
+            test_in_average?: number | null;
+            /** Test Out Average */
+            test_out_average?: number | null;
+        };
+        /** EvolutionParticipantItem */
+        EvolutionParticipantItem: {
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
+            /**
+             * Closed Sessions Count
+             * @default 0
+             */
+            closed_sessions_count: number;
+            /** Cody Alias */
+            cody_alias?: string | null;
+            /** Current Average */
+            current_average?: number | null;
+            /** Email */
+            email?: string | null;
+            /** Full Name */
+            full_name: string;
+            /**
+             * Participant Profile Id
+             * Format: uuid
+             */
+            participant_profile_id: string;
+            /**
+             * Scores Count
+             * @default 0
+             */
+            scores_count: number;
+            /**
+             * Sessions Count
+             * @default 0
+             */
+            sessions_count: number;
+            /** Test In Score */
+            test_in_score?: number | null;
+            /** Test Out Score */
+            test_out_score?: number | null;
+            /** User Id */
+            user_id?: string | null;
+        };
+        /** EvolutionWeekPoint */
+        EvolutionWeekPoint: {
+            /** Average */
+            average: number;
+            /** Scores Count */
+            scores_count: number;
+            /** Week Start */
+            week_start: string;
+        };
         /** IcareAnswerReviewResponse */
         IcareAnswerReviewResponse: {
             /** Row Count */
@@ -3085,6 +3562,17 @@ export interface components {
              * @default 0
              */
             unclassified_response_count: number;
+        };
+        /** InsightMomentItem */
+        InsightMomentItem: {
+            /** Competency Name */
+            competency_name?: string | null;
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Summary */
+            summary: string;
         };
         /** InvitationCreateRequest */
         InvitationCreateRequest: {
@@ -3343,6 +3831,11 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * OutcomeKind
+         * @enum {string}
+         */
+        OutcomeKind: "good" | "bad" | "turn_limit" | "safety_stop";
         /** ParticipantAccountLinkRepairRequest */
         ParticipantAccountLinkRepairRequest: {
             /**
@@ -3834,6 +4327,13 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /** Project Type */
+            project_type?: string | null;
+            /**
+             * Quiz Enabled
+             * @default false
+             */
+            quiz_enabled: boolean;
             /**
              * Show Participant Results
              * @default false
@@ -3973,6 +4473,542 @@ export interface components {
              * @default true
              */
             ok: boolean;
+        };
+        /** PersonEvidenceItem */
+        PersonEvidenceItem: {
+            /**
+             * Average Score
+             * @default 0
+             */
+            average_score: number;
+            /**
+             * Color
+             * @default
+             */
+            color: string;
+            /** Level */
+            level: string;
+            /**
+             * Level Description
+             * @default
+             */
+            level_description: string;
+            /** Name */
+            name: string;
+            /**
+             * Scores Count
+             * @default 0
+             */
+            scores_count: number;
+            /**
+             * Sessions Count
+             * @default 0
+             */
+            sessions_count: number;
+            /**
+             * Why Not Higher
+             * @default
+             */
+            why_not_higher: string;
+        };
+        /** PersonSampleItem */
+        PersonSampleItem: {
+            /** Created At */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Invented Improved */
+            invented_improved?: string | null;
+            /** Invented Weak */
+            invented_weak?: string | null;
+            /** Real Improved */
+            real_improved?: string | null;
+            /** Real Weak */
+            real_weak?: string | null;
+        };
+        /** PersonTextItem */
+        PersonTextItem: {
+            /** Created At */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Summary */
+            summary: string;
+        };
+        /** PersonTheoryItem */
+        PersonTheoryItem: {
+            /** Delta */
+            delta?: number | null;
+            /** Name */
+            name: string;
+            /** Test In */
+            test_in?: number | null;
+            /** Test Out */
+            test_out?: number | null;
+        };
+        /** PracticeConsentRequest */
+        PracticeConsentRequest: {
+            /** Amprenta */
+            amprenta: string;
+        };
+        /**
+         * PracticeConsentResponse
+         * @description Acordul la prima intrare — plicul 139. Textul vine de la server, cu codul omului în el.
+         */
+        PracticeConsentResponse: {
+            /** Acordat */
+            acordat: boolean;
+            /** Amprenta */
+            amprenta: string;
+            /** Bifa */
+            bifa: string;
+            /** Cod */
+            cod: string;
+            /** Paragrafe */
+            paragrafe: string[];
+            /** Titlu */
+            titlu: string;
+        };
+        /** PracticeDashboardResponse */
+        PracticeDashboardResponse: {
+            /** Cody Alias */
+            cody_alias?: string | null;
+            /** Competencies */
+            competencies: components["schemas"]["CompetencyDashboardItem"][];
+            empty_state?: components["schemas"]["DashboardEmptyState"] | null;
+            /** Evidence Ceiling */
+            evidence_ceiling: number;
+            /** Insight Moments */
+            insight_moments: components["schemas"]["InsightMomentItem"][];
+            /** Participant Name */
+            participant_name: string;
+            /** Session Samples */
+            session_samples: components["schemas"]["SessionSampleItem"][];
+            /** Streak Bonus Pct */
+            streak_bonus_pct: number;
+            /** Streak Days */
+            streak_days: number;
+            /**
+             * Xp Daily Cap
+             * @default 100
+             */
+            xp_daily_cap: number;
+            /** Xp Today */
+            xp_today: number;
+            /** Xp Total */
+            xp_total: number;
+        };
+        /** PracticeEvolutionResponse */
+        PracticeEvolutionResponse: {
+            /** Competencies */
+            competencies?: components["schemas"]["EvolutionCompetencyItem"][];
+            /** Participants */
+            participants?: components["schemas"]["EvolutionParticipantItem"][];
+            /** Participants Active */
+            participants_active: number;
+            /** Participants Total */
+            participants_total: number;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Project Name */
+            project_name: string;
+            /** Project Type */
+            project_type?: string | null;
+            /** Test In Completed */
+            test_in_completed?: number | null;
+            /**
+             * Test Out Enabled
+             * @default false
+             */
+            test_out_enabled: boolean;
+            /** Test Pending Note */
+            test_pending_note: string;
+            /** Weekly Average */
+            weekly_average?: components["schemas"]["EvolutionWeekPoint"][];
+        };
+        /** PracticePersonResponse */
+        PracticePersonResponse: {
+            /** Duration Days */
+            duration_days?: number | null;
+            /** Email */
+            email?: string | null;
+            /** Evidence */
+            evidence?: components["schemas"]["PersonEvidenceItem"][];
+            /** Full Name */
+            full_name: string;
+            /**
+             * Has Account
+             * @default false
+             */
+            has_account: boolean;
+            /** Insight Moments */
+            insight_moments?: components["schemas"]["PersonTextItem"][];
+            /**
+             * Participant Profile Id
+             * Format: uuid
+             */
+            participant_profile_id: string;
+            /**
+             * Progress Average
+             * @default 0
+             */
+            progress_average: number;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Project Name */
+            project_name: string;
+            /** Quiz Weak Spots */
+            quiz_weak_spots?: components["schemas"]["RoomQuizWeakSpot"][];
+            /** Session Samples */
+            session_samples?: components["schemas"]["PersonSampleItem"][];
+            /**
+             * Sessions Count
+             * @default 0
+             */
+            sessions_count: number;
+            /** Test In Average */
+            test_in_average?: number | null;
+            /** Test Out Average */
+            test_out_average?: number | null;
+            /** Theory */
+            theory?: components["schemas"]["PersonTheoryItem"][];
+            /** Top Progress */
+            top_progress?: components["schemas"]["PersonEvidenceItem"][];
+            /** Trainer Notes */
+            trainer_notes?: components["schemas"]["TrainerNoteItem"][];
+            /** Trainer Recommendations */
+            trainer_recommendations?: components["schemas"]["PersonTextItem"][];
+            /** User Id */
+            user_id?: string | null;
+            /** Weekly Average */
+            weekly_average?: components["schemas"]["RoomWeekPoint"][];
+        };
+        /** PracticeRoomResponse */
+        PracticeRoomResponse: {
+            /**
+             * Active Count
+             * @default 0
+             */
+            active_count: number;
+            /**
+             * Average Score
+             * @default 0
+             */
+            average_score: number;
+            /** Competencies */
+            competencies?: components["schemas"]["RoomCompetencyItem"][];
+            /** Due At */
+            due_at?: string | null;
+            /** Growth Ranking */
+            growth_ranking?: components["schemas"]["RoomCompetencyItem"][];
+            /**
+             * Inactive Count
+             * @default 0
+             */
+            inactive_count: number;
+            /** Participants */
+            participants?: components["schemas"]["RoomParticipantItem"][];
+            /**
+             * Participants Total
+             * @default 0
+             */
+            participants_total: number;
+            /**
+             * Practice Configured
+             * @default false
+             */
+            practice_configured: boolean;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Project Name */
+            project_name: string;
+            /** Project Type */
+            project_type?: string | null;
+            /** Quiz Weak Spots */
+            quiz_weak_spots?: components["schemas"]["RoomQuizWeakSpot"][];
+            /**
+             * Recurrent Count
+             * @default 0
+             */
+            recurrent_count: number;
+            /**
+             * Sessions Total
+             * @default 0
+             */
+            sessions_total: number;
+            /** Starts At */
+            starts_at?: string | null;
+            /**
+             * Test In Completed
+             * @default 0
+             */
+            test_in_completed: number;
+            /**
+             * Test Out Active
+             * @default false
+             */
+            test_out_active: boolean;
+            /**
+             * Test Out Completed
+             * @default 0
+             */
+            test_out_completed: number;
+            /** Theme Name */
+            theme_name?: string | null;
+            /** Timeline Percent */
+            timeline_percent?: number | null;
+            /** Weekly Average */
+            weekly_average?: components["schemas"]["RoomWeekPoint"][];
+        };
+        /** PracticeSessionCreateRequest */
+        PracticeSessionCreateRequest: {
+            /** @default roleplay */
+            kind: components["schemas"]["SessionKind"];
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Scenario Id */
+            scenario_id?: string | null;
+        };
+        /** PracticeSessionDetailResponse */
+        PracticeSessionDetailResponse: {
+            session: components["schemas"]["PracticeSessionResponse"];
+            /** Turns */
+            turns: components["schemas"]["PracticeTurnResponse"][];
+        };
+        /** PracticeSessionEndRequest */
+        PracticeSessionEndRequest: {
+            /** Note */
+            note?: string | null;
+            /** @default good */
+            outcome_kind: components["schemas"]["OutcomeKind"];
+        };
+        /** PracticeSessionEndResponse */
+        PracticeSessionEndResponse: {
+            session: components["schemas"]["PracticeSessionResponse"];
+            /** Summary */
+            summary?: string | null;
+        };
+        /** PracticeSessionResponse */
+        PracticeSessionResponse: {
+            /** Cody Alias */
+            cody_alias?: string | null;
+            /** Ended At */
+            ended_at?: string | null;
+            first_turn?: components["schemas"]["PracticeTurnResponse"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["SessionKind"];
+            /**
+             * Pack Id
+             * Format: uuid
+             */
+            pack_id: string;
+            /**
+             * Participant Profile Id
+             * Format: uuid
+             */
+            participant_profile_id: string;
+            /**
+             * Program Settings Id
+             * Format: uuid
+             */
+            program_settings_id: string;
+            /** Prompt Version */
+            prompt_version?: string | null;
+            /** Scenario Id */
+            scenario_id?: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            state: components["schemas"]["SessionState"];
+            /**
+             * Turn Count
+             * @default 0
+             */
+            turn_count: number;
+        };
+        /** PracticeSetupRequest */
+        PracticeSetupRequest: {
+            /** Competencies */
+            competencies?: string[] | null;
+            /**
+             * Is Enabled
+             * @default true
+             */
+            is_enabled: boolean;
+            /** Max Sessions Per Day */
+            max_sessions_per_day?: number | null;
+            /** Quiz Enabled */
+            quiz_enabled?: boolean | null;
+            /**
+             * Theme Id
+             * Format: uuid
+             */
+            theme_id: string;
+        };
+        /** PracticeSetupResponse */
+        PracticeSetupResponse: {
+            /** Competencies */
+            competencies?: components["schemas"]["ThemeCompetencyItem"][];
+            /** Configured */
+            configured: boolean;
+            /** Is Enabled */
+            is_enabled: boolean;
+            /** Max Sessions Per Day */
+            max_sessions_per_day?: number | null;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Project Name */
+            project_name: string;
+            /** Project Type */
+            project_type?: string | null;
+            /**
+             * Quiz Enabled
+             * @default false
+             */
+            quiz_enabled: boolean;
+            /** Theme Id */
+            theme_id?: string | null;
+            /** Theme Name */
+            theme_name?: string | null;
+        };
+        /** PracticeStareSummaryResponse */
+        PracticeStareSummaryResponse: {
+            /**
+             * Cache Percent
+             * @default 0
+             */
+            cache_percent: number;
+            /**
+             * Cached Turns
+             * @default 0
+             */
+            cached_turns: number;
+            /**
+             * Cost Today Usd
+             * @default 0
+             */
+            cost_today_usd: number;
+            /** Last Error */
+            last_error?: string | null;
+            /** Material Bytes */
+            material_bytes: number;
+            /** Model */
+            model: string;
+            /** Prompt Version */
+            prompt_version: string;
+            /** Provider */
+            provider: string;
+            /** Region */
+            region: string;
+            /** Sessions Today */
+            sessions_today: number;
+            /** Status */
+            status: string;
+            /** Status Text */
+            status_text: string;
+            /** Turns Today */
+            turns_today: number;
+        };
+        /** PracticeThemeItem */
+        PracticeThemeItem: {
+            /** Competencies */
+            competencies?: components["schemas"]["ThemeCompetencyItem"][];
+            /**
+             * Has Knowledge Pack
+             * @default false
+             */
+            has_knowledge_pack: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Scenario Count
+             * @default 0
+             */
+            scenario_count: number;
+            /** Slug */
+            slug?: string | null;
+            /**
+             * Usable
+             * @default false
+             */
+            usable: boolean;
+        };
+        /** PracticeTranscribeResponse */
+        PracticeTranscribeResponse: {
+            /**
+             * Estimated Usd
+             * @default 0
+             */
+            estimated_usd: number;
+            /** Text */
+            text: string;
+        };
+        /** PracticeTurnCreateRequest */
+        PracticeTurnCreateRequest: {
+            /** Text */
+            text: string;
+        };
+        /** PracticeTurnResponse */
+        PracticeTurnResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ordinal */
+            ordinal: number;
+            role: components["schemas"]["TurnRole"];
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /** Text */
+            text: string;
+        };
+        /** PracticeTurnSubmitResponse */
+        PracticeTurnSubmitResponse: {
+            actor_turn?: components["schemas"]["PracticeTurnResponse"] | null;
+            participant_turn: components["schemas"]["PracticeTurnResponse"];
+            /** @default open */
+            session_state: components["schemas"]["SessionState"];
         };
         /** ProjectLifecycleEventResponse */
         ProjectLifecycleEventResponse: {
@@ -4370,6 +5406,104 @@ export interface components {
          * @enum {string}
          */
         ResponseVisibilityPolicy: "trainer_raw_review" | "reviewed_anonymized";
+        /** RoomCompetencyItem */
+        RoomCompetencyItem: {
+            /**
+             * Acum
+             * @default 0
+             */
+            acum: number;
+            /** Delta */
+            delta?: number | null;
+            /**
+             * Has Data
+             * @default false
+             */
+            has_data: boolean;
+            /**
+             * Has Test In
+             * @default false
+             */
+            has_test_in: boolean;
+            /** Name */
+            name: string;
+            /**
+             * Test In
+             * @default 0
+             */
+            test_in: number;
+            /** Test Out */
+            test_out?: number | null;
+        };
+        /** RoomParticipantItem */
+        RoomParticipantItem: {
+            /**
+             * Active Membership
+             * @default true
+             */
+            active_membership: boolean;
+            /**
+             * Average Score
+             * @default 0
+             */
+            average_score: number;
+            /** Cody Alias */
+            cody_alias?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Full Name */
+            full_name: string;
+            /**
+             * Has Account
+             * @default false
+             */
+            has_account: boolean;
+            /**
+             * Has Test In
+             * @default false
+             */
+            has_test_in: boolean;
+            /**
+             * Has Test Out
+             * @default false
+             */
+            has_test_out: boolean;
+            /**
+             * Inactive
+             * @default true
+             */
+            inactive: boolean;
+            /** Last Activity */
+            last_activity?: string | null;
+            /**
+             * Participant Profile Id
+             * Format: uuid
+             */
+            participant_profile_id: string;
+            /**
+             * Sessions Count
+             * @default 0
+             */
+            sessions_count: number;
+            /** User Id */
+            user_id?: string | null;
+        };
+        /** RoomQuizWeakSpot */
+        RoomQuizWeakSpot: {
+            /** Average */
+            average: number;
+            /** Name */
+            name: string;
+        };
+        /** RoomWeekPoint */
+        RoomWeekPoint: {
+            /** Average */
+            average: number;
+            /** Scores Count */
+            scores_count: number;
+            /** Week Start */
+            week_start: string;
+        };
         /** RosterImportEmailResult */
         RosterImportEmailResult: {
             /**
@@ -4471,6 +5605,11 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * SessionKind
+         * @enum {string}
+         */
+        SessionKind: "roleplay" | "coaching" | "knowledge" | "research";
         /** SessionPrincipal */
         SessionPrincipal: {
             /**
@@ -4510,6 +5649,26 @@ export interface components {
              */
             user_id: string;
         };
+        /** SessionSampleItem */
+        SessionSampleItem: {
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Invented Improved */
+            invented_improved?: string | null;
+            /** Invented Weak */
+            invented_weak?: string | null;
+            /** Real Improved */
+            real_improved?: string | null;
+            /** Real Weak */
+            real_weak?: string | null;
+        };
+        /**
+         * SessionState
+         * @enum {string}
+         */
+        SessionState: "open" | "closed";
         /** TeamCreateRequest */
         TeamCreateRequest: {
             /** Name */
@@ -4570,6 +5729,109 @@ export interface components {
          * @enum {string}
          */
         TeamType: "leadership" | "functional";
+        /** ThemeCompetencyItem */
+        ThemeCompetencyItem: {
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Order Index
+             * @default 0
+             */
+            order_index: number;
+        };
+        /** TrainerNoteCreateRequest */
+        TrainerNoteCreateRequest: {
+            /** Note */
+            note: string;
+        };
+        /** TrainerNoteItem */
+        TrainerNoteItem: {
+            /** Created At */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Note */
+            note: string;
+        };
+        /** TrainingInvitationItem */
+        TrainingInvitationItem: {
+            /** Email */
+            email?: string | null;
+            /** Full Name */
+            full_name: string;
+            /**
+             * Has Account
+             * @default false
+             */
+            has_account: boolean;
+            /**
+             * Has Test In
+             * @default false
+             */
+            has_test_in: boolean;
+            /**
+             * Invited
+             * @default false
+             */
+            invited: boolean;
+            /** Invited At */
+            invited_at?: string | null;
+            /**
+             * Participant Profile Id
+             * Format: uuid
+             */
+            participant_profile_id: string;
+        };
+        /**
+         * TrainingInvitationSendItem
+         * @description Ce s-a intamplat cu fiecare om, pe rand.
+         *
+         *     `invite_url` e linkul prin care omul isi pune parola. Vine si cand emailul nu
+         *     a intrat la coada: linkul e bun oricum, iar trainerul il poate copia. Se poate
+         *     arata O SINGURA DATA, acum: in baza nu se pastreaza decat amprenta lui.
+         *
+         *     `email_queued` inseamna ca emailul a intrat in coada, NU ca a ajuns la om.
+         *     Plecarea propriu-zisa se intampla mai tarziu si poate esua acolo — de exemplu
+         *     cu o cheie invalida la furnizor. De aceea campul nu se cheama `email_sent`.
+         */
+        TrainingInvitationSendItem: {
+            /** Email */
+            email?: string | null;
+            /**
+             * Email Queued
+             * @default false
+             */
+            email_queued: boolean;
+            /** Error */
+            error?: string | null;
+            /** Full Name */
+            full_name?: string | null;
+            /** Invite Url */
+            invite_url?: string | null;
+            /**
+             * Participant Profile Id
+             * Format: uuid
+             */
+            participant_profile_id: string;
+        };
+        /**
+         * TrainingInvitationSendRequest
+         * @description Pe cine invita trainerul. Bifele din tabel.
+         */
+        TrainingInvitationSendRequest: {
+            /** Participant Profile Ids */
+            participant_profile_ids: string[];
+        };
+        /**
+         * TurnRole
+         * @enum {string}
+         */
+        TurnRole: "participant" | "actor" | "system";
         /**
          * UserAccountType
          * @enum {string}
@@ -13366,6 +14628,1554 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParticipantWorkspaceSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_participant_practice_dashboard_api_practice_dashboard_get: {
+        parameters: {
+            query?: {
+                project_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeDashboardResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_participant_practice_dashboard_api_practice_participant_dashboard_get: {
+        parameters: {
+            query?: {
+                project_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeDashboardResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_practice_consent_api_practice_projects__project_id__acord_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeConsentResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    give_practice_consent_api_practice_projects__project_id__acord_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PracticeConsentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeConsentResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_project_evolution_api_practice_projects__project_id__evolution_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeEvolutionResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_training_invitations_api_practice_projects__project_id__invitations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrainingInvitationItem"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    send_training_invitations_api_practice_projects__project_id__invitations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrainingInvitationSendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrainingInvitationSendItem"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_project_person_api_practice_projects__project_id__participants__profile_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticePersonResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    add_trainer_note_api_practice_projects__project_id__participants__profile_id__notes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrainerNoteCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrainerNoteItem"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_project_room_api_practice_projects__project_id__room_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeRoomResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_practice_setup_api_practice_projects__project_id__setup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeSetupResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    configure_practice_setup_api_practice_projects__project_id__setup_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PracticeSetupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeSetupResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    start_practice_session_api_practice_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PracticeSessionCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeSessionResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_practice_session_history_api_practice_sessions__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeSessionDetailResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    end_practice_session_api_practice_sessions__session_id__end_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PracticeSessionEndRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeSessionEndResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    submit_practice_turn_api_practice_sessions__session_id__turns_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PracticeTurnCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeTurnSubmitResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_stare_summary_api_practice_stare_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeStareSummaryResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_practice_themes_api_practice_themes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeThemeItem"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    start_trainer_practice_session_api_practice_trainer_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PracticeSessionCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeSessionResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    transcribe_practice_audio_api_practice_transcribe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_transcribe_practice_audio_api_practice_transcribe_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeTranscribeResponse"];
                 };
             };
             /** @description Bad Request */

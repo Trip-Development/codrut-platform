@@ -1,13 +1,14 @@
 import base64
 import binascii
 import json
+from decimal import Decimal
 from functools import cached_property, lru_cache
 from ipaddress import ip_network
 from typing import Literal
 from urllib.parse import urlsplit
 
 from email_validator import EmailNotValidError, validate_email
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -44,6 +45,11 @@ class Settings(BaseSettings):
     email_smtp_starttls: bool = False
     email_test_mode: bool = True
     email_brevo_sandbox_enabled: bool = False
+    # Gard pentru mediul de proba: cand lista NU e goala, pleaca email DOAR catre
+    # adresele din ea. Restul se opresc, fiecare cu motivul scris in jurnal si in
+    # randul lui din email_sends — nu dispar tacut. Goala = fara restrictie, adica
+    # exact purtarea de pana acum, deci productia nu se schimba.
+    email_allowed_recipients: list[str] = Field(default_factory=list)
     email_daily_send_cap: int = Field(default=2000, ge=0)
     email_outbox_batch_size: int = Field(default=100, ge=1, le=1000)
     email_outbox_concurrency: int = Field(default=8, ge=1, le=32)
@@ -92,6 +98,71 @@ class Settings(BaseSettings):
     local_auth_trainer_email: str = "trainer@example.com"
     local_auth_participant_email: str = "participant@example.com"
     protected_result_guidance_b64: SecretStr | None = None
+    generation_provider: str = "local"
+    vertex_project_id: str = "codrut-cody"
+    vertex_region: str = "europe-west4"
+    vertex_credentials_path: str = "/etc/codrut/cody-vertex.json"
+    # MODELUL SI PRETURILE MERG IMPREUNA. Cine schimba modelul schimba si cele patru preturi
+    # de mai jos, si trece prin SPEC-CODY/UNELTE/LISTA-LA-SCHIMBAREA-MODELULUI.md, toate punctele.
+    # Plicul 101: la comutarea din 19 septembrie preturile au ramas ale modelului vechi, iar
+    # aplicatia a socotit de ~2,4 ori mai putin decat adevarul — inclusiv la plafonul care
+    # opreste generarea.
+    # FARA VALOARE IMPLICITA, dinadins — plicul 114, pasul 3.
+    #
+    # Pana azi scria aici `gemini-2.5-flash`: modelul care se retrage pe 16 octombrie 2026 si
+    # care nu raspunde la destinatia europeana. `compose.prod.yaml` nu trece nicio setare Vertex,
+    # deci in ziua in care productia ar fi chemat modelul ar fi pornit TACUT pe unul mort — nu la
+    # pornire, ci la prima replica a unui om adevarat.
+    #
+    # Acum: cine nu-si spune modelul nu porneste, cu mesaj limpede. Mai bine se opreste la
+    # pornire decat in fata omului.
+    vertex_actor_model: str
+    vertex_evaluator_model: str
+    # Rezerva pentru transcriere, daca modelul principal nu o poate face — plicul 89.
+    # Gol inseamna „fara rezerva", nu „modelul vechi".
+    vertex_transcribe_fallback: str = ""
+    vertex_timeout_seconds: int = Field(default=60, ge=5, le=300)
+    vertex_max_output_tokens: int = Field(default=1024, ge=64, le=8192)
+    # Evaluatorul are nevoie de mai mult decat actorul: pe langa concluzie si
+    # recomandari trebuie sa incapa si blocul JSON cu scorurile, iar la Gemini 2.5
+    # bugetul de gandire se scade din aceeasi alocare. Cu 1024 in total si 1024
+    # rezervati gandirii, raspunsul se taia inainte de JSON si NIMIC nu se scria.
+    vertex_max_output_tokens_evaluator: int = Field(default=3072, ge=64, le=8192)
+    thinking_budget_actor: int = Field(default=0, ge=0, le=8192)
+    thinking_budget_evaluator: int = Field(default=1024, ge=0, le=8192)
+    # Preturile modelului pe care rulam, gemini-3.8-flash, in dolari pe milion de unitati
+    # (pret public, verificat 20 septembrie 2026). Se dau si din mediu, cu prefixul CODRUT_,
+    # ca sa nu ceara o comitere cand furnizorul schimba pretul — plicul 101.
+    # MERG IMPREUNA CU MODELUL de mai sus: vezi
+    # SPEC-CODY/UNELTE/LISTA-LA-SCHIMBAREA-MODELULUI.md.
+    price_input_per_million_usd: Decimal = Decimal("0.75")
+    price_cached_per_million_usd: Decimal = Decimal("0.075")
+    price_output_per_million_usd: Decimal = Decimal("3.75")
+    price_thought_per_million_usd: Decimal = Decimal("3.75")
+    practice_trainer_direct_entry: bool = False
+
+    # Despartirea actor/evaluator — plicul 112, decizia de arhitectura 7 (Andrei, 24 august).
+    #
+    # Stins, adica purtarea de azi: un singur apel, care face si personajul, si evaluarea.
+    # Aprins: doua apeluri in paralel, fiecare cu materialul meseriei lui. Intoarcerea e
+    # randul asta, nu o operatie.
+    practice_two_calls: bool = False
+
+    # Tabelul de preturi PE MODEL — plicul 120.
+    #
+    # Pana azi exista o singura pereche de patru preturi. Cu doua modele in aceeasi replica
+    # (actorul ieftin, evaluatorul scump) paza ar fi numarat gresit: cu preturile celui scump,
+    # economia nu s-ar fi vazut deloc; cu ale celui ieftin, evaluatorul ar fi fost socotit de
+    # trei ori mai ieftin decat e — chiar accidentul din 19 septembrie, cand plafonul Google
+    # s-a atins intr-o zi.
+    #
+    # Forma: JSON, model -> [intrare, din cache, iesire, gandire], in dolari pe milion.
+    # Se da din mediu, ca sa nu ceara o comitere cand furnizorul schimba pretul — lectia 101.
+    prices_by_model: str = ""
+    biblioteca_path: str = Field(
+        default="/opt/codrut-platform/BIBLIOTECA",
+        validation_alias=AliasChoices("BIBLIOTECA_PATH", "biblioteca_path"),
+    )
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -104,6 +175,14 @@ class Settings(BaseSettings):
                     return [str(origin).strip() for origin in parsed if str(origin).strip()]
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
+
+    def recipient_is_allowed(self, email: str) -> bool:
+        """Lista goala inseamna fara restrictie."""
+        if not self.email_allowed_recipients:
+            return True
+        return email.strip().lower() in {
+            adresa.strip().lower() for adresa in self.email_allowed_recipients if adresa.strip()
+        }
 
     @field_validator("email_from_address", "email_from_name", "email_legal_address")
     @classmethod

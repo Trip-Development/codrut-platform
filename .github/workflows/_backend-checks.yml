@@ -52,6 +52,10 @@ jobs:
       CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@localhost:5432/codrut
       CODRUT_REDIS_URL: redis://localhost:6379/0
       CODRUT_SESSION_SECRET: ci-session-secret
+      # Modelul, spus pe fata — plicul 114. Poarta trecea trei variabile si niciun model, deci
+      # in ziua in care modelul devine obligatoriu ar fi devenit rosie pentru toata echipa.
+      CODRUT_VERTEX_ACTOR_MODEL: gemini-3.8-flash
+      CODRUT_VERTEX_EVALUATOR_MODEL: gemini-3.8-flash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
@@ -78,6 +82,10 @@ jobs:
     timeout-minutes: 6
     env:
       CODRUT_SESSION_SECRET: ci-session-secret
+      # Modelul, spus pe fata — plicul 114. Poarta trecea trei variabile si niciun model, deci
+      # in ziua in care modelul devine obligatoriu ar fi devenit rosie pentru toata echipa.
+      CODRUT_VERTEX_ACTOR_MODEL: gemini-3.8-flash
+      CODRUT_VERTEX_EVALUATOR_MODEL: gemini-3.8-flash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0

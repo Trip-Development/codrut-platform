@@ -3,6 +3,7 @@ import { cn } from "@/utils/cn";
 import { formatRomanianDate } from "@/utils/date-format";
 
 const projectTypeLabels: Record<string, string> = {
+  training: "Training",
   team_coaching: "Coaching de echipă",
   individual_coaching: "Coaching individual",
   leadership_program: "Program de leadership",

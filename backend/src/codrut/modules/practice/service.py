@@ -1,0 +1,1597 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+import re
+import uuid
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from typing import Any
+
+from redis.asyncio import Redis
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from codrut.contracts.generation import (
+    GenerationMessage,
+    GenerationPurpose,
+    GenerationRequest,
+    GenerationResult,
+)
+from codrut.core.config import Settings, get_settings
+from codrut.core.errors import DomainError
+from codrut.modules.companies.models import CompanyProject, ParticipantProfile, ProjectMembership
+from codrut.modules.identity.models import User, UserRole
+from codrut.modules.identity.schemas import SessionPrincipal
+from codrut.modules.practice.acord import cere_acordul
+from codrut.modules.practice.alias import ascunde_numele, codul_omului
+from codrut.modules.practice.budget import BudgetExceeded, release, reserve, settle
+from codrut.modules.practice.evaluator import sedinta_prea_scurta, text_sedinta_prea_scurta
+from codrut.modules.practice.generation_provider import (
+    GenerationProvider,
+    build_generation_provider,
+)
+from codrut.modules.practice.models import (
+    OutcomeKind,
+    ParticipantMemory,
+    PracticeOutcome,
+    PracticeProgramSettings,
+    PracticeSession,
+    PracticeTurn,
+    ProjectCompetency,
+    SessionKind,
+    SessionState,
+    TurnRole,
+)
+from codrut.modules.practice.policies import ensure_participant_may_practice
+from codrut.modules.practice.pricing import estimate_pessimistic_cost
+from codrut.modules.practice.prompts import (
+    CODY_PROMPT_VERSION,
+    REPLICA_DE_CONFIRMARE,
+    get_prompts_pe_meserii,
+    get_system_prompt_for_kind,
+)
+from codrut.modules.practice.quotas import (
+    acquire_generation_lock,
+    ensure_daily_session_limit,
+    ensure_turn_length,
+    is_session_turn_limit_reached,
+)
+
+logger = logging.getLogger(__name__)
+
+# Blocul tehnic pe care `rezumat.md` il cere modelului la finalul sintezei.
+_BLOC_JSON = re.compile(r"```json\s*\{.*?\}\s*```", re.DOTALL)
+
+
+def doar_proza(text: str | None) -> str | None:
+    """Sinteza asa cum o citeste omul: fara blocul JSON de la final.
+
+    `rezumat.md` cere modelului proza PLUS un bloc JSON, din care se scriu scorurile in
+    baza. Pana la plicul 39 spre ecran pleca textul intreg, deci participantul vedea la
+    vedere acolade, ghilimele si nume de campuri in engleza.
+
+    Se taie aici, in backend, nu se ascunde in frontend: daca ramane in raspuns, il vede
+    oricine deschide cererea.
+
+    Atentie la ce NU face: nu hotaraste nimic despre cele patru note din bloc. Daca ele
+    ajung vreodata pe ecranul participantului, si sub ce forma, e o decizie a lui Andrei,
+    amanata pe 31 august pentru cand se ajunge la cumularea punctajelor. Aici se scoate
+    doar iesirea tehnica bruta.
+    """
+    if not text:
+        return text
+    return _BLOC_JSON.sub("", text).strip() or None
+
+# Ce i se trimite modelului ca sa deschida el sesiunea. Vezi `_prima_replica`: nu e o
+# replica pusa in gura participantului, si nu se salveaza niciodata in transcript.
+DESCHIDE_SESIUNEA = (
+    "Incepe tu sesiunea, dupa regula primului mesaj din instructiunile de sistem."
+)
+
+# Regulile memoriei, pastrate din aplicatia veche.
+MEMORIE_CATE_INSEMNARI = 5
+MEMORIE_RELEVANTA_MINIMA = 40
+# Promptul foloseste memoria doar la inceputul sesiunii; peste asta nici nu se citeste.
+MEMORIE_PANA_LA_REPLICA = 2
+
+
+# Eticheta cu care scena ajunge la EVALUATOR — plicul 118.
+#
+# Nu ca replica lui (asa a ajuns pana la 117, si o continua), nu deloc (asa a fost la 117, si
+# si-a inventat alta). A treia varianta: ce a produs celalalt, marcat pe fata ca venind de la
+# altcineva.
+SCENA_CELUILALT = "[În scenă, celălalt personaj a spus:]"
+
+
+def _fara_despartitor(text: str | None) -> str:
+    """Bucata personajului, fara randurile care sunt doar „***" — plicul 152.
+
+    „***" e despartitorul APLICATIEI dintre personaj si evaluare. Cand personajul il scrie singur
+    (la pornire, intre descrierea scenei si prima replica: 7 din 10 porniri, pe proba, 25
+    septembrie), omul vede doua despartitoare, iar actorul se vede, data viitoare, scriindu-l.
+    Regula o pune aplicatia, nu o rugaminte catre model.
+    """
+    linii = [linie for linie in (text or "").splitlines() if linie.strip() != "***"]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(linii)).strip()
+
+
+# Motivul scris in baza cand plafonul de bani se atinge chiar la inchidere — plicul 129, E.3.
+#
+# Sedinta se inchide oricum, dar fara evaluare: altfel omul ar apasa butonul la nesfarsit si ar
+# primi de fiecare data acelasi refuz.
+MOTIV_PESTE_PLAFON = "Inchisa fara evaluare: plafonul de buget al programului a fost atins."
+
+
+class _FaraEvaluare(Exception):
+    """Semnal intern: sedinta se inchide, dar nu se cheama modelul. Nu iese din serviciu."""
+
+
+class PracticeSessionService:
+    def __init__(
+        self,
+        session: AsyncSession,
+        redis: Redis | None = None,
+        generation_provider: GenerationProvider | None = None,
+        settings: Settings | None = None,
+    ) -> None:
+        self.session = session
+        self.settings = settings or get_settings()
+        self._redis = redis
+        self._generation_provider = generation_provider
+
+    @property
+    def redis(self) -> Redis:
+        if self._redis is None:
+            self._redis = Redis.from_url(self.settings.redis_url, decode_responses=True)
+        return self._redis
+
+    @property
+    def generation_provider(self) -> GenerationProvider:
+        if self._generation_provider is None:
+            self._generation_provider = build_generation_provider(self.settings)
+        return self._generation_provider
+
+    async def _resolve_participant_profile(
+        self,
+        principal: SessionPrincipal,
+    ) -> ParticipantProfile:
+        # Acelasi lucru, dar aici nu exista context de proiect: se alege
+        # DETERMINIST — intai cel legat de cont, apoi cel mai vechi. Nu are voie
+        # sa crape doar fiindca omul e in doua companii.
+        stmt = (
+            select(ParticipantProfile)
+            .where(
+                or_(
+                    ParticipantProfile.user_id == principal.user_id,
+                    # plicul 79: dupa adresa, doar profilurile NELEGATE — ca la plicul 75
+                    and_(
+                        ParticipantProfile.user_id.is_(None),
+                        ParticipantProfile.email == principal.email,
+                    ),
+                )
+            )
+            .order_by(ParticipantProfile.user_id.is_(None), ParticipantProfile.created_at)
+        )
+        profile = (await self.session.execute(stmt)).scalars().first()
+        if profile is None:
+            raise DomainError(
+                "Participant profile not found for principal",
+                code="participant_profile_not_found",
+            )
+        return profile
+
+    async def start_session(
+        self,
+        principal: SessionPrincipal,
+        project_id: uuid.UUID,
+        kind: SessionKind,
+        scenario_id: uuid.UUID | None = None,
+    ) -> tuple[PracticeSession, PracticeTurn | None]:
+        """Start a new practice session for a participant after policy and quota checks."""
+        # 1. Load project and verify project_type is training
+        stmt_proj = select(CompanyProject).where(CompanyProject.id == project_id)
+        project = (await self.session.execute(stmt_proj)).scalar_one_or_none()
+        if project is None:
+            raise DomainError(f"Proiectul {project_id} nu a fost găsit", code="project_not_found")
+        if project.project_type != "training":
+            raise DomainError(
+                "Exersarea nu este configurată pentru acest tip de proiect.",
+                code="practice_not_configured_for_project_type",
+            )
+
+        # 2. Load practice program settings for project
+        stmt_settings = select(PracticeProgramSettings).where(
+            PracticeProgramSettings.project_id == project_id
+        )
+        program_settings = (await self.session.execute(stmt_settings)).scalar_one_or_none()
+        if program_settings is None:
+            raise DomainError(
+                f"Practice is not configured for project {project_id}",
+                code="practice_not_configured",
+            )
+
+        # 3. Load participant profile and project membership
+        #
+        # Cautarea se face IN COMPANIA PROIECTULUI. Fara asta, un om care are
+        # profil in doua companii da MultipleResultsFound si sesiunea crapa cu 500
+        # — gasit la plicul 30, cu proba1 aflat si in „Pilot Cody", si in „test".
+        stmt_profile = (
+            select(ParticipantProfile)
+            .where(
+                ParticipantProfile.company_id == project.company_id,
+                or_(
+                    ParticipantProfile.user_id == principal.user_id,
+                    # plicul 79: dupa adresa, doar profilurile NELEGATE — ca la plicul 75
+                    and_(
+                        ParticipantProfile.user_id.is_(None),
+                        ParticipantProfile.email == principal.email,
+                    ),
+                ),
+            )
+            .order_by(ParticipantProfile.user_id.is_(None), ParticipantProfile.created_at)
+        )
+        profile = (await self.session.execute(stmt_profile)).scalars().first()
+        membership = None
+        if profile is not None:
+            stmt_membership = select(ProjectMembership).where(
+                ProjectMembership.project_id == project_id,
+                ProjectMembership.participant_profile_id == profile.id,
+            )
+            membership = (await self.session.execute(stmt_membership)).scalar_one_or_none()
+
+        membership_active = bool(membership is not None and membership.active)
+
+        # 3. Authorization check
+        ensure_participant_may_practice(
+            principal,
+            program_enabled=program_settings.is_enabled,
+            membership_active=membership_active,
+        )
+
+        assert profile is not None
+
+        # 3a. Acordul la prima intrare — plicul 139. Fara el, nicio sedinta: ecranul ascuns nu e o
+        # usa inchisa. Acordul e pe proiect si pe textul de azi (amprenta lui); daca textul se
+        # schimba, se cere din nou.
+        await cere_acordul(self.session, profile.id, project_id)
+
+        # 3bis. „Verificam cat ai retinut" — numai unde trainerul l-a aprins.
+        #
+        # Plicul 128, partea E, hotararea lui Andrei: quizul e al cursurilor. La team coaching
+        # nu preda nimeni nimic, deci n-are ce verifica.
+        #
+        # Refuzul sta AICI, nu doar in meniu: butonul ascuns se ocoleste cu o cerere scrisa de
+        # mana. Un drum inchis se inchide pe partea serverului, altfel e doar o perdea.
+        if kind == SessionKind.knowledge and not program_settings.quiz_enabled:
+            raise DomainError(
+                "Quiz is not enabled for this project",
+                code="quiz_not_enabled",
+            )
+
+        # 4. Daily sessions limit
+        now = datetime.now(UTC)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        stmt_count = select(func.count(PracticeSession.id)).where(
+            PracticeSession.participant_profile_id == profile.id,
+            PracticeSession.started_at >= today_start,
+        )
+        sessions_today_count = (await self.session.execute(stmt_count)).scalar_one() or 0
+        ensure_daily_session_limit(
+            sessions_today_count=sessions_today_count,
+            max_sessions_per_day=program_settings.max_sessions_per_day,
+        )
+
+        # 5. Check active knowledge pack
+        if program_settings.active_pack_id is None:
+            raise DomainError(
+                "Active knowledge pack is missing for practice program",
+                code="practice_pack_missing",
+            )
+
+        # 6. Create practice session with fixed active pack_id and prompt version
+        practice_session = PracticeSession(
+            program_settings_id=program_settings.id,
+            participant_profile_id=profile.id,
+            pack_id=program_settings.active_pack_id,
+            scenario_id=scenario_id,
+            kind=kind,
+            state=SessionState.open,
+            started_at=now,
+            turn_count=0,
+            prompt_version=CODY_PROMPT_VERSION,
+        )
+        self.session.add(practice_session)
+        await self.session.flush()
+
+        # Codrut vorbeste primul. Daca modelul nu raspunde, `prima` e None si sesiunea
+        # ramane deschisa si goala — nu se pierde pentru o replica ratata.
+        prima = await self._prima_replica(practice_session, profile, program_settings)
+        return practice_session, prima
+
+    def _istoricul_unei_meserii(
+        self, existing_turns, text: str, meserie: str
+    ) -> list[GenerationMessage]:
+        """Istoricul asa cum il vede UN singur apel — plicul 117.
+
+        Replicile omului intra intregi, la amandoua meseriile: ele sunt ce s-a spus de fapt.
+        Replicile lui Cody intra numai cu bucata meseriei respective.
+
+        Randurile vechi n-au bucatile salvate (coloanele sunt nule). Atunci se foloseste `text`,
+        ca pana acum: sesiunile incepute inainte nu se strica, doar nu castiga nimic.
+
+        Regula plicurilor 64-65 ramane neatinsa: replicile „user" una dupa alta se string, iar
+        replica de acum ia locul unui orfan ramas de la o generare esuata.
+        """
+        camp = "text_actor" if meserie == "actor" else "text_evaluator"
+        mesaje: list[GenerationMessage] = []
+        scena_in_asteptare = ""
+
+        def pune_user(continut: str) -> None:
+            """Replica omului, cu scena dinaintea ei daca e vreuna in asteptare."""
+            nonlocal scena_in_asteptare
+            intreg = continut
+            if scena_in_asteptare:
+                intreg = f"{SCENA_CELUILALT}\n{scena_in_asteptare}\n\n{continut}"
+            scena_in_asteptare = ""
+            if mesaje and mesaje[-1].role == "user":
+                mesaje[-1] = GenerationMessage(role="user", text=intreg)
+            else:
+                mesaje.append(GenerationMessage(role="user", text=intreg))
+
+        for t in existing_turns:
+            if t.role == TurnRole.participant:
+                if (t.text or "").strip():
+                    pune_user(t.text)
+                continue
+            vechi_fara_bucati = (
+                getattr(t, "text_actor", None) is None
+                and getattr(t, "text_evaluator", None) is None
+            )
+            if vechi_fara_bucati:
+                # rand dinaintea plicului 117: n-are bucati, deci se ia textul lipit
+                continut = t.text
+            else:
+                # rand cu bucati: se ia NUMAI a lui. Daca lipseste (evaluare nelivrata), randul
+                # se sare — nu se inlocuieste cu textul lipit, altfel s-ar intoarce exact
+                # amestecul pe care plicurile 117-118 il desfac.
+                continut = getattr(t, camp, None) or ""
+                if meserie == "evaluator" and not vechi_fara_bucati:
+                    # Scena i se da inapoi, dar NU ca propriul lui trecut — plicul 118.
+                    #
+                    # La 117 i-am taiat-o de tot, si atunci si-a inventat propriul scenariu:
+                    # personajul inventat a aparut in 23 de replici ale lui si intr-una a
+                    # actorului. Scena nu e „bucata actorului", e FAPT COMUN — fara ea n-are ce
+                    # judeca. Se pune deci inaintea replicii urmatoare a omului, pe rolul
+                    # „user" si cu o eticheta: e vorba celuilalt din scena, nu a lui.
+                    scena_in_asteptare = (getattr(t, "text_actor", None) or "").strip()
+            if (continut or "").strip():
+                mesaje.append(GenerationMessage(role="model", text=continut))
+
+        pune_user(text)
+        return mesaje
+
+    async def _evaluatorul(
+        self, cerere: GenerationRequest, session_id: uuid.UUID
+    ) -> GenerationResult | None:
+        """Apelul evaluatorului, cu o singura reincercare — plicul 112, punctul 2e.
+
+        Daca pica si a doua oara, intoarce None: replica personajului se afiseaza oricum, iar
+        evaluarea lipsa se spune pe fata. Replica omului nu se pierde niciodata — ea e salvata
+        in baza inainte de orice apel (plicul 83).
+        """
+        for incercare in (1, 2):
+            try:
+                return await self.generation_provider.generate(cerere)
+            except Exception:
+                logger.warning(
+                    "practice_evaluator_esuat sesiune=%s incercarea=%s",
+                    session_id, incercare, exc_info=True,
+                )
+        return None
+
+    async def start_trainer_session(
+        self,
+        principal: SessionPrincipal,
+        project_id: uuid.UUID,
+        kind: SessionKind,
+        scenario_id: uuid.UUID | None = None,
+    ) -> tuple[PracticeSession, PracticeTurn | None]:
+        """Start a direct practice session for a trainer without requiring invitations."""
+        if not principal.can_access_workspace(UserRole.trainer):
+            raise DomainError("Trainer access required", code="trainer_required")
+
+        stmt_settings = select(PracticeProgramSettings).where(
+            PracticeProgramSettings.project_id == project_id
+        )
+        program_settings = (await self.session.execute(stmt_settings)).scalar_one_or_none()
+        if program_settings is None or program_settings.active_pack_id is None:
+            raise DomainError(
+                f"Practice is not configured for project {project_id}",
+                code="practice_not_configured",
+            )
+
+        # Proiectul se citeste INAINTE de profil — plicul 73 — ca profilul sa poata fi cautat
+        # in compania lui, la fel ca pe drumul participantului (plicul 30). Pana acum se citea
+        # abia mai jos, in ramura `if profile is None`.
+        stmt_proj = select(CompanyProject).where(CompanyProject.id == project_id)
+        project = (await self.session.execute(stmt_proj)).scalar_one_or_none()
+        if project is None:
+            raise DomainError(f"Project not found: {project_id}", code="project_not_found")
+
+        # Aceeasi forma ca la plicul 30, pe drumul participantului (mai sus, start_session):
+        # in compania proiectului, cu ordonare ferma, primul rand — nu exact unul.
+        #
+        # Aici ramasese forma veche: dupa cont SAU adresa, fara companie, `scalar_one_or_none`.
+        # Un om cu profil in doua companii dadea MultipleResultsFound si pornirea crapa cu 500.
+        # Masurat pe proba la plicul 73: proba1, cu profil si in „Pilot Cody", si in „test".
+        stmt_profile = (
+            select(ParticipantProfile)
+            .where(
+                ParticipantProfile.company_id == project.company_id,
+                or_(
+                    ParticipantProfile.user_id == principal.user_id,
+                    # Plicul 79: aici ramura adresei ramane LARGA, dinadins.
+                    # Ingustata, un trainer B cu adresa folosita de profilul
+                    # altui cont A, in aceeasi companie, n-ar mai gasi profil;
+                    # ramura de mai jos ar crea unul nou cu aceeasi adresa:
+                    # incalcare de unicitate (company_id, email), deci 500.
+                    # Masurat pe proba: 0 profiluri in situatia asta.
+                    ParticipantProfile.email == principal.email,
+                ),
+            )
+            .order_by(ParticipantProfile.user_id.is_(None), ParticipantProfile.created_at)
+        )
+        # Cine porneste, chiar inainte de intrebarea de profil — plicul 72.
+        logger.info(
+            "practice_pornire cont=%s proiect=%s",
+            principal.user_id,
+            project_id,
+        )
+        profile = (await self.session.execute(stmt_profile)).scalars().first()
+        if profile is not None and profile.full_name == "Trainer":
+            # Plicul 49: numele-santinela pus de noi, inlocuit la prima atingere.
+            profile.full_name = _nume_din_email(principal.email)
+            await self.session.flush()
+        if profile is None:
+            stmt_user = select(User).where(User.id == principal.user_id)
+            user_exists = (await self.session.execute(stmt_user)).scalar_one_or_none() is not None
+
+            profile = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=project.company_id,
+                user_id=principal.user_id if user_exists else None,
+                full_name=_nume_din_email(principal.email),
+                email=principal.email,
+            )
+            self.session.add(profile)
+            await self.session.flush()
+
+        now = datetime.now(UTC)
+        practice_session = PracticeSession(
+            program_settings_id=program_settings.id,
+            participant_profile_id=profile.id,
+            pack_id=program_settings.active_pack_id,
+            scenario_id=scenario_id,
+            kind=kind,
+            state=SessionState.open,
+            started_at=now,
+            turn_count=0,
+            prompt_version=CODY_PROMPT_VERSION,
+        )
+        self.session.add(practice_session)
+        await self.session.flush()
+
+        # Codrut vorbeste primul. Daca modelul nu raspunde, `prima` e None si sesiunea
+        # ramane deschisa si goala — nu se pierde pentru o replica ratata.
+        prima = await self._prima_replica(practice_session, profile, program_settings)
+        return practice_session, prima
+
+    async def get_session_history(
+        self,
+        principal: SessionPrincipal,
+        session_id: uuid.UUID,
+    ) -> tuple[PracticeSession, list[PracticeTurn]]:
+        """Get a practice session and its conversation turns in order."""
+        stmt_session = select(PracticeSession).where(PracticeSession.id == session_id)
+        session_obj = (await self.session.execute(stmt_session)).scalar_one_or_none()
+        profile = await self._resolve_participant_profile(principal)
+        if session_obj is None or session_obj.participant_profile_id != profile.id:
+            raise DomainError(
+                f"Practice session not found: {session_id}",
+                code="session_not_found",
+            )
+
+        stmt_turns = (
+            select(PracticeTurn)
+            .where(PracticeTurn.session_id == session_id)
+            .order_by(PracticeTurn.ordinal.asc())
+        )
+        turns = list((await self.session.execute(stmt_turns)).scalars().all())
+        return session_obj, turns
+
+    async def _prima_replica(
+        self,
+        practice_session: PracticeSession,
+        profile: ParticipantProfile,
+        program_settings: PracticeProgramSettings,
+    ) -> PracticeTurn | None:
+        """Replica cu care Codrut deschide sesiunea, inainte ca omul sa scrie ceva.
+
+        Pana la plicul 38 participantul deschidea „Exerseaza" si primea un ecran gol,
+        pentru ca singurul loc unde se nastea o replica de la Codrut era raspunsul la un
+        mesaj al omului. Slotul `first_turn` exista in raspuns si era mereu `null`.
+
+        Regula primului mesaj e deja in prompt si e a lui Andrei: doar salut, plus
+        „Cum iti merge ziua pana acum?".
+
+        **Daca modelul nu raspunde, sesiunea ramane deschisa** si se intoarce `None`.
+        Ecranul arata atunci starea goala de pana acum. O replica ratata nu are voie sa
+        coste omul sesiunea — mai ales ca Vertex a dat 429 de mai multe ori.
+        """
+        competente = await self._competentele_proiectului(program_settings.project_id)
+        # Spre model pleaca CODUL omului, niciodata numele — plicul 138.
+        cod = await codul_omului(self.session, profile)
+        memorii = await self._memoria_participantului(
+            profile.user_id, history_length=0, profil=profile, cod=cod
+        )
+
+        system_instruction = get_system_prompt_for_kind(
+            kind=practice_session.kind,
+            name=cod,
+            history_length=0,
+            quiz_competency=(
+                "mix" if practice_session.kind == SessionKind.knowledge else None
+            ),
+            project_competencies=competente,
+            memories=memorii,
+            biblioteca_path=self.settings.biblioteca_path,
+            profil_rol=await self._profilul_de_rol(profile, practice_session.id),
+        )
+
+        request = GenerationRequest(
+            # Vertex refuza o cerere fara niciun `contents`, deci trebuie o intrare.
+            #
+            # NU e trucul din aplicatia veche: acolo se trimitea in ascuns o replica
+            # falsa DIN PARTEA PARTICIPANTULUI, care apoi trebuia ascunsa din
+            # transcript. Aici textul e o instructiune limpede, nu vorbe puse in gura
+            # omului, si nu se salveaza NICIODATA ca `PracticeTurn` — transcriptul
+            # incepe curat, cu replica lui Codrut.
+            messages=(GenerationMessage(role="user", text=DESCHIDE_SESIUNEA),),
+            system_instruction=system_instruction,
+            purpose=GenerationPurpose.actor,
+            max_output_tokens=self.settings.vertex_max_output_tokens,
+            temperature=0.7,
+            thinking_budget=self.settings.thinking_budget_actor,
+        )
+
+        prompt_words = sum(len(m.text.split()) for m in request.messages)
+        if request.system_instruction:
+            prompt_words += len(request.system_instruction.split())
+        estimated_usd = estimate_pessimistic_cost(
+            prompt_tokens=max(1, prompt_words),
+            max_output_tokens=self.settings.vertex_max_output_tokens,
+            thinking_budget=self.settings.thinking_budget_actor,
+            settings=self.settings,
+        )
+        stmt_active_members = select(func.count(ProjectMembership.id)).where(
+            ProjectMembership.project_id == program_settings.project_id,
+            ProjectMembership.active.is_(True),
+        )
+        activi = (await self.session.execute(stmt_active_members)).scalar_one() or 0
+        cap_usd = Decimal(activi) * program_settings.usd_cap_per_participant
+
+        try:
+            reservation_id = await reserve(
+                session=self.session,
+                program_settings_id=program_settings.id,
+                estimated_usd=estimated_usd,
+                cap_usd=cap_usd,
+                session_id=practice_session.id,
+            )
+        except Exception:
+            logger.warning(
+                "Prima replica nu a putut rezerva buget; sesiunea ramane deschisa.",
+                extra={"practice_session_id": str(practice_session.id)},
+            )
+            return None
+
+        await self.session.commit()
+
+        try:
+            result = await self.generation_provider.generate(request)
+        except Exception:
+            await release(self.session, reservation_id)
+            await self.session.commit()
+            logger.warning(
+                "Modelul nu a dat prima replica; sesiunea ramane deschisa si goala.",
+                extra={"practice_session_id": str(practice_session.id)},
+                exc_info=True,
+            )
+            return None
+
+        await settle(self.session, reservation_id, actual_usd=result.estimated_usd)
+
+        expires_at = datetime.now(UTC) + timedelta(days=program_settings.turn_retention_days)
+        prima = PracticeTurn(
+            session_id=practice_session.id,
+            ordinal=1,
+            role=TurnRole.actor,
+            text=result.text,
+            prompt_tokens=result.usage.prompt_tokens,
+            cached_tokens=result.usage.cached_tokens,
+            output_tokens=result.usage.output_tokens,
+            thought_tokens=result.usage.thought_tokens,
+            expires_at=expires_at,
+        )
+        self.session.add(prima)
+
+        stmt_sess = select(PracticeSession).where(PracticeSession.id == practice_session.id)
+        curenta = (await self.session.execute(stmt_sess)).scalar_one()
+        curenta.turn_count += 1
+        await self.session.commit()
+        await self.session.refresh(prima)
+        return prima
+
+    async def _profilul_de_rol(
+        self,
+        profile: ParticipantProfile,
+        session_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]:
+        """Ce stie platforma despre pozitia omului, plus a cata sesiune de role-play e.
+
+        `role_group` e deja normalizat la scriere in `leadership` / `member`; verificarea
+        de aici e aceeasi cu cea din scoring/service.py rd. 1816, scrisa la fel.
+        """
+        stmt = select(func.count(PracticeSession.id)).where(
+            PracticeSession.participant_profile_id == profile.id,
+            PracticeSession.kind == SessionKind.roleplay,
+        )
+        if session_id is not None:
+            stmt = stmt.where(PracticeSession.id != session_id)
+        anterioare = int((await self.session.execute(stmt)).scalar() or 0)
+
+        # Toate sesiunile, nu doar cele de role-play: toate trei modurile saluta, iar
+        # formula de salut se alege dupa a cata sesiune e omul (plicul 54).
+        stmt_toate = select(func.count(PracticeSession.id)).where(
+            PracticeSession.participant_profile_id == profile.id,
+        )
+        if session_id is not None:
+            stmt_toate = stmt_toate.where(PracticeSession.id != session_id)
+        toate = int((await self.session.execute(stmt_toate)).scalar() or 0)
+
+        return {
+            "conduce_oameni": (profile.role_group or "").strip().casefold()
+            in {"leadership", "manager"},
+            # Functia (`profile.position`) nu mai pleaca spre model — plicul 142.
+            "nr_roleplay_anterioare": anterioare,
+            "nr_sesiuni_anterioare": toate,
+        }
+
+    async def _competentele_proiectului(self, project_id: uuid.UUID) -> list[str]:
+        """Competentele alese de trainer, in ordinea lor.
+
+        Blocul de quiz le foloseste ca sa spuna limpede pe ce se da testul. Fara ele
+        scria „toate competentele de comunicare", adica nimic anume.
+        """
+        randuri = (await self.session.execute(
+            select(ProjectCompetency)
+            .where(ProjectCompetency.project_id == project_id)
+            .order_by(ProjectCompetency.order_index, ProjectCompetency.name)
+        )).scalars().all()
+        return [c.name for c in randuri]
+
+    async def _memoria_participantului(
+        self,
+        user_id: uuid.UUID | None,
+        *,
+        history_length: int,
+        profil: ParticipantProfile | None = None,
+        cod: str | None = None,
+    ) -> list[dict]:
+        """Ce stie Codrut despre omul asta din sesiunile dinainte.
+
+        Se scria la finalul fiecarei sesiuni si nu se citea niciodata inapoi, deci
+        fiecare sesiune incepea cu Codrut care nu stie nimic despre om.
+
+        Regula pastrata din aplicatia veche: cele mai recente 5 insemnari cu relevanta
+        cel putin 40, date in ordine cronologica, si numai la inceputul sesiunii —
+        promptul le foloseste oricum doar la `history_length <= 2`, deci mai tarziu nici
+        nu se citesc din baza.
+        """
+        if user_id is None or history_length > MEMORIE_PANA_LA_REPLICA:
+            return []
+
+        recente = (await self.session.execute(
+            select(ParticipantMemory)
+            .where(
+                ParticipantMemory.user_id == user_id,
+                ParticipantMemory.relevance_score >= MEMORIE_RELEVANTA_MINIMA,
+            )
+            .order_by(ParticipantMemory.created_at.desc())
+            .limit(MEMORIE_CATE_INSEMNARI)
+        )).scalars().all()
+
+        # Memoria a fost scrisa de MODEL, iar pana la plicul 138 modelul primea numele omului —
+        # deci insemnarile vechi il contin. Spre model pleaca inapoi numai cu codul in locul lui.
+        #
+        # Memoria e tinuta pe CONT, nu pe profil, iar acelasi om poate avea mai multe profiluri
+        # (la firme diferite), cu numele scris diferit. Gasit pe proba la plicul 138: o insemnare
+        # scrisa sub un profil („Draga <nume>, ...") pleca si cand omul exersa sub celalalt. Deci
+        # se curata de numele TUTUROR profilurilor lui — acelasi cont sau aceeasi adresa.
+        nume_de_ascuns: list[str] = []
+        if profil is not None and cod and recente:
+            conditii = [ParticipantProfile.id == profil.id]
+            if user_id is not None:
+                conditii.append(ParticipantProfile.user_id == user_id)
+            if profil.email:
+                conditii.append(func.lower(ParticipantProfile.email) == profil.email.lower())
+            nume_de_ascuns = sorted({
+                n for n in (await self.session.execute(
+                    select(ParticipantProfile.full_name).where(or_(*conditii))
+                )).scalars().all() if n
+            }, key=len, reverse=True)
+
+        def curat(valoare):
+            if not nume_de_ascuns:
+                return valoare
+            if isinstance(valoare, str):
+                for nume in nume_de_ascuns:
+                    valoare = ascunde_numele(valoare, nume, cod)
+                return valoare
+            if isinstance(valoare, list):
+                return [curat(v) for v in valoare]
+            if isinstance(valoare, dict):
+                return {k: curat(v) for k, v in valoare.items()}
+            return valoare
+
+        return [
+            {
+                "created_at": m.created_at.isoformat() if m.created_at else "",
+                "summary": curat(m.summary),
+                "key_quotes": curat(m.key_quotes or []),
+                "evolution_signals": curat(m.evolution_signals or {}),
+                "personal_context": curat(m.personal_context or {}),
+                "relevant_competencies": m.relevant_competencies or [],
+                "relevance_score": m.relevance_score,
+            }
+            # din baza vin de la cea mai noua; in prompt merg cronologic
+            for m in reversed(recente)
+        ]
+
+    async def add_participant_turn(
+        self,
+        principal: SessionPrincipal,
+        session_id: uuid.UUID,
+        text: str,
+    ) -> PracticeTurn | None:
+        """Add a participant turn and generate the actor's reply."""
+        # 1. Verify session exists, is open, and belongs to principal
+        stmt_session = select(PracticeSession).where(PracticeSession.id == session_id)
+        session_obj = (await self.session.execute(stmt_session)).scalar_one_or_none()
+        profile = await self._resolve_participant_profile(principal)
+        if session_obj is None or session_obj.participant_profile_id != profile.id:
+            raise DomainError(
+                f"Practice session not found: {session_id}",
+                code="session_not_found",
+            )
+        if session_obj.state != SessionState.open:
+            raise DomainError(
+                f"Practice session is {session_obj.state.value}",
+                code="session_closed",
+            )
+
+        stmt_prog = select(PracticeProgramSettings).where(
+            PracticeProgramSettings.id == session_obj.program_settings_id
+        )
+        program_settings = (await self.session.execute(stmt_prog)).scalar_one()
+
+        # 2. Text length check
+        ensure_turn_length(text, program_settings.max_chars_per_turn)
+
+        # 3. Check turn count limit
+        #
+        # Se numara SCHIMBURILE REUSITE — plicul 123 (hotararea lui Andrei: salutul nu se numara
+        # printre cele 10) si plicul 124 (nici o generare picata nu se numara).
+        #
+        # Doua pierderi tacute, amandoua platite de om, amandoua inchise aici:
+        #
+        # 1. `turn_count` creste si la replica de deschidere, generata la pornire
+        #    (`_prima_replica`, plicul 45). Cu plafonul pus pe 10, omul primea NOUA schimburi:
+        #    al zecelea mesaj al lui ii inchidea sedinta fara raspuns.
+        # 2. Numarand in schimb toate randurile omului — cum am facut la 123 — fiecare generare
+        #    picata il costa un schimb: replica lui RAMANE salvata cand modelul refuza (vezi
+        #    „participant turn remains saved in DB"), el mai apasa o data, si se salveaza inca
+        #    un rand. In sedinta auditorului au fost SASE la rand, fara niciun raspuns intre ele.
+        #
+        # Un schimb reusit = o replica a ACTORULUI care vine dupa ce omul a vorbit macar o data.
+        # Asa iese, dintr-o singura regula, si salutul nescazut (el vine INAINTE ca omul sa fi
+        # vorbit), si randurile orfane (n-au primit niciun raspuns, deci nu numara nimic) — si
+        # sedinta in care generarea de la pornire a esuat nu pierde nimic, fiindca n-are salut
+        # de scazut.
+        #
+        # De ce nu se scade din `turn_count`: el e citit si de tabloul participantului
+        # (`schemas.py:50`, `practice.ts`), iar valoarea lui salvata ramane astfel neatinsa.
+        # Nimic altceva nu se misca — nici `history_length`, pe care se sprijina pasul de pornire
+        # de la plicul 119.
+        stmt_roluri = (
+            select(PracticeTurn.role)
+            .where(PracticeTurn.session_id == session_id)
+            .order_by(PracticeTurn.ordinal.asc())
+        )
+        roluri = (await self.session.execute(stmt_roluri)).scalars().all()
+        omul_a_vorbit = False
+        schimburi_reusite = 0
+        for rol in roluri:
+            if rol == TurnRole.participant:
+                omul_a_vorbit = True
+            elif rol == TurnRole.actor and omul_a_vorbit:
+                schimburi_reusite += 1
+        if is_session_turn_limit_reached(
+            schimburi_reusite, program_settings.max_turns_per_session
+        ):
+            session_obj.state = SessionState.closed
+            session_obj.ended_at = datetime.now(UTC)
+            outcome = PracticeOutcome(
+                session_id=session_id,
+                kind=OutcomeKind.turn_limit,
+                note="Maximum turns reached for session",
+            )
+            self.session.add(outcome)
+            await self.session.flush()
+            return None
+
+        # 4. Redis single-flight generation lock
+        timeout_seconds = self.settings.vertex_timeout_seconds + 10
+        async with acquire_generation_lock(
+            redis=self.redis,
+            participant_profile_id=profile.id,
+            timeout_seconds=timeout_seconds,
+        ):
+            now = datetime.now(UTC)
+            expires_at = now + timedelta(days=program_settings.turn_retention_days)
+
+            # Query existing turns for this session
+            stmt_turns = (
+                select(PracticeTurn)
+                .where(PracticeTurn.session_id == session_id)
+                .order_by(PracticeTurn.ordinal.asc())
+            )
+            existing_turns = (await self.session.execute(stmt_turns)).scalars().all()
+            next_ordinal = (existing_turns[-1].ordinal + 1) if existing_turns else 1
+
+            # 5. Write participant turn
+            p_turn = PracticeTurn(
+                session_id=session_id,
+                ordinal=next_ordinal,
+                role=TurnRole.participant,
+                text=text,
+                expires_at=expires_at,
+            )
+            self.session.add(p_turn)
+            await self.session.flush()
+
+            # 6. Build GenerationRequest
+            # Replici ale omului lipite una de alta = urme de la generari esuate — plicul 64.
+            #
+            # Replica omului se salveaza inainte de a chema modelul si RAMANE salvata daca
+            # modelul refuza (vezi „participant turn remains saved in DB", mai jos). Omul mai
+            # apasa o data, se salveaza inca un rand identic. In sesiunea auditorului au fost
+            # SASE la rand, fara niciun raspuns intre ele.
+            #
+            # Modelul primea o conversatie stricata: aceeasi replica de mai multe ori. De aici
+            # raspunsul identic la replici diferite, si reprosul „ai ocolit «te rog»" exact
+            # cand omul spusese „te rog".
+            #
+            # Nu stergem nimic din baza — doar nu mai trimitem urmele la model. Asa se repara
+            # si sesiunile deja stricate.
+            messages: list[GenerationMessage] = []
+            for t in existing_turns:
+                role_str = "user" if t.role == TurnRole.participant else "model"
+                if messages and messages[-1].role == role_str == "user":
+                    messages[-1] = GenerationMessage(role="user", text=t.text)
+                    continue
+                messages.append(GenerationMessage(role=role_str, text=t.text))
+            # Si replica de acum trece prin aceeasi regula — plicul 65.
+            #
+            # `existing_turns` se citeste din baza INAINTE ca replica noua sa fie adaugata,
+            # deci replica de acum nu trece prin bucla de mai sus. Daca ultimul mesaj pastrat
+            # e tot al omului, e un orfan ramas de la o generare esuata, si replica noua se
+            # pune IN LOCUL lui, nu dupa el. Altfel modelul primea doua replici „user" una
+            # dupa alta — masurat pe cazul auditorului: 6 repetari inainte de plicul 64, 2
+            # dupa el, 1 de acum incolo.
+            if messages and messages[-1].role == "user":
+                messages[-1] = GenerationMessage(role="user", text=text)
+            else:
+                messages.append(GenerationMessage(role="user", text=text))
+
+            history_length = len(existing_turns) + 1
+
+            # Cele trei piese care existau pe disc dar nu ajungeau niciodata la model.
+            competente = await self._competentele_proiectului(program_settings.project_id)
+            cod = await codul_omului(self.session, profile)
+            memorii = await self._memoria_participantului(
+                profile.user_id or principal.user_id,
+                history_length=history_length,
+                profil=profile,
+                cod=cod,
+            )
+
+            doua_apeluri = (
+                self.settings.practice_two_calls and session_obj.kind == SessionKind.roleplay
+            )
+            # La pasul de pornire NU se cheama evaluatorul — plicul 119, partea A.
+            #
+            # Acolo omul doar a confirmat („Da, hai"); n-a exersat inca nimic, deci n-are ce
+            # evalua. Si tot de acolo veneau TOATE cele cinci picaturi ale rularii de la 118:
+            # trei sedinte in care evaluatorul si-a inventat un context (n-avea de unde sa-l ia,
+            # scena se naste chiar atunci, in paralel) si doua in care a dat nota confirmarii.
+            #
+            # Hotaraste aplicatia, dupa numaratoarea pe care o stie deja, NU modelul si nu textul.
+            #
+            # Plicul 152: evaluatorul nu se cheama, dar ACTORUL raspunde cu promptul LUI, nu cu cel
+            # combinat. Pana acum pasul asta facea un singur apel cu promptul combinat: replica
+            # iesea in formatul vechi (scena, „***", „[🏆 Scor: -/10]") si se salva fara bucati, iar
+            # la replica urmatoare randul „vechi" ajungea intreg la AMBELE apeluri ca propriul lor
+            # trecut — actorul se vedea dand note, evaluatorul se vedea jucand scena. Masurat pe
+            # sedinta lui Andrei, 25 septembrie: doua reactii ale personajului si doua note la
+            # fiecare replica. Acum rezultatul e bucata actorului, salvata ca atare.
+            pornire_doar_actor = False
+            if history_length == REPLICA_DE_CONFIRMARE:
+                pornire_doar_actor = doua_apeluri
+                doua_apeluri = False
+            system_instruction = get_system_prompt_for_kind(
+                kind=session_obj.kind,
+                name=cod,
+                history_length=history_length,
+                # `quiz.md` ii spune modelului sa urmeze EXCLUSIV blocul „MOD QUIZ
+                # ACTIV". Blocul se construia doar daca primea o competenta, si nu
+                # primea niciodata — deci i se cerea sa urmeze ceva ce nu era acolo.
+                # Nu exista inca nicio cale prin care omul sa aleaga o singura
+                # competenta, deci quizul e pe toate: „mix".
+                quiz_competency="mix" if session_obj.kind == SessionKind.knowledge else None,
+                project_competencies=competente,
+                memories=memorii,
+                biblioteca_path=self.settings.biblioteca_path,
+                profil_rol=await self._profilul_de_rol(profile, session_obj.id),
+            )
+
+            request = GenerationRequest(
+                messages=tuple(messages),
+                system_instruction=system_instruction,
+                purpose=GenerationPurpose.actor,
+                max_output_tokens=self.settings.vertex_max_output_tokens,
+                temperature=0.7,
+                thinking_budget=self.settings.thinking_budget_actor,
+            )
+
+            # Despartirea actor/evaluator — plicul 112. Amandoua primesc ACELASI transcript;
+            # niciuna nu asteapta iesirea celeilalte, deci pleaca in paralel.
+            #
+            # Ordinea „intai personajul, apoi evaluarea" nu mai e o rugaminte catre model:
+            # actorul nu primeste regulile de evaluare, evaluatorul nu primeste personajul.
+            cerere_evaluator: GenerationRequest | None = None
+            if pornire_doar_actor:
+                # Pasul de pornire, cu doua apeluri pornite — plicul 152: numai actorul, cu
+                # promptul si istoricul LUI. Fara regulile de evaluare, n-are de unde scrie nota.
+                prompt_actor, _ = get_prompts_pe_meserii(
+                    name=cod,
+                    history_length=history_length,
+                    memories=memorii,
+                    biblioteca_path=self.settings.biblioteca_path,
+                    profil_rol=await self._profilul_de_rol(profile, session_obj.id),
+                )
+                request = GenerationRequest(
+                    messages=tuple(self._istoricul_unei_meserii(existing_turns, text, "actor")),
+                    system_instruction=prompt_actor,
+                    purpose=GenerationPurpose.actor,
+                    max_output_tokens=self.settings.vertex_max_output_tokens,
+                    temperature=0.7,
+                    thinking_budget=self.settings.thinking_budget_actor,
+                )
+            if doua_apeluri:
+                # Fiecare apel isi vede NUMAI propriul trecut — plicul 117.
+                #
+                # Pana acum amandoua primeau `messages`, facut din `t.text`, adica din textul
+                # LIPIT: scena si evaluarea intr-un singur rand. Deci fiecare isi citea, marcata
+                # ca fiind a lui, si munca celuilalt — evaluatorul se vedea jucand scena, deci
+                # juca; actorul se vedea dand note, deci dadea note.
+                #
+                # Dovada care a inchis discutia (raportul 115): niciuna din cele 16 abateri nu
+                # era la pasul 3, primul pas de joc. Toate la 4, 5 si 6. Promptul tine la
+                # inceput; istoricul castiga pe masura ce se lungeste.
+                mesaje_actor = self._istoricul_unei_meserii(existing_turns, text, "actor")
+                mesaje_evaluator = self._istoricul_unei_meserii(existing_turns, text, "evaluator")
+                prompt_actor, prompt_evaluator = get_prompts_pe_meserii(
+                    name=cod,
+                    history_length=history_length,
+                    memories=memorii,
+                    biblioteca_path=self.settings.biblioteca_path,
+                    profil_rol=await self._profilul_de_rol(profile, session_obj.id),
+                )
+                request = GenerationRequest(
+                    messages=tuple(mesaje_actor),
+                    system_instruction=prompt_actor,
+                    purpose=GenerationPurpose.actor,
+                    max_output_tokens=self.settings.vertex_max_output_tokens,
+                    temperature=0.7,
+                    thinking_budget=self.settings.thinking_budget_actor,
+                )
+                cerere_evaluator = GenerationRequest(
+                    messages=tuple(mesaje_evaluator),
+                    system_instruction=prompt_evaluator,
+                    purpose=GenerationPurpose.evaluator,
+                    max_output_tokens=self.settings.vertex_max_output_tokens_evaluator,
+                    temperature=0.2,
+                    thinking_budget=self.settings.thinking_budget_evaluator,
+                )
+
+            # 7. Estimate pessimistic cost and reserve budget
+            prompt_words = sum(len(m.text.split()) for m in request.messages)
+            if request.system_instruction:
+                prompt_words += len(request.system_instruction.split())
+            estimated_prompt_tokens = max(1, prompt_words)
+
+            estimated_usd = estimate_pessimistic_cost(
+                prompt_tokens=estimated_prompt_tokens,
+                max_output_tokens=self.settings.vertex_max_output_tokens,
+                thinking_budget=self.settings.thinking_budget_actor,
+                settings=self.settings,
+            )
+            # Plicul 112: se rezerva pentru AMANDOUA apelurile, cu preturile din mediu — lectia
+            # plicului 101, unde preturile ramase ale modelului vechi faceau paza sa numere de
+            # 2,4 ori mai putin decat adevarul.
+            if cerere_evaluator is not None:
+                cuvinte_eval = sum(len(m.text.split()) for m in cerere_evaluator.messages)
+                if cerere_evaluator.system_instruction:
+                    cuvinte_eval += len(cerere_evaluator.system_instruction.split())
+                estimated_usd += estimate_pessimistic_cost(
+                    prompt_tokens=max(1, cuvinte_eval),
+                    max_output_tokens=self.settings.vertex_max_output_tokens_evaluator,
+                    thinking_budget=self.settings.thinking_budget_evaluator,
+                    settings=self.settings,
+                )
+
+            stmt_active_members = select(func.count(ProjectMembership.id)).where(
+                ProjectMembership.project_id == program_settings.project_id,
+                ProjectMembership.active.is_(True),
+            )
+            active_participants_count = (
+                await self.session.execute(stmt_active_members)
+            ).scalar_one() or 0
+            cap_usd = Decimal(active_participants_count) * program_settings.usd_cap_per_participant
+
+            reservation_id = await reserve(
+                session=self.session,
+                program_settings_id=program_settings.id,
+                estimated_usd=estimated_usd,
+                cap_usd=cap_usd,
+                session_id=session_id,
+            )
+
+            # 8. Close transaction before calling model (frees DB connection)
+            await self.session.commit()
+
+            # 9. Invoke model generation provider
+            logger.info(
+                "practice_generare sesiune=%s mesaje=%s ultima_replica_om=%r",
+                session_id,
+                len(messages),
+                messages[-1].text[:80] if messages else "",
+            )
+            try:
+                if cerere_evaluator is None:
+                    result = await self.generation_provider.generate(request)
+                    rezultat_evaluator = None
+                else:
+                    # In paralel, nu pe rand: altfel despartirea ar dubla asteptarea omului
+                    # in loc s-o scada.
+                    result, rezultat_evaluator = await asyncio.gather(
+                        self.generation_provider.generate(request),
+                        self._evaluatorul(cerere_evaluator, session_id),
+                    )
+            except Exception:
+                # 11. On failure: release budget, commit, participant turn remains saved in DB
+                await release(self.session, reservation_id)
+                await self.session.commit()
+                raise
+
+            # 10. New transaction: settle budget reservation with actual cost and record actor turn
+            cost_real = result.estimated_usd
+            if rezultat_evaluator is not None:
+                cost_real += rezultat_evaluator.estimated_usd
+            await settle(self.session, reservation_id, actual_usd=cost_real)
+
+            # Ordinea o pune aplicatia acum, nu modelul: personajul intai, evaluarea dupa.
+            # `***` e acelasi despartitor pe care il scrie azi un singur apel.
+            text_final = result.text
+            doar_personajul = cerere_evaluator is not None or pornire_doar_actor
+            text_personaj = _fara_despartitor(result.text) if doar_personajul else None
+            if pornire_doar_actor:
+                text_final = text_personaj
+            if cerere_evaluator is not None:
+                evaluarea = (
+                    (rezultat_evaluator.text or "").strip()
+                    if rezultat_evaluator is not None else ""
+                )
+                if not evaluarea:
+                    # Punctul 2e: replica personajului SE AFISEAZA oricum, iar lipsa evaluarii
+                    # se spune pe fata, fara nota inventata.
+                    evaluarea = (
+                        "_Evaluare nelivrată. Replica ta e salvată; nota vine data viitoare._"
+                    )
+                text_final = f"{text_personaj}\n\n***\n\n{evaluarea}"
+
+            actor_turn = PracticeTurn(
+                session_id=session_id,
+                ordinal=next_ordinal + 1,
+                role=TurnRole.actor,
+                text=text_final,
+                # Cele doua bucati, pentru istoricul de data viitoare — plicul 117. La un
+                # singur apel raman nule, si atunci istoricul se face din `text`, ca pana acum.
+                # La pornire (plicul 152) bucata actorului se salveaza si ea: randul nu mai e
+                # „vechi", deci la replica urmatoare evaluatorul primeste scena ca vorba celuilalt.
+                text_actor=text_personaj,
+                text_evaluator=(
+                    (rezultat_evaluator.text or "").strip()
+                    if cerere_evaluator is not None and rezultat_evaluator is not None
+                    else None
+                ),
+                prompt_tokens=result.usage.prompt_tokens,
+                cached_tokens=result.usage.cached_tokens,
+                output_tokens=result.usage.output_tokens,
+                thought_tokens=result.usage.thought_tokens,
+                # Costul adevarat al replicii, cu fiecare apel la pretul modelului lui —
+                # plicul 120. Coloanele de unitati de mai sus tin numai apelul actorului.
+                cost_usd=cost_real,
+                expires_at=expires_at,
+            )
+            self.session.add(actor_turn)
+
+            stmt_sess = select(PracticeSession).where(PracticeSession.id == session_id)
+            current_session = (await self.session.execute(stmt_sess)).scalar_one()
+            current_session.turn_count += 1
+
+            await self.session.commit()
+
+            return actor_turn
+
+    async def submit_turn(
+        self,
+        principal: SessionPrincipal,
+        session_id: uuid.UUID,
+        text: str,
+    ) -> tuple[PracticeTurn, PracticeTurn | None, SessionState]:
+        """Submit participant turn, trigger actor reply, and return turns and session state."""
+        actor_turn = await self.add_participant_turn(
+            principal=principal,
+            session_id=session_id,
+            text=text,
+        )
+        stmt_pturn = (
+            select(PracticeTurn)
+            .where(
+                PracticeTurn.session_id == session_id,
+                PracticeTurn.role == TurnRole.participant,
+            )
+            .order_by(PracticeTurn.ordinal.desc())
+            .limit(1)
+        )
+        p_turn = (await self.session.execute(stmt_pturn)).scalar_one()
+        stmt_sess = select(PracticeSession).where(PracticeSession.id == session_id)
+        sess = (await self.session.execute(stmt_sess)).scalar_one()
+        return p_turn, actor_turn, sess.state
+
+    async def end_session(
+        self,
+        principal: SessionPrincipal,
+        session_id: uuid.UUID,
+        outcome_kind: OutcomeKind = OutcomeKind.good,
+        note: str | None = None,
+    ) -> tuple[PracticeSession, str | None]:
+        """Explicitly end a practice session, generate summary using SUMMARY_PROMPT, record outcome and persist evaluation data."""  # noqa: E501
+        import json
+        import logging
+        import re
+
+        from codrut.modules.practice.models import (
+            CompetencyScore,
+            InsightMoment,
+            ParticipantMemory,
+        )
+
+        stmt = select(PracticeSession).where(PracticeSession.id == session_id)
+        session_obj = (await self.session.execute(stmt)).scalar_one_or_none()
+        profile = await self._resolve_participant_profile(principal)
+        if session_obj is None or session_obj.participant_profile_id != profile.id:
+            raise DomainError(
+                f"Practice session not found: {session_id}",
+                code="session_not_found",
+            )
+
+        summary_text: str | None = None
+        peste_plafon = False
+
+        # Proiectul sesiunii. PracticeSession nu-l tine direct — il are prin setarile
+        # de program. Se afla o singura data si se foloseste peste tot mai jos:
+        # fara el, scorurile se scriau cu project_id gol si ramaneau orfane cand
+        # proiectul era sters (gasit la plicul 30, in curatenie).
+        _setari = (await self.session.execute(
+            select(PracticeProgramSettings).where(
+                PracticeProgramSettings.id == session_obj.program_settings_id
+            )
+        )).scalar_one_or_none()
+        proiect_id = _setari.project_id if _setari else None
+
+        # Fetch turns for summary generation
+        stmt_turns = (
+            select(PracticeTurn)
+            .where(PracticeTurn.session_id == session_id)
+            .order_by(PracticeTurn.ordinal.asc())
+        )
+        turns = list((await self.session.execute(stmt_turns)).scalars().all())
+
+        # Spre model pleaca codul, nu numele — plicul 138.
+        cod = await codul_omului(self.session, profile)
+
+        # Sedinta prea scurta — plicul 144, hotararea lui Andrei. Pragul se socoteste O SINGURA
+        # DATA, aici, cu aceeasi functie ca evaluatorul (plicul 143: numai pe ce a scris omul).
+        # Sub prag: niciun apel spre model, nimic salvat din conversatie; sedinta se inchide
+        # normal, iar omul vede textul lui Andrei, nu o sinteza care judeca „Da, hai." si „Ok.".
+        prea_scurta = sedinta_prea_scurta(
+            [t.text for t in turns if t.role == TurnRole.participant]
+        )
+        if prea_scurta:
+            summary_text = text_sedinta_prea_scurta()
+
+        if turns and not prea_scurta:
+            history_lines = []
+            for t in turns:
+                speaker = cod if t.role == TurnRole.participant else "Cody"
+                history_lines.append(f"{speaker}: {t.text}")
+            history_str = "\n\n".join(history_lines)
+            from codrut.modules.practice.prompts import get_summary_prompt
+
+            summary_content = get_summary_prompt(
+                name=cod,
+                opt_text=session_obj.kind.value,
+                history=history_str,
+            )
+            req = GenerationRequest(
+                messages=(GenerationMessage(role="user", text=summary_content),),
+                system_instruction="Ești analizator de discurs.",
+                purpose=GenerationPurpose.evaluator,
+                max_output_tokens=self.settings.vertex_max_output_tokens_evaluator,
+                temperature=0.2,
+                thinking_budget=self.settings.thinking_budget_evaluator,
+            )
+
+            # Apelul de inchidere trece prin buget, ca oricare altul — plicul 129, partea E.
+            #
+            # Pana azi NU trecea: nicio rezervare, nicio replica, deci niciun rand in care sa
+            # scrie ce a costat. Masurat la plicul 128: din 5 sedinte inchise, ZERO rezervari
+            # dupa ultima replica. Urmarile erau doua, amandoua tacute:
+            #   · plafonul pe participant (`usd_cap_per_participant`) nu-l vedea deloc;
+            #   · costul unei sedinte iesea mai mic decat adevarul, cu chiar apelul care
+            #     citeste tot transcriptul.
+            #
+            # Rezervarea E locul unde se scrie costul: ea e singurul registru complet al
+            # sedintei (coloana `cost_usd` de pe replici nu acopera nici replica de deschidere
+            # — plicul 125). Deci „rezervat inainte, decontat dupa" rezolva amandoua deodata.
+            rezervare_id = None
+            try:
+                cuvinte = len(summary_content.split()) + len(
+                    (req.system_instruction or "").split()
+                )
+                estimare = estimate_pessimistic_cost(
+                    prompt_tokens=max(1, cuvinte),
+                    max_output_tokens=self.settings.vertex_max_output_tokens_evaluator,
+                    thinking_budget=self.settings.thinking_budget_evaluator,
+                    settings=self.settings,
+                )
+                stmt_activi = select(func.count(ProjectMembership.id)).where(
+                    ProjectMembership.project_id == proiect_id,
+                    ProjectMembership.active.is_(True),
+                )
+                activi = (await self.session.execute(stmt_activi)).scalar_one() or 0
+                plafon = Decimal(activi) * (
+                    _setari.usd_cap_per_participant if _setari else Decimal("0")
+                )
+                rezervare_id = await reserve(
+                    session=self.session,
+                    program_settings_id=session_obj.program_settings_id,
+                    estimated_usd=estimare,
+                    cap_usd=plafon,
+                    session_id=session_id,
+                )
+                peste_plafon = False
+            except BudgetExceeded:
+                # Plafonul atins CHIAR la inchidere: sedinta se inchide oricum, fara evaluare.
+                # Altfel omul ar ramane cu o sedinta pe care n-o mai poate inchide NICIODATA —
+                # ar apasa butonul si ar primi de fiecare data acelasi refuz.
+                logger.warning("practice_inchidere_peste_plafon sesiune=%s", session_id)
+                peste_plafon = True
+                note = note or MOTIV_PESTE_PLAFON
+
+            try:
+                if peste_plafon:
+                    raise _FaraEvaluare()
+                res = await self.generation_provider.generate(req)
+                summary_text = res.text
+                if rezervare_id is not None:
+                    await settle(self.session, rezervare_id, actual_usd=res.estimated_usd)
+
+                # 4-step closing flow persistence
+                json_match = re.search(r"```json\s*(\{.*?\})\s*```", summary_text, re.DOTALL)
+                if json_match:
+                    try:
+                        eval_data = json.loads(json_match.group(1))
+                        scores_dict = eval_data.get("scores", {})
+                        topic = eval_data.get("topic", "")
+                        characters = eval_data.get("characters", [])
+
+                        score_name_map = {
+                            "questionsRatio": "Abilități de Coach și Întrebări",
+                            "assertiveness": "Comunicare Asertivă",
+                            "sbiFeedback": "Feedback Structurat (SBI)",
+                            "conciseness": "Concizie și Echilibru",
+                        }
+                        for k, v in scores_dict.items():
+                            if isinstance(v, (int, float)):
+                                c_name = score_name_map.get(k, k)
+                                normalized_score = int(round(float(v) * 10))
+                                level = (
+                                    1 if normalized_score < 50
+                                    else (2 if normalized_score < 80 else 3)
+                                )
+                                cs = CompetencyScore(
+                                    user_id=profile.user_id or principal.user_id,
+                                    project_id=proiect_id,
+                                    score=min(100, max(0, normalized_score)),
+                                    level=level,
+                                    justification=(
+                                        f"Scor evaluat automat în modul "
+                                        f"{session_obj.kind.value}: {v}/10."
+                                    ),
+                                    conversation_id=str(session_id),
+                                    competency_name=c_name,
+                                    source_type="session",
+                                )
+                                self.session.add(cs)
+
+                        conclusion_part = (
+                            summary_text.split("##Recomandări")[0]
+                            .replace("##Concluzie", "")
+                            .strip()
+                        )
+                        im = InsightMoment(
+                            user_id=profile.user_id or principal.user_id,
+                            conversation_id=str(session_id),
+                            summary=(
+                                conclusion_part[:500] if conclusion_part else "Sesiune finalizată."
+                            ),
+                        )
+                        self.session.add(im)
+
+                        numeric_scores = [
+                            float(x) for x in scores_dict.values() if isinstance(x, (int, float))
+                        ]
+                        avg_score = (
+                            int(round(sum(numeric_scores) / max(1, len(numeric_scores)) * 10))
+                            if numeric_scores else 50
+                        )
+                        pm = ParticipantMemory(
+                            user_id=profile.user_id or principal.user_id,
+                            session_id=str(session_id),
+                            summary=(
+                                conclusion_part[:1000] if conclusion_part else summary_text[:1000]
+                            ),
+                            key_quotes=[],
+                            evolution_signals=scores_dict,
+                            personal_context={"topic": topic, "characters": characters},
+                            relevant_competencies=list(score_name_map.values()),
+                            source_type=session_obj.kind.value,
+                            relevance_score=min(100, max(0, avg_score)),
+                        )
+                        self.session.add(pm)
+
+                        profile.xp = (profile.xp or 0) + 10
+                        profile.streak = (profile.streak or 0) + 1
+                        stmt_u = select(User).where(
+                            User.id == (profile.user_id or principal.user_id)
+                        )
+                        user_obj = (await self.session.execute(stmt_u)).scalar_one_or_none()
+                        if user_obj:
+                            user_obj.xp = (user_obj.xp or 0) + 10
+                            user_obj.streak = (user_obj.streak or 0) + 1
+
+                    except Exception as parse_err:
+                        logging.getLogger(__name__).warning(
+                            f"Failed to parse evaluation JSON in end_session: {parse_err}"
+                        )
+                else:
+                    # Fara randul asta defectul e invizibil: raspunsul vine 200 OK,
+                    # sesiunea se inchide, si tabloul ramane pe zero fara ca nimic
+                    # sa se planga nicaieri. Asa a stat ascuns pana la plicul 28.
+                    logging.getLogger(__name__).warning(
+                        "end_session: evaluation JSON block missing from summary "
+                        f"(session={session_id}, summary_len={len(summary_text or '')}). "
+                        "No scores, insight moment or memory were persisted."
+                    )
+
+            except _FaraEvaluare:
+                summary_text = None
+            except Exception as err:
+                logging.getLogger(__name__).warning(f"Failed to generate session summary: {err}")
+                if rezervare_id is not None:
+                    # Banii rezervati se dau inapoi daca apelul n-a avut loc — ca la
+                    # `_prima_replica`. Altfel plafonul ar scadea pentru un apel care n-a fost.
+                    await release(self.session, rezervare_id)
+
+        # A DOUA chemare, portata la plicul 29 din app/api/evaluate/route.ts.
+        # Aplicatia veche facea doua chemari la oprirea sesiunii, nu una: rezumatul
+        # de mai sus (cele patru axe) SI evaluarea structurala de aici, care da
+        # scoruri pe competentele PROIECTULUI, mostrele „asa ai spus / asa ar fi
+        # sunat" si recomandarile pentru trainer. A doua nu fusese portata.
+        if turns and not peste_plafon and not prea_scurta:
+            try:
+                from codrut.modules.practice.evaluator import (
+                    PracticeEvaluator,
+                    build_transcript,
+                )
+                from codrut.modules.practice.setup_service import (
+                    competency_names_for_project,
+                )
+
+                competente = (
+                    await competency_names_for_project(self.session, proiect_id)
+                    if proiect_id else []
+                )
+                evaluator = PracticeEvaluator(
+                    session=self.session,
+                    generation_provider=self.generation_provider,
+                    settings=self.settings,
+                )
+                await evaluator.evaluate_session(
+                    session_id=session_id,
+                    user_id=profile.user_id or principal.user_id,
+                    project_id=proiect_id,
+                    competencies=competente,
+                    transcript=build_transcript(turns, cod),
+                    # pragul de sedinta scurta, numai pe ce a scris omul — plicul 143
+                    replici_om=[t.text for t in turns if t.role == TurnRole.participant],
+                    source_type=session_obj.kind.value,
+                )
+            except Exception as eval_err:
+                logging.getLogger(__name__).warning(
+                    f"Structural evaluation failed in end_session: {eval_err}"
+                )
+
+        if session_obj.state != SessionState.closed:
+            session_obj.state = SessionState.closed
+            session_obj.ended_at = datetime.now(UTC)
+            outcome = PracticeOutcome(
+                session_id=session_id,
+                kind=outcome_kind,
+                # si in nota se pastreaza proza: blocul tehnic nu e de citit de nimeni
+                note=note or ((doar_proza(summary_text) or "")[:500] or None),
+            )
+            self.session.add(outcome)
+            await self.session.flush()
+
+        return session_obj, doar_proza(summary_text)
+
+    async def transcribe(
+        self,
+        audio_bytes: bytes,
+        mime_type: str = "audio/webm",
+    ) -> tuple[str, Decimal]:
+        """Transcribe an audio recording and return text and estimated cost."""
+        text, usage, cost_usd = await self.generation_provider.transcribe_audio(
+            audio_bytes=audio_bytes,
+            mime_type=mime_type,
+        )
+        return text, cost_usd
+
+    async def get_stare_summary(self) -> dict[str, Any]:
+        """Summary for the /stare dashboard."""
+        from codrut.contracts.generation import TokenUsage
+        from codrut.modules.practice.pricing import estimate_cost
+        from codrut.modules.practice.prompts import CODY_PROMPT_VERSION, get_core_material
+
+        _, material_bytes = get_core_material(self.settings.biblioteca_path)
+        now = datetime.now(UTC)
+        today_start = datetime(now.year, now.month, now.day, tzinfo=UTC)
+
+        stmt_sess = select(func.count(PracticeSession.id)).where(
+            PracticeSession.started_at >= today_start
+        )
+        sessions_today = (await self.session.execute(stmt_sess)).scalar_one() or 0
+
+        stmt_turns = select(func.count(PracticeTurn.id)).where(
+            PracticeTurn.created_at >= today_start
+        )
+        turns_today = (await self.session.execute(stmt_turns)).scalar_one() or 0
+
+        stmt_cached_turns = select(func.count(PracticeTurn.id)).where(
+            PracticeTurn.created_at >= today_start,
+            PracticeTurn.cached_tokens > 0,
+        )
+        cached_turns = (await self.session.execute(stmt_cached_turns)).scalar_one() or 0
+
+        # Cost exact calculation from usageMetadata on PracticeTurn
+        stmt_turns_data = select(
+            func.sum(PracticeTurn.prompt_tokens),
+            func.sum(PracticeTurn.cached_tokens),
+            func.sum(PracticeTurn.output_tokens),
+            func.sum(PracticeTurn.thought_tokens),
+        ).where(PracticeTurn.created_at >= today_start)
+        row = (await self.session.execute(stmt_turns_data)).one()
+        # numai pentru procentul de cache de mai jos; banii se socotesc separat
+        prompt_t = row[0] or 0
+        cached_t = row[1] or 0
+
+        # Banii zilei — plicul 120.
+        #
+        # Pana azi se aduna TOT textul si se socotea la pretul modelului ACTORULUI. Cu doua
+        # modele in aceeasi replica, asta numara gresit in amandoua felurile; iar unitatile
+        # evaluatorului nu se salveaza deloc in coloanele de mai sus, deci se pierdeau cu totul.
+        #
+        # Acum: se aduna costurile ADEVARATE, salvate pe fiecare replica, fiecare apel la pretul
+        # modelului lui. Randurile de dinaintea plicului n-au coloana — pentru ELE, si numai
+        # pentru ele, ramane estimarea din unitati.
+        stmt_cost = select(
+            func.sum(PracticeTurn.cost_usd),
+            func.sum(PracticeTurn.prompt_tokens),
+            func.sum(PracticeTurn.cached_tokens),
+            func.sum(PracticeTurn.output_tokens),
+            func.sum(PracticeTurn.thought_tokens),
+        ).where(PracticeTurn.created_at >= today_start, PracticeTurn.cost_usd.is_(None))
+        vechi_row = (await self.session.execute(stmt_cost)).one()
+        stmt_cost_nou = select(func.sum(PracticeTurn.cost_usd)).where(
+            PracticeTurn.created_at >= today_start, PracticeTurn.cost_usd.is_not(None)
+        )
+        cost_salvat = (await self.session.execute(stmt_cost_nou)).scalar_one() or Decimal(0)
+
+        cache_percent = (
+            float(round((Decimal(cached_t) / Decimal(prompt_t) * 100), 1)) if prompt_t > 0 else 0.0
+        )
+
+        usage_fara_cost = TokenUsage(
+            prompt_tokens=vechi_row[1] or 0,
+            cached_tokens=vechi_row[2] or 0,
+            output_tokens=vechi_row[3] or 0,
+            thought_tokens=vechi_row[4] or 0,
+        )
+        cost_usd = Decimal(cost_salvat) + estimate_cost(
+            usage_fara_cost, self.settings, model=self.settings.vertex_actor_model
+        )
+
+        return {
+            "status": "normal",
+            "status_text": "Sistemul funcționează normal",
+            "prompt_version": CODY_PROMPT_VERSION,
+            "material_bytes": material_bytes,
+            "provider": self.settings.generation_provider,
+            "model": self.settings.vertex_actor_model,
+            "region": self.settings.vertex_region,
+            "sessions_today": sessions_today,
+            "turns_today": turns_today,
+            "cached_turns": cached_turns,
+            "cache_percent": cache_percent,
+            "cost_today_usd": float(round(cost_usd, 6)),
+            "last_error": None,
+        }
+
+
+def _nume_din_email(email: str | None) -> str:
+    """Un nume de om, scos din adresă, pentru intrarea directă a trainerului.
+
+    Pana la plicul 49 aici scria literal „Trainer". Modelului i se spunea ca omul din
+    fata lui se cheama asa — si, fiindca nu e un nume, si-l inventa singur: cand „Mihai",
+    cand un „Andrei" ghicit, cand „[Trainer]" cu paranteze, ca un loc necompletat.
+    """
+    local = (email or "").split("@")[0]
+    curat = re.sub(r"[._\-]+", " ", local).strip()
+    curat = re.sub(r"\d+", "", curat).strip()
+    return curat.title() if curat else "Participant"

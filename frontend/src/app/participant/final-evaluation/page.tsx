@@ -11,6 +11,7 @@ import {
   participantCanViewResults,
   participantScopeParams,
   participantScopedHref,
+  participantActiveProjectType,
   participantScopedNavItems,
   participantWorkspaceRequestOptions,
   type ParticipantRouteSearchParams,
@@ -30,6 +31,7 @@ export default async function ParticipantFinalEvaluationPage({
     ),
   ]);
   const scopeParams = participantScopeParams(summary);
+  const projectType = participantActiveProjectType(summary);
   const questionnairesHref = participantScopedHref("/participant/questionnaires", scopeParams);
   const resultsHref = participantScopedHref("/participant/results", scopeParams);
   const canViewResults = participantCanViewResults(summary);
@@ -45,7 +47,10 @@ export default async function ParticipantFinalEvaluationPage({
       eyebrow=""
       title={hasOpenTasks ? "Mai ai sarcini de completat" : "Ai finalizat partea ta"}
       description=""
-      navItems={participantScopedNavItems(scopeParams, canViewResults)}
+      navItems={participantScopedNavItems(scopeParams, {
+        projectType,
+        showResults: canViewResults,
+      })}
       activeHref={participantActiveHref("/participant", scopeParams)}
       userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
       session={participant}

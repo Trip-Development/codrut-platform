@@ -11,6 +11,7 @@ import {
   participantCanViewResults,
   participantScopeParams,
   participantScopedHref,
+  participantActiveProjectType,
   participantScopedNavItems,
   participantWorkspaceRequestOptions,
   type ParticipantRouteSearchParams,
@@ -31,6 +32,7 @@ export default async function ParticipantChatPage({
   ]);
   const scopeParams = participantScopeParams(summary);
   const showResults = participantCanViewResults(summary);
+  const projectType = participantActiveProjectType(summary);
   const identity = summary.participantFullName.trim() || summary.anonymousName?.trim() || "Participant";
   const openTasks = summary.tasks.filter((task) => task.status !== "completed").length;
 
@@ -40,7 +42,7 @@ export default async function ParticipantChatPage({
       eyebrow=""
       title="Suport"
       description=""
-      navItems={participantScopedNavItems(scopeParams, showResults)}
+      navItems={participantScopedNavItems(scopeParams, { projectType, showResults })}
       activeHref={participantActiveHref("/participant/chat", scopeParams)}
       userLabel={identity.split(/\s+/)[0]}
       session={participant}
@@ -68,7 +70,9 @@ export default async function ParticipantChatPage({
 
         <aside className="border-t border-border pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
           <p className="text-sm font-semibold text-foreground">{identity}</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{summary.projectName}</p>
+          {summary.projectName ? (
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{summary.projectName}</p>
+          ) : null}
           <p className="mt-6 border-t border-border pt-5 text-sm leading-6 text-muted-foreground">
             Răspunsurile individuale nu sunt afișate celorlalți participanți.
           </p>

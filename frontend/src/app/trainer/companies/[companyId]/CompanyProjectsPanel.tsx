@@ -75,6 +75,17 @@ export function CompanyProjectsPanel({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [projectType, setProjectType] = useState("team_coaching");
+  const [trainingTheme, setTrainingTheme] = useState("comunicare-asertiva");
+  const [competencies, setCompetencies] = useState<string[]>([
+    "Claritate și structură",
+    "Ascultare activă",
+    "Asertivitate și fermitate",
+    "Feedback constructiv (SBI)",
+    "Gestionarea reacțiilor defensive",
+    "Orientare pe soluții și acord",
+    "Prezență și ton Adult-Adult",
+  ]);
+  const [newCompInput, setNewCompInput] = useState("");
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [formOpenDate, setFormOpenDate] = useState("");
@@ -318,6 +329,7 @@ export function CompanyProjectsPanel({
                   className="bg-surface"
                   disabled={isCreating}
                 >
+                  <option value="training">Training</option>
                   <option value="team_coaching">Coaching de echipă</option>
                   <option value="individual_coaching">Coaching individual</option>
                   <option value="leadership_program">Program de leadership</option>
@@ -325,6 +337,76 @@ export function CompanyProjectsPanel({
                 </SelectControl>
               </Field>
             </FieldGroup>
+
+            {projectType === "training" ? (
+              <div className="rounded-md border border-border bg-surface-muted/40 p-3.5 space-y-3">
+                <Field>
+                  <FieldLabel>Temă principală (Cody)</FieldLabel>
+                  <SelectControl
+                    label="Temă principală"
+                    value={trainingTheme}
+                    onChange={(event) => setTrainingTheme(event.target.value)}
+                    className="bg-surface"
+                    disabled={isCreating}
+                  >
+                    <option value="comunicare-asertiva">Comunicare Asertivă</option>
+                    <option value="feedback">Feedback</option>
+                  </SelectControl>
+                </Field>
+
+                <div className="space-y-1.5">
+                  <FieldLabel>Competențe evaluate ({competencies.length})</FieldLabel>
+                  <div className="flex flex-wrap gap-1.5">
+                    {competencies.map((comp, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1 rounded bg-surface px-2 py-1 text-xs font-medium text-foreground border border-border"
+                      >
+                        {comp}
+                        <button
+                          type="button"
+                          onClick={() => setCompetencies(competencies.filter((_, i) => i !== idx))}
+                          className="text-muted-foreground hover:text-destructive"
+                          title="Elimină competență"
+                        >
+                          <XIcon className="size-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <Input
+                      value={newCompInput}
+                      onChange={(e) => setNewCompInput(e.target.value)}
+                      placeholder="Adaugă competență..."
+                      className="h-8 text-xs"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (newCompInput.trim()) {
+                            setCompetencies([...competencies, newCompInput.trim()]);
+                            setNewCompInput("");
+                          }
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (newCompInput.trim()) {
+                          setCompetencies([...competencies, newCompInput.trim()]);
+                          setNewCompInput("");
+                        }
+                      }}
+                    >
+                      Adaugă
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <FieldGroup className="grid gap-4 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="company-project-start-date">Start proiect</FieldLabel>
