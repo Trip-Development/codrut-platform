@@ -4,6 +4,7 @@ import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
 import { ParticipantCompletionState } from "../ParticipantCompletionState";
+import { ParticipantContextSelector } from "../ParticipantContextSelector";
 import { ParticipantTaskList } from "../ParticipantTaskList";
 import {
   participantActiveHref,
@@ -62,10 +63,21 @@ export default async function ParticipantQuestionnairesPage({
       eyebrow=""
       title="Chestionare"
       description=""
-      navItems={participantScopedNavItems(scopeParams, { projectType, showResults })}
+      navItems={participantScopedNavItems(scopeParams, {
+        projectType,
+        showResults,
+        contexts: summary.contexts,
+      })}
       activeHref={participantActiveHref("/participant/questionnaires", scopeParams)}
       userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
       session={participant}
+      sidebarTop={
+        <ParticipantContextSelector
+          contexts={summary.contexts}
+          selectedProfileId={summary.participantProfileId}
+          selectedProjectId={summary.projectId}
+        />
+      }
     >
       {allTasksComplete ? (
         <div className="mb-8">

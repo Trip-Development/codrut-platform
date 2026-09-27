@@ -35,6 +35,7 @@ import { cn } from "@/utils/cn";
 import type { ShellNavItem } from "./nav";
 import { ProfileAvatar } from "./profile-avatar";
 import { SessionBanner } from "./session-banner";
+import { SidebarStateContext } from "./sidebar-state";
 
 type AppShellProps = {
   audience: "trainer" | "participant";
@@ -49,6 +50,11 @@ type AppShellProps = {
   accessNote?: string;
   showHeader?: boolean;
   headerActions?: React.ReactNode;
+  /**
+   * Ce stă deasupra legăturilor din meniu, și în meniul lateral, și în cel de pe telefon —
+   * plicul 160 (schimbătorul de proiect al participantului). Paginile trainerului nu-l dau.
+   */
+  sidebarTop?: React.ReactNode;
   children: React.ReactNode;
 };
 
@@ -152,6 +158,7 @@ export function AppShell({
   accessNote,
   showHeader = true,
   headerActions,
+  sidebarTop,
   children,
 }: AppShellProps) {
   const pathname = usePathname();
@@ -368,6 +375,16 @@ export function AppShell({
           </Button>
         </div>
 
+        {sidebarTop ? (
+          <div data-sidebar-top className={cn("pb-2", isSidebarCollapsed ? "px-2" : "px-3")}>
+            <SidebarStateContext.Provider
+              value={{ inSidebar: true, collapsed: isSidebarCollapsed, mobile: false }}
+            >
+              {sidebarTop}
+            </SidebarStateContext.Provider>
+          </div>
+        ) : null}
+
         <nav className={cn("flex-1 overflow-y-auto py-2", isSidebarCollapsed ? "px-2" : "px-3")} aria-label="Rute aplicație">
           {renderNavLinks(true)}
         </nav>
@@ -533,7 +550,18 @@ export function AppShell({
               </Button>
             </div>
 
-            <div className="flex-1 overflow-y-auto">{renderNavLinks(false)}</div>
+            <div className="flex-1 overflow-y-auto">
+              {sidebarTop ? (
+                <div data-mobile-sidebar-top className="mb-4">
+                  <SidebarStateContext.Provider
+                    value={{ inSidebar: true, collapsed: false, mobile: true }}
+                  >
+                    {sidebarTop}
+                  </SidebarStateContext.Provider>
+                </div>
+              ) : null}
+              {renderNavLinks(false)}
+            </div>
 
             <div className="mt-auto flex flex-col gap-3 pt-5">
               <Separator />

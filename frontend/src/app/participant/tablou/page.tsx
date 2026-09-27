@@ -3,6 +3,7 @@ import { getParticipantSession } from "@/api/auth-server";
 import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { PracticeParticipantDashboard } from "../dashboard/PracticeParticipantDashboard";
+import { ParticipantContextSelector } from "../ParticipantContextSelector";
 import {
   participantActiveHref,
   participantActiveProjectType,
@@ -45,10 +46,17 @@ export default async function TablouParticipantPage({
       eyebrow="Antrenament & Competențe"
       title={`Tabloul tău, ${participantFirstName}`}
       description="Evoluția deprinderilor dobândite în simulările de conversație cu Cody."
-      navItems={participantScopedNavItems(scopeParams, { projectType })}
+      navItems={participantScopedNavItems(scopeParams, { projectType, contexts: summary?.contexts })}
       activeHref={participantActiveHref("/participant/tablou", scopeParams)}
       userLabel={participantFirstName}
       session={participant}
+      sidebarTop={
+        <ParticipantContextSelector
+          contexts={summary?.contexts ?? []}
+          selectedProfileId={summary?.participantProfileId}
+          selectedProjectId={summary?.projectId}
+        />
+      }
     >
       <div className="max-w-5xl mx-auto w-full">
         <PracticeParticipantDashboard projectId={summary?.projectId ?? null} />
