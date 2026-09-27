@@ -3132,12 +3132,27 @@ export interface components {
             days_span_70: number;
             /** Distinct Days 70 */
             distinct_days_70: number;
+            /**
+             * Interlocutor Types
+             * @default 0
+             */
+            interlocutor_types: number;
             /** Level */
             level: string;
             /** Level Description */
             level_description: string;
             /** Name */
             name: string;
+            /**
+             * Points
+             * @default 0
+             */
+            points: number;
+            /**
+             * Points Today
+             * @default 0
+             */
+            points_today: number;
             /** Scores 70 Count */
             scores_70_count: number;
             /** Total Roleplays */
@@ -3393,6 +3408,11 @@ export interface components {
             level_description: string;
             /** Name */
             name: string;
+            /**
+             * Points
+             * @default 0
+             */
+            points: number;
             /**
              * Scores Count
              * @default 0
@@ -4486,6 +4506,11 @@ export interface components {
              * @default
              */
             color: string;
+            /**
+             * Interlocutor Types
+             * @default 0
+             */
+            interlocutor_types: number;
             /** Level */
             level: string;
             /**
@@ -4495,6 +4520,11 @@ export interface components {
             level_description: string;
             /** Name */
             name: string;
+            /**
+             * Points
+             * @default 0
+             */
+            points: number;
             /**
              * Scores Count
              * @default 0
@@ -4588,6 +4618,16 @@ export interface components {
             insight_moments: components["schemas"]["InsightMomentItem"][];
             /** Participant Name */
             participant_name: string;
+            /**
+             * Points Today
+             * @default 0
+             */
+            points_today: number;
+            /**
+             * Points Total
+             * @default 0
+             */
+            points_total: number;
             /** Session Samples */
             session_samples: components["schemas"]["SessionSampleItem"][];
             /** Streak Bonus Pct */

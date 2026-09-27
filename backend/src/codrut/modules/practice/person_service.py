@@ -27,6 +27,7 @@ from codrut.modules.companies.models import (
 )
 from codrut.modules.identity.models import User
 from codrut.modules.practice.evaluator import TRAINER_PREFIX
+from codrut.modules.practice.interlocutor import intrarile_de_punctaj
 from codrut.modules.practice.models import (
     CompetencyScore,
     InsightMoment,
@@ -41,7 +42,7 @@ from codrut.modules.practice.room_service import (
     TEST_OUT_ID,
     _medie,
 )
-from codrut.modules.practice.scoring import ScoreEntry, compute_competency_evidence
+from codrut.modules.practice.scoring import compute_competency_evidence
 from codrut.modules.practice.setup_service import competency_names_for_project
 
 
@@ -161,13 +162,12 @@ class PracticePersonService:
             if s.competency_name:
                 pe_competenta[s.competency_name].append(s)
 
+        # plicul 165: aceleași reguli de punctaj ca pe tabloul participantului
+        intrari = await intrarile_de_punctaj(self.session, practica)
         evidence = []
         for nume in competente:
             lst = pe_competenta.get(nume, [])
-            dovada = compute_competency_evidence([
-                ScoreEntry(score=s.score, created_at=s.created_at, source_type=s.source_type)
-                for s in lst
-            ])
+            dovada = compute_competency_evidence([intrari[s.id] for s in lst if s.id in intrari])
             evidence.append({
                 "name": nume,
                 "level": dovada.level,
@@ -177,6 +177,8 @@ class PracticePersonService:
                 "sessions_count": len({s.conversation_id for s in lst}),
                 "scores_count": len(lst),
                 "why_not_higher": dovada.why_not_higher,
+                "points": dovada.points,
+                "interlocutor_types": dovada.interlocutor_types,
             })
 
         # Top progres pe practica: dupa media acumulata

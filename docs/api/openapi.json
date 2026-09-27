@@ -3730,6 +3730,11 @@
             "title": "Distinct Days 70",
             "type": "integer"
           },
+          "interlocutor_types": {
+            "default": 0,
+            "title": "Interlocutor Types",
+            "type": "integer"
+          },
           "level": {
             "title": "Level",
             "type": "string"
@@ -3741,6 +3746,16 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "points": {
+            "default": 0,
+            "title": "Points",
+            "type": "integer"
+          },
+          "points_today": {
+            "default": 0,
+            "title": "Points Today",
+            "type": "integer"
           },
           "scores_70_count": {
             "title": "Scores 70 Count",
@@ -4462,6 +4477,11 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "points": {
+            "default": 0,
+            "title": "Points",
+            "type": "integer"
           },
           "scores_count": {
             "default": 0,
@@ -7644,6 +7664,11 @@
             "title": "Color",
             "type": "string"
           },
+          "interlocutor_types": {
+            "default": 0,
+            "title": "Interlocutor Types",
+            "type": "integer"
+          },
           "level": {
             "title": "Level",
             "type": "string"
@@ -7656,6 +7681,11 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "points": {
+            "default": 0,
+            "title": "Points",
+            "type": "integer"
           },
           "scores_count": {
             "default": 0,
@@ -7912,6 +7942,16 @@
           "participant_name": {
             "title": "Participant Name",
             "type": "string"
+          },
+          "points_today": {
+            "default": 0,
+            "title": "Points Today",
+            "type": "integer"
+          },
+          "points_total": {
+            "default": 0,
+            "title": "Points Total",
+            "type": "integer"
           },
           "session_samples": {
             "items": {

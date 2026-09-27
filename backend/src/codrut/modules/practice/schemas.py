@@ -118,6 +118,10 @@ class CompetencyDashboardItem(BaseModel):
     distinct_days_70: int
     average_score: float
     why_not_higher: str
+    # punctajul nou — plicul 165
+    points: int = 0
+    points_today: int = 0
+    interlocutor_types: int = 0
 
 
 class InsightMomentItem(BaseModel):
@@ -153,6 +157,9 @@ class PracticeDashboardResponse(BaseModel):
     streak_days: int
     streak_bonus_pct: int
     evidence_ceiling: int
+    # punctajul nou — plicul 165 (xp_* și evidence_ceiling rămân, dar nu se mai afișează)
+    points_today: int = 0
+    points_total: int = 0
     competencies: list[CompetencyDashboardItem]
     insight_moments: list[InsightMomentItem]
     session_samples: list[SessionSampleItem]
@@ -218,6 +225,7 @@ class EvolutionCompetencyItem(BaseModel):
     level_description: str = ""
     color: str = ""
     scores_count: int = 0
+    points: int = 0  # plicul 165
 
 
 class EvolutionWeekPoint(BaseModel):
@@ -339,6 +347,9 @@ class PersonEvidenceItem(BaseModel):
     sessions_count: int = 0
     scores_count: int = 0
     why_not_higher: str = ""
+    # plicul 165
+    points: int = 0
+    interlocutor_types: int = 0
 
 
 class PersonTextItem(BaseModel):
