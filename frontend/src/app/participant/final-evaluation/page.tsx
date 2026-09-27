@@ -50,16 +50,19 @@ export default async function ParticipantFinalEvaluationPage({
       navItems={participantScopedNavItems(scopeParams, {
         projectType,
         showResults: canViewResults,
+        contexts: summary.contexts,
       })}
       activeHref={participantActiveHref("/participant", scopeParams)}
       userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
       session={participant}
+      sidebarTop={
+        <ParticipantContextSelector
+          contexts={summary.contexts}
+          selectedProfileId={summary.participantProfileId}
+          selectedProjectId={summary.projectId}
+        />
+      }
     >
-      <ParticipantContextSelector
-        contexts={summary.contexts}
-        selectedProfileId={summary.participantProfileId}
-        selectedProjectId={summary.projectId}
-      />
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-12">
         <section>
           {hasOpenTasks ? (

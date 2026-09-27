@@ -139,8 +139,10 @@ describe("participant workspace context", () => {
     await waitFor(() => expect(screen.getByRole("searchbox", { name: "Caută în proiect" })).toBeDefined());
     fireEvent.click(screen.getByRole("option", { name: /Program avansat/ }));
 
+    // Plicul 160: alegerea duce și la pagina proiectului (aici unul fără tip de training →
+    // `/participant`), nu mai lasă omul pe pagina pe care era.
     expect(navigation.push).toHaveBeenCalledWith(
-      "/participant/questionnaires?source=menu&profile=profile-1&project=project-2",
+      "/participant?source=menu&profile=profile-1&project=project-2",
     );
   });
 

@@ -94,18 +94,62 @@ export function participantScopedNavItems(
   {
     projectType,
     showResults = true,
-  }: { projectType?: string | null; showResults?: boolean } = {},
+    contexts,
+  }: {
+    projectType?: string | null;
+    showResults?: boolean;
+    /** Plicul 160 B: cu 2+ proiecte, „Acasă" duce la pagina de bun venit. */
+    contexts?: ProiecteleOmului;
+  } = {},
 ): ShellNavItem[] {
   const lista = participantNavItemsForType(projectType);
   const items = showResults
     ? lista
     : lista.filter((item) => item.href !== "/participant/results");
+  const bunVenit = participantHasWelcomePage(contexts);
   return items.map((item) => ({
     ...item,
     href: item.href === "/participant/results"
       ? participantResultsHref(params)
-      : participantScopedHref(item.href, params),
+      : bunVenit && item.href === "/participant"
+        ? participantScopedHref(PARTICIPANT_WELCOME_PATH, params)
+        : participantScopedHref(item.href, params),
   }));
+}
+
+type ProiecteleOmului = Array<{ projects?: unknown[] | null }> | null | undefined;
+
+/**
+ * Pagina de bun venit — plicul 160 B, hotărârea lui Andrei din 27 septembrie.
+ *
+ * NUMAI pentru omul cu 2+ proiecte (numărate peste toate firmele, ca în schimbător). Omul cu un
+ * singur proiect — cei mai mulți — vede exact ce vedea: aceeași pagină, același meniu.
+ */
+export const PARTICIPANT_WELCOME_PATH = "/participant/bun-venit";
+
+export function participantProjectCount(contexts: ProiecteleOmului): number {
+  return (contexts ?? []).reduce((total, context) => total + (context.projects?.length ?? 0), 0);
+}
+
+export function participantHasWelcomePage(contexts: ProiecteleOmului): boolean {
+  return participantProjectCount(contexts) >= 2;
+}
+
+/** `/participant` fără proiect ales, la omul cu 2+ proiecte → pagina de bun venit (și după login). */
+export function participantShouldOpenWelcome(
+  searchParams: ParticipantRouteSearchParams,
+  contexts: ProiecteleOmului,
+): boolean {
+  return !firstValue(searchParams.project) && participantHasWelcomePage(contexts);
+}
+
+/**
+ * Unde duce alegerea unui proiect — plicul 160: un proiect de training la „Exersează", orice
+ * altul la pagina proiectului. Stă aici, nu lângă schimbător, ca s-o poată folosi și pagina de
+ * bun venit, care e o componentă de server.
+ */
+export function participantProjectDestination(projectType?: string | null): string {
+  return projectType === TRAINING_PROJECT_TYPE ? "/participant/practice" : "/participant";
 }
 
 export function participantActiveHref(pathname: string, params: URLSearchParams): string {

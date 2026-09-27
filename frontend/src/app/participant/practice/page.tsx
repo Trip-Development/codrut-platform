@@ -42,16 +42,18 @@ export default async function ParticipantPracticePage({
       eyebrow="Antrenament cu Cody"
       title="Conversație de practică"
       description="Exersează comunicarea asertivă și feedbackul în scenarii simulate cu inteligență artificială"
-      navItems={participantScopedNavItems(scopeParams, { projectType })}
+      navItems={participantScopedNavItems(scopeParams, { projectType, contexts: summary.contexts })}
       activeHref={participantActiveHref("/participant/practice", scopeParams)}
       userLabel={name.split(" ")[0]}
       session={participant}
+      sidebarTop={
+        <ParticipantContextSelector
+          contexts={summary.contexts}
+          selectedProfileId={summary.participantProfileId}
+          selectedProjectId={summary.projectId}
+        />
+      }
     >
-      <ParticipantContextSelector
-        contexts={summary.contexts}
-        selectedProfileId={summary.participantProfileId}
-        selectedProjectId={summary.projectId}
-      />
       <PracticeWorkspace
         projectId={summary.projectId}
         quizEnabled={quizEnabled}
