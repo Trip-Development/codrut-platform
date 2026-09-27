@@ -1,9 +1,17 @@
+import { redirect } from "next/navigation";
+
 import { getParticipantSession } from "@/api/auth-server";
 import { getParticipantOnboardingState } from "@/api/participant-onboarding";
 import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { ParticipantClientWorkspace } from "./ParticipantClientWorkspace";
-import { participantWorkspaceRequestOptions, type ParticipantRouteSearchParams } from "./participant-context";
+import {
+  participantScopedHref,
+  participantShouldOpenWelcome,
+  participantWorkspaceRequestOptions,
+  PARTICIPANT_WELCOME_PATH,
+  type ParticipantRouteSearchParams,
+} from "./participant-context";
 
 export default async function ParticipantWorkspacePage({
   searchParams,
@@ -16,6 +24,14 @@ export default async function ParticipantWorkspacePage({
     getParticipantSession(),
     getParticipantWorkspaceSummary(participantWorkspaceRequestOptions(requestOptions.headers, routeParams)),
   ]);
+  // Plicul 160 B: omul cu 2+ proiecte, fără proiect ales (și după login), ajunge la bun venit.
+  // Cu un singur proiect, sau cu proiectul ales în adresă, pagina e cea de până acum.
+  if (participantShouldOpenWelcome(routeParams, summary.contexts)) {
+    const params = new URLSearchParams();
+    const profil = routeParams.profile;
+    if (typeof profil === "string" && profil) params.set("profile", profil);
+    redirect(participantScopedHref(PARTICIPANT_WELCOME_PATH, params));
+  }
   const onboarding = await getParticipantOnboardingState(summary.participantProfileId);
 
   // Chestionarul se CERE, nu se IMPUNE — plicul 127, hotararea lui Andrei din 22 septembrie:

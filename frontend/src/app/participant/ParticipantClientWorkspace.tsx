@@ -125,7 +125,11 @@ export function ParticipantClientWorkspace({
   const projectType = participantActiveProjectType(summaryData);
   const navItems = readOnly
     ? []
-    : participantScopedNavItems(scopeParams, { projectType, showResults });
+    : participantScopedNavItems(scopeParams, {
+        projectType,
+        showResults,
+        contexts: summaryData.contexts,
+      });
 
   return (
     <AppShell

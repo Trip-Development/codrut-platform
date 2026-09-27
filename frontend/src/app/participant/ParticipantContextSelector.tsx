@@ -9,9 +9,9 @@ import type {
   ParticipantWorkspaceCycle,
 } from "@/api/participants";
 import { CycleComparisonToolbar } from "@/components/reports/CycleComparisonToolbar";
-import { TRAINING_PROJECT_TYPE } from "@/components/shell/nav";
 import { useSidebarState } from "@/components/shell/sidebar-state";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { participantProjectDestination } from "./participant-context";
 
 /**
  * Proiectul ales, ținut minte în browser — plicul 129, partea A.
@@ -61,15 +61,6 @@ function uitaProiectul(cheie: string | null) {
   } catch {
     // nimic de făcut
   }
-}
-
-/**
- * Unde duce alegerea unui proiect — plicul 160: un proiect de training la „Exersează", orice
- * altul la pagina proiectului. Înainte alegerea lăsa omul pe aceeași pagină, și ajungea, de pildă,
- * pe „Exersează" cu un proiect de chestionare.
- */
-export function participantProjectDestination(projectType?: string | null): string {
-  return projectType === TRAINING_PROJECT_TYPE ? "/participant/practice" : "/participant";
 }
 
 export function ParticipantContextSelector({

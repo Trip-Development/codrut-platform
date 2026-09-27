@@ -42,7 +42,7 @@ export default async function ParticipantPracticePage({
       eyebrow="Antrenament cu Cody"
       title="Conversație de practică"
       description="Exersează comunicarea asertivă și feedbackul în scenarii simulate cu inteligență artificială"
-      navItems={participantScopedNavItems(scopeParams, { projectType })}
+      navItems={participantScopedNavItems(scopeParams, { projectType, contexts: summary.contexts })}
       activeHref={participantActiveHref("/participant/practice", scopeParams)}
       userLabel={name.split(" ")[0]}
       session={participant}
