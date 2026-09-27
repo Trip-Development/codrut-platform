@@ -46,7 +46,7 @@ export default async function TablouParticipantPage({
     <AppShell
       audience="participant"
       eyebrow="Antrenament & Competențe"
-      title={`Tabloul tău, ${participantFirstName}`}
+      title="Tabloul tău"
       description="Evoluția deprinderilor dobândite în simulările de conversație cu Cody."
       navItems={participantScopedNavItems(scopeParams, { projectType, contexts: contexteCont })}
       activeHref={participantActiveHref("/participant/tablou", scopeParams)}
