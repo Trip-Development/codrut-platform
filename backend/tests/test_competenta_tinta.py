@@ -82,6 +82,7 @@ async def test_tinta_e_competenta_cu_cele_mai_putine_note() -> None:
     assert [c.purpose for c in cereri] == [GenerationPurpose.actor]
     prompt = cereri[0].system_instruction
     assert "Scenariul pune la încercare mai ales competența „Feedback asertiv”" in prompt
+    assert "În „Obiectivul tău” se vede limpede competența asta" in prompt
     # stă lângă regula setup-ului, la capătul promptului
     assert prompt.index("CUM ARATĂ SETUP-UL") < prompt.index("mai ales competența")
 

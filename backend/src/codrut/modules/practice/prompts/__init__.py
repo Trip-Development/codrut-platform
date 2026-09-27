@@ -758,7 +758,8 @@ def regula_setupului_la_doua_apeluri(
     ) + (
         # Plicul 165 C: competența proiectului cu cele mai puține note ale omului.
         f"\nScenariul pune la încercare mai ales competența „{competenta_tinta}”; obiectivul "
-        f"participantului o urmărește pe ea."
+        f"participantului o urmărește pe ea. În „Obiectivul tău” se vede limpede competența "
+        f"asta: o numești sau o descrii pe față, nu alta în locul ei."
         if competenta_tinta else ""
     )
 
