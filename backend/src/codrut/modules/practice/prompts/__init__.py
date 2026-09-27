@@ -729,7 +729,11 @@ def get_system_prompt_for_kind(
         )
 
 
-def regula_setupului_la_doua_apeluri(profil_rol: dict[str, Any] | None, name: str) -> str:
+def regula_setupului_la_doua_apeluri(
+    profil_rol: dict[str, Any] | None,
+    name: str,
+    competenta_tinta: str | None = None,
+) -> str:
     """Cum arată setup-ul, spus ultimul, lângă numele personajului — plicul 164, partea A.
 
     Andrei, pe live, de două ori: după setup venea replica LUI, scrisă de Cody („— Tudor, te-am
@@ -751,6 +755,11 @@ def regula_setupului_la_doua_apeluri(profil_rol: dict[str, Any] | None, name: st
         f"PERSONAJULUI: vorbește {nume}, către participant, cu eticheta „{nume}:”. Tu joci NUMAI "
         f"personajul {nume}: nu scrii niciodată ce spune participantul — nici prima lui replică, "
         f"nici un exemplu; el răspunde singur, după tine."
+    ) + (
+        # Plicul 165 C: competența proiectului cu cele mai puține note ale omului.
+        f"\nScenariul pune la încercare mai ales competența „{competenta_tinta}”; obiectivul "
+        f"participantului o urmărește pe ea."
+        if competenta_tinta else ""
     )
 
 
@@ -760,6 +769,7 @@ def get_prompts_pe_meserii(
     memories: list[dict[str, Any]] | None = None,
     biblioteca_path: str = "",
     profil_rol: dict[str, Any] | None = None,
+    competenta_tinta: str | None = None,
 ) -> tuple[str, str]:
     """Cele doua prompturi ale despartirii actor/evaluator — plicul 112, decizia 7.
 
@@ -780,7 +790,9 @@ def get_prompts_pe_meserii(
     material_evaluator, _ = get_core_material(biblioteca_path, felie="evaluator")
 
     # Plicul 164 A: la pornire, regula setup-ului stă ultima, lângă numele personajului.
-    regula_setupului = regula_setupului_la_doua_apeluri(profil_rol, name) if comanda else ""
+    regula_setupului = (
+        regula_setupului_la_doua_apeluri(profil_rol, name, competenta_tinta) if comanda else ""
+    )
     prompt_actor = (
         f"{material_actor}\n\n---\n\n{reguli_generale}\n\n---\n\n"
         f"{ACTOR_PROMPT_DOUA_APELURI}{memory_block}{comanda}{regula_setupului}"

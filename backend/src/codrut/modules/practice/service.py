@@ -698,6 +698,41 @@ class PracticeSessionService:
             "nr_sesiuni_anterioare": toate,
         }
 
+    async def _competenta_tinta(
+        self,
+        profile: ParticipantProfile,
+        principal: SessionPrincipal,
+        project_id: uuid.UUID,
+        competente: list[str],
+    ) -> str | None:
+        """Competenta proiectului cu cele mai putine note ale omului — plicul 165, partea C.
+
+        Numai notele role-play-urilor lui, pe proiectul acesta (ca in punctaj). La egalitate,
+        ordinea trainerului. Scenariul o tinteste; evaluatorul de la inchidere noteaza in
+        continuare toate competentele vazute.
+        """
+        if not competente:
+            return None
+        from codrut.modules.practice.dashboard_service import _cheie
+        from codrut.modules.practice.interlocutor import intrarile_de_punctaj
+        from codrut.modules.practice.models import CompetencyScore
+
+        conturi = {u for u in (profile.user_id, principal.user_id) if u}
+        note = (await self.session.execute(
+            select(CompetencyScore).where(
+                CompetencyScore.user_id.in_(conturi),
+                CompetencyScore.project_id == project_id,
+            )
+        )).scalars().all()
+        intrari = await intrarile_de_punctaj(self.session, note)
+        dupa_cheie = {_cheie(n): n for n in competente}
+        numar = dict.fromkeys(competente, 0)
+        for s in note:
+            nume = dupa_cheie.get(_cheie(s.competency_name or ""))
+            if nume is not None and s.id in intrari:
+                numar[nume] += 1
+        return min(competente, key=lambda n: numar[n])
+
     async def _competentele_proiectului(self, project_id: uuid.UUID) -> list[str]:
         """Competentele alese de trainer, in ordinea lor.
 
@@ -1011,6 +1046,9 @@ class PracticeSessionService:
                     memories=memorii,
                     biblioteca_path=self.settings.biblioteca_path,
                     profil_rol=await self._profilul_de_rol(profile, session_obj.id),
+                    competenta_tinta=await self._competenta_tinta(
+                        profile, principal, program_settings.project_id, competente
+                    ),
                 )
                 request = GenerationRequest(
                     messages=tuple(self._istoricul_unei_meserii(existing_turns, text, "actor")),
