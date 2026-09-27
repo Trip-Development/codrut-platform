@@ -16,6 +16,7 @@ import {
   participantWorkspaceRequestOptions,
   type ParticipantRouteSearchParams,
 } from "../participant-context";
+import { participantAccountContexts } from "../proiectele-contului";
 
 export default async function ParticipantFinalEvaluationPage({
   searchParams,
@@ -41,6 +42,7 @@ export default async function ParticipantFinalEvaluationPage({
   const openTasks = summary.tasks.filter((task) => task.status !== "completed");
   const hasOpenTasks = openTasks.length > 0;
 
+  const contexteCont = await participantAccountContexts(requestOptions.headers, routeParams, summary.contexts);
   return (
     <AppShell
       audience="participant"
@@ -50,14 +52,14 @@ export default async function ParticipantFinalEvaluationPage({
       navItems={participantScopedNavItems(scopeParams, {
         projectType,
         showResults: canViewResults,
-        contexts: summary.contexts,
+        contexts: contexteCont,
       })}
       activeHref={participantActiveHref("/participant", scopeParams)}
       userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
       session={participant}
       sidebarTop={
         <ParticipantContextSelector
-          contexts={summary.contexts}
+          contexts={contexteCont}
           selectedProfileId={summary.participantProfileId}
           selectedProjectId={summary.projectId}
         />

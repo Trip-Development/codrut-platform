@@ -18,6 +18,7 @@ import {
 } from "../participant-context";
 import { PaginaDeBunVenit } from "./PaginaDeBunVenit";
 import { BUN_VENIT } from "./texte";
+import { participantAccountContexts } from "../proiectele-contului";
 
 /**
  * „Acasă" pentru omul cu 2+ proiecte — plicul 160, partea B (hotărârea lui Andrei, 27 sept).
@@ -37,7 +38,8 @@ export default async function ParticipantWelcomePage({
     getParticipantSession(),
     getParticipantWorkspaceSummary(participantWorkspaceRequestOptions(requestOptions.headers, routeParams)),
   ]);
-  if (!participantHasWelcomePage(summary.contexts)) {
+  const contexteCont = await participantAccountContexts(requestOptions.headers, routeParams, summary.contexts);
+  if (!participantHasWelcomePage(contexteCont)) {
     const inapoi = new URLSearchParams();
     for (const [cheie, valoare] of Object.entries(routeParams)) {
       for (const v of Array.isArray(valoare) ? valoare : valoare ? [valoare] : []) inapoi.append(cheie, v);
@@ -57,19 +59,19 @@ export default async function ParticipantWelcomePage({
       navItems={participantScopedNavItems(scopeParams, {
         projectType,
         showResults: participantCanViewResults(summary),
-        contexts: summary.contexts,
+        contexts: contexteCont,
       })}
       activeHref={participantScopedHref(PARTICIPANT_WELCOME_PATH, scopeParams)}
       session={participant}
       sidebarTop={
         <ParticipantContextSelector
-          contexts={summary.contexts}
+          contexts={contexteCont}
           selectedProfileId={summary.participantProfileId}
           selectedProjectId={summary.projectId}
         />
       }
     >
-      <PaginaDeBunVenit contexts={summary.contexts} />
+      <PaginaDeBunVenit contexts={contexteCont} />
     </AppShell>
   );
 }

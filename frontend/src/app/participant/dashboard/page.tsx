@@ -3,6 +3,7 @@ import { getParticipantOnboardingState } from "@/api/participant-onboarding";
 import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { ParticipantClientWorkspace } from "../ParticipantClientWorkspace";
+import { participantAccountContexts } from "../proiectele-contului";
 import { participantWorkspaceRequestOptions, type ParticipantRouteSearchParams } from "../participant-context";
 
 export default async function ParticipantDashboardPage({
@@ -17,6 +18,7 @@ export default async function ParticipantDashboardPage({
     getParticipantWorkspaceSummary(participantWorkspaceRequestOptions(requestOptions.headers, routeParams)),
   ]);
   const onboarding = await getParticipantOnboardingState(summary.participantProfileId);
+  const contexteCont = await participantAccountContexts(requestOptions.headers, routeParams, summary.contexts);
 
   // Chestionarul se CERE, nu se IMPUNE — plicul 127, hotararea lui Andrei din 22 septembrie:
   // „Am partea de chestionare, si am partea de exersat cu Cody. Ce treaba are una cu alta?"
@@ -30,6 +32,7 @@ export default async function ParticipantDashboardPage({
     <ParticipantClientWorkspace
       session={participant}
       summaryData={summary}
+      accountContexts={contexteCont}
       onboardingHref={onboarding.required ? onboarding.href : null}
     />
   );
