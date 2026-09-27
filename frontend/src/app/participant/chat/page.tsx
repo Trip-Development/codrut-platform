@@ -42,7 +42,11 @@ export default async function ParticipantChatPage({
       eyebrow=""
       title="Suport"
       description=""
-      navItems={participantScopedNavItems(scopeParams, { projectType, showResults })}
+      navItems={participantScopedNavItems(scopeParams, {
+        projectType,
+        showResults,
+        contexts: summary.contexts,
+      })}
       activeHref={participantActiveHref("/participant/chat", scopeParams)}
       userLabel={identity.split(/\s+/)[0]}
       session={participant}

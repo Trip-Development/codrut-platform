@@ -46,7 +46,7 @@ export default async function TablouParticipantPage({
       eyebrow="Antrenament & Competențe"
       title={`Tabloul tău, ${participantFirstName}`}
       description="Evoluția deprinderilor dobândite în simulările de conversație cu Cody."
-      navItems={participantScopedNavItems(scopeParams, { projectType })}
+      navItems={participantScopedNavItems(scopeParams, { projectType, contexts: summary?.contexts })}
       activeHref={participantActiveHref("/participant/tablou", scopeParams)}
       userLabel={participantFirstName}
       session={participant}

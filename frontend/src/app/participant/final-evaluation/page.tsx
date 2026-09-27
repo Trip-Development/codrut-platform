@@ -50,6 +50,7 @@ export default async function ParticipantFinalEvaluationPage({
       navItems={participantScopedNavItems(scopeParams, {
         projectType,
         showResults: canViewResults,
+        contexts: summary.contexts,
       })}
       activeHref={participantActiveHref("/participant", scopeParams)}
       userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}

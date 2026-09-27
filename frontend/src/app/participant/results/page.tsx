@@ -96,7 +96,10 @@ export default async function ParticipantResultsPage({
       eyebrow=""
       title="Rezultate"
       description=""
-      navItems={participantScopedNavItems(scopeParams, { projectType })}
+      navItems={participantScopedNavItems(scopeParams, {
+        projectType,
+        contexts: selectedSummary.contexts,
+      })}
       activeHref={participantActiveHref("/participant/results", scopeParams)}
       userLabel={selectedSummary.participantFullName.split(/\s+/)[0] || "Participant"}
       session={participant}

@@ -63,7 +63,11 @@ export default async function ParticipantQuestionnairesPage({
       eyebrow=""
       title="Chestionare"
       description=""
-      navItems={participantScopedNavItems(scopeParams, { projectType, showResults })}
+      navItems={participantScopedNavItems(scopeParams, {
+        projectType,
+        showResults,
+        contexts: summary.contexts,
+      })}
       activeHref={participantActiveHref("/participant/questionnaires", scopeParams)}
       userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
       session={participant}
