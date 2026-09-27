@@ -181,6 +181,32 @@ class PracticeSessionService:
             )
         return profile
 
+    async def _profile_of_session(
+        self,
+        principal: SessionPrincipal,
+        session_obj: PracticeSession | None,
+        session_id: uuid.UUID,
+    ) -> ParticipantProfile:
+        # Plicul 158: profilul se ia DIN SEDINTA, nu „cel mai vechi al contului" — omul cu doua
+        # profiluri (doua firme) pornea sedinta pe al doilea si apoi primea `session_not_found`.
+        # Paza ramane: profilul sedintei trebuie sa fie al contului, altfel `session_not_found`.
+        # fara niciun profil: aceeasi eroare ca inainte
+        await self._resolve_participant_profile(principal)
+        profile = (
+            await self.session.get(ParticipantProfile, session_obj.participant_profile_id)
+            if session_obj is not None
+            else None
+        )
+        if profile is None or not (
+            profile.user_id == principal.user_id
+            or (profile.user_id is None and profile.email == principal.email)
+        ):
+            raise DomainError(
+                f"Practice session not found: {session_id}",
+                code="session_not_found",
+            )
+        return profile
+
     async def start_session(
         self,
         principal: SessionPrincipal,
@@ -495,12 +521,7 @@ class PracticeSessionService:
         """Get a practice session and its conversation turns in order."""
         stmt_session = select(PracticeSession).where(PracticeSession.id == session_id)
         session_obj = (await self.session.execute(stmt_session)).scalar_one_or_none()
-        profile = await self._resolve_participant_profile(principal)
-        if session_obj is None or session_obj.participant_profile_id != profile.id:
-            raise DomainError(
-                f"Practice session not found: {session_id}",
-                code="session_not_found",
-            )
+        await self._profile_of_session(principal, session_obj, session_id)
 
         stmt_turns = (
             select(PracticeTurn)
@@ -769,12 +790,7 @@ class PracticeSessionService:
         # 1. Verify session exists, is open, and belongs to principal
         stmt_session = select(PracticeSession).where(PracticeSession.id == session_id)
         session_obj = (await self.session.execute(stmt_session)).scalar_one_or_none()
-        profile = await self._resolve_participant_profile(principal)
-        if session_obj is None or session_obj.participant_profile_id != profile.id:
-            raise DomainError(
-                f"Practice session not found: {session_id}",
-                code="session_not_found",
-            )
+        profile = await self._profile_of_session(principal, session_obj, session_id)
         if session_obj.state != SessionState.open:
             raise DomainError(
                 f"Practice session is {session_obj.state.value}",
@@ -1202,12 +1218,7 @@ class PracticeSessionService:
 
         stmt = select(PracticeSession).where(PracticeSession.id == session_id)
         session_obj = (await self.session.execute(stmt)).scalar_one_or_none()
-        profile = await self._resolve_participant_profile(principal)
-        if session_obj is None or session_obj.participant_profile_id != profile.id:
-            raise DomainError(
-                f"Practice session not found: {session_id}",
-                code="session_not_found",
-            )
+        profile = await self._profile_of_session(principal, session_obj, session_id)
 
         summary_text: str | None = None
         peste_plafon = False
