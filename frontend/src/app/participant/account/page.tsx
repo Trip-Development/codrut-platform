@@ -43,12 +43,14 @@ export default async function ParticipantAccountPage({
       activeHref={participantActiveHref("/participant/account", scopeParams)}
       userLabel={name.split(" ")[0]}
       session={participant}
+      sidebarTop={
+        <ParticipantContextSelector
+          contexts={summary.contexts}
+          selectedProfileId={summary.participantProfileId}
+          selectedProjectId={summary.projectId}
+        />
+      }
     >
-      <ParticipantContextSelector
-        contexts={summary.contexts}
-        selectedProfileId={summary.participantProfileId}
-        selectedProjectId={summary.projectId}
-      />
       <AccountWorkspace session={participant} summary={summary} />
     </AppShell>
   );

@@ -137,12 +137,25 @@ export function ParticipantClientWorkspace({
       activeHref={participantActiveHref("/participant", scopeParams)}
       userLabel={participantFirstName}
       session={session}
+      sidebarTop={
+        readOnly ? undefined : (
+          <ParticipantContextSelector
+            contexts={contexts}
+            selectedProfileId={summaryData.participantProfileId}
+            selectedProjectId={summaryData.projectId}
+          />
+        )
+      }
     >
-      <ParticipantContextSelector
-        contexts={contexts}
-        selectedProfileId={summaryData.participantProfileId}
-        selectedProjectId={summaryData.projectId}
-      />
+      {readOnly ? (
+        // Previzualizarea trainerului n-are meniu: lista rămâne în pagină, ca înainte — plicul 160.
+        <ParticipantContextSelector
+          contexts={contexts}
+          selectedProfileId={summaryData.participantProfileId}
+          selectedProjectId={summaryData.projectId}
+          keepPage
+        />
+      ) : null}
       {onboardingHref ? (
         <div className="mb-6 rounded-lg border border-border bg-muted/40 px-4 py-3">
           <a className="text-sm font-medium underline underline-offset-4" href={onboardingHref}>

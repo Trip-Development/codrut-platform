@@ -100,12 +100,14 @@ export default async function ParticipantResultsPage({
       activeHref={participantActiveHref("/participant/results", scopeParams)}
       userLabel={selectedSummary.participantFullName.split(/\s+/)[0] || "Participant"}
       session={participant}
+      sidebarTop={
+        <ParticipantContextSelector
+          contexts={selectedSummary.contexts}
+          selectedProfileId={selectedSummary.participantProfileId}
+          selectedProjectId={selectedSummary.projectId}
+        />
+      }
     >
-      <ParticipantContextSelector
-        contexts={selectedSummary.contexts}
-        selectedProfileId={selectedSummary.participantProfileId}
-        selectedProjectId={selectedSummary.projectId}
-      />
       {baselineCycle && comparisonCycle ? (
         <ParticipantResultCycleControls
           cycles={orderedCycles}

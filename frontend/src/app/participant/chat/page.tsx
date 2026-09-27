@@ -46,12 +46,14 @@ export default async function ParticipantChatPage({
       activeHref={participantActiveHref("/participant/chat", scopeParams)}
       userLabel={identity.split(/\s+/)[0]}
       session={participant}
+      sidebarTop={
+        <ParticipantContextSelector
+          contexts={summary.contexts}
+          selectedProfileId={summary.participantProfileId}
+          selectedProjectId={summary.projectId}
+        />
+      }
     >
-      <ParticipantContextSelector
-        contexts={summary.contexts}
-        selectedProfileId={summary.participantProfileId}
-        selectedProjectId={summary.projectId}
-      />
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-12">
         <section>
           <div className="border-b border-border pb-6">
