@@ -24,6 +24,7 @@ import {
   firstValue,
   type ParticipantRouteSearchParams,
 } from "../participant-context";
+import { participantAccountContexts } from "../proiectele-contului";
 
 export default async function ParticipantResultsPage({
   searchParams,
@@ -90,6 +91,7 @@ export default async function ParticipantResultsPage({
   // care scrie adresa direct în bară e trimis înapoi, nu i se arată ecranul.
   if (participantIsTraining(projectType)) redirect("/participant");
 
+  const contexteCont = await participantAccountContexts(requestOptions.headers, routeParams, selectedSummary.contexts);
   return (
     <AppShell
       audience="participant"
@@ -98,14 +100,14 @@ export default async function ParticipantResultsPage({
       description=""
       navItems={participantScopedNavItems(scopeParams, {
         projectType,
-        contexts: selectedSummary.contexts,
+        contexts: contexteCont,
       })}
       activeHref={participantActiveHref("/participant/results", scopeParams)}
       userLabel={selectedSummary.participantFullName.split(/\s+/)[0] || "Participant"}
       session={participant}
       sidebarTop={
         <ParticipantContextSelector
-          contexts={selectedSummary.contexts}
+          contexts={contexteCont}
           selectedProfileId={selectedSummary.participantProfileId}
           selectedProjectId={selectedSummary.projectId}
         />

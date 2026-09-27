@@ -5,6 +5,7 @@ import { getParticipantOnboardingState } from "@/api/participant-onboarding";
 import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { ParticipantClientWorkspace } from "./ParticipantClientWorkspace";
+import { participantAccountContexts } from "./proiectele-contului";
 import {
   participantScopedHref,
   participantShouldOpenWelcome,
@@ -26,7 +27,8 @@ export default async function ParticipantWorkspacePage({
   ]);
   // Plicul 160 B: omul cu 2+ proiecte, fără proiect ales (și după login), ajunge la bun venit.
   // Cu un singur proiect, sau cu proiectul ales în adresă, pagina e cea de până acum.
-  if (participantShouldOpenWelcome(routeParams, summary.contexts)) {
+  const contexteCont = await participantAccountContexts(requestOptions.headers, routeParams, summary.contexts);
+  if (participantShouldOpenWelcome(routeParams, contexteCont)) {
     const params = new URLSearchParams();
     const profil = routeParams.profile;
     if (typeof profil === "string" && profil) params.set("profile", profil);
@@ -46,6 +48,7 @@ export default async function ParticipantWorkspacePage({
     <ParticipantClientWorkspace
       session={participant}
       summaryData={summary}
+      accountContexts={contexteCont}
       onboardingHref={onboarding.required ? onboarding.href : null}
     />
   );

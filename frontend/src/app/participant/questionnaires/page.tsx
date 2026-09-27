@@ -22,6 +22,7 @@ import {
   groupParticipantTasksByProject,
   participantTaskProjectsFromCatalog,
 } from "../task-display";
+import { participantAccountContexts } from "../proiectele-contului";
 
 export default async function ParticipantQuestionnairesPage({
   searchParams,
@@ -57,6 +58,7 @@ export default async function ParticipantQuestionnairesPage({
   const resultCount = countAvailableParticipantResults(summary);
   const showResults = participantCanViewResults(summary);
 
+  const contexteCont = await participantAccountContexts(requestOptions.headers, routeParams, summary.contexts);
   return (
     <AppShell
       audience="participant"
@@ -66,14 +68,14 @@ export default async function ParticipantQuestionnairesPage({
       navItems={participantScopedNavItems(scopeParams, {
         projectType,
         showResults,
-        contexts: summary.contexts,
+        contexts: contexteCont,
       })}
       activeHref={participantActiveHref("/participant/questionnaires", scopeParams)}
       userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
       session={participant}
       sidebarTop={
         <ParticipantContextSelector
-          contexts={summary.contexts}
+          contexts={contexteCont}
           selectedProfileId={summary.participantProfileId}
           selectedProjectId={summary.projectId}
         />

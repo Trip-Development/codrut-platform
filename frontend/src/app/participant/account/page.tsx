@@ -13,6 +13,7 @@ import {
   type ParticipantRouteSearchParams,
 } from "../participant-context";
 import { AccountWorkspace } from "./AccountWorkspace";
+import { participantAccountContexts } from "../proiectele-contului";
 
 export default async function ParticipantAccountPage({
   searchParams,
@@ -30,6 +31,7 @@ export default async function ParticipantAccountPage({
   const scopeParams = participantScopeParams(summary);
   const projectType = participantActiveProjectType(summary);
 
+  const contexteCont = await participantAccountContexts(requestOptions.headers, routeParams, summary.contexts);
   return (
     <AppShell
       audience="participant"
@@ -39,14 +41,14 @@ export default async function ParticipantAccountPage({
       navItems={participantScopedNavItems(scopeParams, {
         projectType,
         showResults: participantCanViewResults(summary),
-        contexts: summary.contexts,
+        contexts: contexteCont,
       })}
       activeHref={participantActiveHref("/participant/account", scopeParams)}
       userLabel={name.split(" ")[0]}
       session={participant}
       sidebarTop={
         <ParticipantContextSelector
-          contexts={summary.contexts}
+          contexts={contexteCont}
           selectedProfileId={summary.participantProfileId}
           selectedProjectId={summary.projectId}
         />
