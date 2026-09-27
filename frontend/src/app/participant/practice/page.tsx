@@ -12,6 +12,7 @@ import {
   type ParticipantRouteSearchParams,
 } from "../participant-context";
 import { PracticeWorkspace } from "./PracticeWorkspace";
+import { participantAccountContexts } from "../proiectele-contului";
 
 export default async function ParticipantPracticePage({
   searchParams,
@@ -36,19 +37,20 @@ export default async function ParticipantPracticePage({
     .flatMap((context) => context.projects ?? [])
     .some((project) => project.id === summary.projectId && project.quizEnabled === true);
 
+  const contexteCont = await participantAccountContexts(requestOptions.headers, routeParams, summary.contexts);
   return (
     <AppShell
       audience="participant"
       eyebrow="Antrenament cu Cody"
       title="Conversație de practică"
       description="Exersează comunicarea asertivă și feedbackul în scenarii simulate cu inteligență artificială"
-      navItems={participantScopedNavItems(scopeParams, { projectType, contexts: summary.contexts })}
+      navItems={participantScopedNavItems(scopeParams, { projectType, contexts: contexteCont })}
       activeHref={participantActiveHref("/participant/practice", scopeParams)}
       userLabel={name.split(" ")[0]}
       session={participant}
       sidebarTop={
         <ParticipantContextSelector
-          contexts={summary.contexts}
+          contexts={contexteCont}
           selectedProfileId={summary.participantProfileId}
           selectedProjectId={summary.projectId}
         />

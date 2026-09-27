@@ -17,6 +17,7 @@ from codrut.modules.practice.competency_aliases import (
     normalize_competency_name,
 )
 from codrut.modules.practice.evaluator import TRAINER_PREFIX
+from codrut.modules.practice.interlocutor import intrarile_de_punctaj
 from codrut.modules.practice.models import (
     CompetencyScore,
     InsightMoment,
@@ -176,6 +177,8 @@ class PracticeDashboardService:
         #
         # Fara proiect sau fara competente alese: lista fixa de azi, ca sa nu se strice nimic.
         competente = await self._competentele_proiectului(project_id)
+        # plicul 165: numai notele role-play-urilor, fiecare cu tipul interlocutorului
+        intrari = await intrarile_de_punctaj(self.session, all_scores)
         if competente:
             dupa_nume = {_cheie(n): n for n in competente}
             scores_by_comp: dict[str, list[ScoreEntry]] = {c: [] for c in competente}
@@ -184,24 +187,17 @@ class PracticeDashboardService:
                 if nume is None:
                     canonic = match_comp(s.competency_name)
                     nume = dupa_nume.get(_cheie(canonic)) if canonic else None
-                if nume is None:
+                if nume is None or s.id not in intrari:
                     continue
-                scores_by_comp[nume].append(ScoreEntry(
-                    score=s.score, created_at=s.created_at, source_type=s.source_type,
-                ))
+                scores_by_comp[nume].append(intrari[s.id])
         else:
             competente = list(CANONICAL_COMPETENCIES)
             scores_by_comp = {c: [] for c in CANONICAL_COMPETENCIES}
             for s in all_scores:
                 matched_canonical = match_comp(s.competency_name)
-                if not matched_canonical:
+                if not matched_canonical or s.id not in intrari:
                     continue
-                entry = ScoreEntry(
-                    score=s.score,
-                    created_at=s.created_at,
-                    source_type=s.source_type,
-                )
-                scores_by_comp[matched_canonical].append(entry)
+                scores_by_comp[matched_canonical].append(intrari[s.id])
 
         competency_results = []
         for name in competente:
@@ -218,6 +214,9 @@ class PracticeDashboardService:
                 "distinct_days_70": ev.distinct_days_70,
                 "average_score": ev.average_score,
                 "why_not_higher": ev.why_not_higher,
+                "points": ev.points,
+                "points_today": ev.points_today,
+                "interlocutor_types": ev.interlocutor_types,
             })
 
         # 7. Insight moments
@@ -266,6 +265,9 @@ class PracticeDashboardService:
             "streak_days": effective_streak,
             "streak_bonus_pct": bonus_pct,
             "evidence_ceiling": evidence_ceiling(30),
+            # punctajul nou — plicul 165: sume peste competențele arătate, fără plafon
+            "points_today": sum(c["points_today"] for c in competency_results),
+            "points_total": sum(c["points"] for c in competency_results),
             "competencies": competency_results,
             "insight_moments": [
                 {

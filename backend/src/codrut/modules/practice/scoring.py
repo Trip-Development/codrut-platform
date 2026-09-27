@@ -3,8 +3,9 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
+from zoneinfo import ZoneInfo
 
 COMPETENCY_LEVEL_DESCRIPTIONS = {
     "INTEGRARE": "E reflex automat — apare și sub stres, fără efort conștient.",
@@ -101,6 +102,9 @@ class ScoreEntry:
     score: int
     created_at: datetime
     source_type: str = "session"  # "session", "roleplay", "cunostinte", "test_in", "test_out"
+    # tipul interlocutorului din ședință („jos", „lateral", „sus", „client"), dedus în
+    # `interlocutor.sedintele_notelor` — plicul 165. Gol pentru notele fără ședință (arhiva).
+    interlocutor: str | None = None
 
 
 @dataclass(frozen=True)
@@ -114,6 +118,10 @@ class CompetencyEvidence:
     distinct_days_70: int
     average_score: float
     why_not_higher: str
+    # punctajul nou — plicul 165
+    points: int = 0
+    points_today: int = 0
+    interlocutor_types: int = 0
 
 
 def compute_daily_xp(entries: Sequence[tuple[str, int | float, datetime]]) -> int:
@@ -161,65 +169,131 @@ def compute_streak(activity_dates: Sequence[date], reference_date: date | None =
     return streak
 
 
-def compute_competency_evidence(entries: Sequence[ScoreEntry]) -> CompetencyEvidence:
-    """Calculează nivelul de competență conform pedagogiei:
+# ---- Punctajul nou — plicul 165, hotărârea lui Andrei din 27 septembrie ----
+#
+# Nota din conversație („[🏆 Scor: 8/10]") rămâne cum e. Punctele și nivelurile le calculează
+# aplicația, din notele pe competență (`CompetencyScore`, 0–100, date la închidere), fără niciun
+# apel la vreun model:
+#   1. contează numai role-play-urile;
+#   2. o zi (în ora României) = cel mult o notă numărată pe competență: cea mai mare;
+#   3. nota numărată sub 60 → 0 puncte; de la 60: nota − 50;
+#   4. +25 în prima zi în care competența trece de 60 cu un tip nou de interlocutor, o dată pe tip;
+#   5. punctele nu scad; fără plafon de sus.
+ZONA_ROMANIEI = ZoneInfo("Europe/Bucharest")
+NOTA_MINIMA = 60
+BONUS_TIP_NOU = 25
+PRAG_APLICARE = 100
+PRAG_CONSOLIDARE = 400
+PRAG_INTEGRARE = 1000
+TIPURI_CONSOLIDARE = 2
+TIPURI_INTEGRARE = 3
+ZILE_INTEGRARE = 56
+_NU_ROLEPLAY = ("cunostinte", "quiz", "knowledge", "test_in", "test_out", "test-in", "test-out")
 
-    INTEGRARE       >=3 role-play-uri cu scor >=70%, întinse pe >=14 zile (între primul și ultimul >=70%)
-    CONSOLIDARE     >=2 role-play-uri cu scor >=70%, în >=2 zile diferite
-    APLICARE        >=1 role-play cu scor >=50%
-    CONȘTIENTIZARE  competența apare în sesiuni, dar fără dovezile de sus
 
-    Quiz-ul (source_type='cunostinte') NU contribuie la nivel. Test IN/OUT idem.
-    """  # noqa: E501
-    valid_roleplays = [
-        e
-        for e in entries
-        if e.source_type.lower()
-        not in ("cunostinte", "quiz", "knowledge", "test_in", "test_out", "test-in", "test-out")
-    ]
+def ziua_in_romania(moment: datetime) -> date:
+    """Ziua calendaristică a unei note, în ora României (o notă fără fus e socotită UTC)."""
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return moment.astimezone(ZONA_ROMANIEI).date()
 
-    if not valid_roleplays:
-        return CompetencyEvidence(
-            level="CONȘTIENTIZARE",
-            level_description=COMPETENCY_LEVEL_DESCRIPTIONS["CONȘTIENTIZARE"],
-            color=COMPETENCY_LEVEL_COLORS["CONȘTIENTIZARE"],
-            total_roleplays=0,
-            scores_70_count=0,
-            days_span_70=0,
-            distinct_days_70=0,
-            average_score=0.0,
-            why_not_higher="Exersează primul role-play pentru a debloca nivelul Aplicare (scor ≥50%).",  # noqa: E501
+
+def puncte_pentru_nota(nota: int | float) -> int:
+    """Nota numărată a unei zile → puncte: sub 60 nimic, altfel nota − 50 (60→10 … 100→50)."""
+    return 0 if nota < NOTA_MINIMA else int(nota) - 50
+
+
+def _in_lipsa(parti: list[str]) -> str:
+    if len(parti) <= 1:
+        return "".join(parti)
+    return ", ".join(parti[:-1]) + " și " + parti[-1]
+
+
+def compute_competency_evidence(
+    entries: Sequence[ScoreEntry],
+    today: date | None = None,
+) -> CompetencyEvidence:
+    """Nivelul unei competențe, pe puncte — plicul 165.
+
+    CONȘTIENTIZARE  sub 100 de puncte
+    APLICARE        ≥ 100 puncte
+    CONSOLIDARE     ≥ 400 puncte și ≥ 2 tipuri de interlocutor cu notă ≥ 60
+    INTEGRARE       ≥ 1.000 puncte, ≥ 3 tipuri și ≥ 56 de zile de la prima notă a competenței
+
+    Quiz-ul și testele IN/OUT nu contribuie. `today` e ziua în ora României (implicit azi).
+    """
+    azi = today or datetime.now(ZONA_ROMANIEI).date()
+    valid_roleplays = [e for e in entries if e.source_type.lower() not in _NU_ROLEPLAY]
+
+    # 2 · pe zi, cea mai mare notă; 4 · tipurile noi reușite în ziua aceea
+    pe_zi: dict[date, list[ScoreEntry]] = {}
+    for e in valid_roleplays:
+        pe_zi.setdefault(ziua_in_romania(e.created_at), []).append(e)
+    puncte = 0
+    puncte_azi = 0
+    tipuri_reusite: set[str] = set()
+    for zi in sorted(pe_zi):
+        ale_zilei = pe_zi[zi]
+        castig = puncte_pentru_nota(max(e.score for e in ale_zilei))
+        for tip in sorted({e.interlocutor for e in ale_zilei
+                           if e.interlocutor and e.score >= NOTA_MINIMA}):
+            if tip not in tipuri_reusite:
+                tipuri_reusite.add(tip)
+                castig += BONUS_TIP_NOU
+        puncte += castig
+        if zi == azi:
+            puncte_azi = castig
+
+    tipuri = len(tipuri_reusite)
+    prima_zi = min(pe_zi) if pe_zi else None
+    zile_de_la_prima = (azi - prima_zi).days if prima_zi else 0
+
+    integrare = (
+        puncte >= PRAG_INTEGRARE
+        and tipuri >= TIPURI_INTEGRARE
+        and zile_de_la_prima >= ZILE_INTEGRARE
+    )
+    if integrare:
+        level = "INTEGRARE"
+        why_not_higher = (
+            "Nivel maxim atins. Punctele cresc în continuare cu fiecare simulare reușită."
+        )
+    elif puncte >= PRAG_CONSOLIDARE and tipuri >= TIPURI_CONSOLIDARE:
+        level = "CONSOLIDARE"
+        parti = []
+        if puncte < PRAG_INTEGRARE:
+            parti.append(f"{PRAG_INTEGRARE - puncte} puncte")
+        if tipuri < TIPURI_INTEGRARE:
+            parti.append(f"reușite cu cel puțin 3 tipuri de interlocutor (ai {tipuri})")
+        if zile_de_la_prima < ZILE_INTEGRARE:
+            ramase = ZILE_INTEGRARE - zile_de_la_prima
+            parti.append(f"8 săptămâni de la prima simulare (mai sunt {ramase} zile)")
+        why_not_higher = f"Pentru Integrare: îți mai trebuie {_in_lipsa(parti)}."
+    elif puncte >= PRAG_APLICARE:
+        level = "APLICARE"
+        parti = []
+        if puncte < PRAG_CONSOLIDARE:
+            parti.append(f"{PRAG_CONSOLIDARE - puncte} puncte")
+        if tipuri < TIPURI_CONSOLIDARE:
+            parti.append(f"reușite cu cel puțin 2 tipuri de interlocutor (ai {tipuri})")
+        why_not_higher = f"Pentru Consolidare: îți mai trebuie {_in_lipsa(parti)}."
+    else:
+        level = "CONȘTIENTIZARE"
+        why_not_higher = (
+            f"Pentru Aplicare: îți mai trebuie {PRAG_APLICARE - puncte} puncte. Primești puncte la "
+            "simulările în care nota ta la această competență e de cel puțin 60%."
         )
 
-    avg_score = round(sum(e.score for e in valid_roleplays) / len(valid_roleplays), 1)
-
+    # câmpurile de dinainte rămân în răspuns, socotite ca înainte (nu se mai afișează)
     scores_70 = [e for e in valid_roleplays if e.score >= 70]
-    scores_50 = [e for e in valid_roleplays if e.score >= 50]
-
-    distinct_days_70 = len(set(e.created_at.date() for e in scores_70))
     days_span_70 = 0
     if len(scores_70) >= 2:
         sorted_dates_70 = sorted(e.created_at for e in scores_70)
         days_span_70 = (sorted_dates_70[-1].date() - sorted_dates_70[0].date()).days
-
-    # Verificare condiții în ordine descrescătoare de mastery
-    if len(scores_70) >= 3 and days_span_70 >= 14:
-        level = "INTEGRARE"
-        why_not_higher = "Nivel maxim atins: reflex automat integrat în practică și testat în timp."
-    elif len(scores_70) >= 2 and distinct_days_70 >= 2:
-        level = "CONSOLIDARE"
-        if len(scores_70) < 3:
-            why_not_higher = "Pentru Integrare: ai nevoie de cel puțin 3 simulări cu scor ≥70% întinse pe minim 14 zile."  # noqa: E501
-        else:
-            days_needed = 14 - days_span_70
-            why_not_higher = f"Pentru Integrare: ai cele 3 scoruri ≥70%, dar intervalul actual este de {days_span_70} zile (necesar ≥14 zile, mai sunt ~{days_needed} zile de consistență)."  # noqa: E501
-    elif len(scores_50) >= 1:
-        level = "APLICARE"
-        why_not_higher = "Pentru Consolidare: ai nevoie de minim 2 simulări cu scor ≥70% în cel puțin 2 zile diferite."  # noqa: E501
-    else:
-        level = "CONȘTIENTIZARE"
-        why_not_higher = "Pentru Aplicare: ai nevoie de cel puțin o simulare cu scor ≥50%."
-
+    avg_score = (
+        round(sum(e.score for e in valid_roleplays) / len(valid_roleplays), 1)
+        if valid_roleplays else 0.0
+    )
     return CompetencyEvidence(
         level=level,
         level_description=COMPETENCY_LEVEL_DESCRIPTIONS[level],
@@ -227,7 +301,10 @@ def compute_competency_evidence(entries: Sequence[ScoreEntry]) -> CompetencyEvid
         total_roleplays=len(valid_roleplays),
         scores_70_count=len(scores_70),
         days_span_70=days_span_70,
-        distinct_days_70=distinct_days_70,
+        distinct_days_70=len({e.created_at.date() for e in scores_70}),
         average_score=avg_score,
         why_not_higher=why_not_higher,
+        points=puncte,
+        points_today=puncte_azi,
+        interlocutor_types=tipuri,
     )

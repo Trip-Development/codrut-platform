@@ -101,9 +101,12 @@ def test_compute_streak():
 
 
 def test_competency_evidence_pedagogy_rules():
+    """Plicul 165: regula veche (≥50% → Aplicare, 2×≥70% în 2 zile → Consolidare, 3×≥70% pe 14
+    zile → Integrare) a fost înlocuită de punctajul hotărât de Andrei pe 27 septembrie — regulile
+    noi, punct cu punct, stau în `test_punctajul_nou.py`. Aici rămâne ce e valabil la ambele:
+    quiz-ul și testele IN/OUT nu contează, iar culorile nivelurilor sunt aceleași."""
     base_date = datetime(2026, 8, 1)
 
-    # 1. No entries or low scores (<50) -> CONȘTIENTIZARE
     low_entries = [
         ScoreEntry(score=40, created_at=base_date, source_type="session"),
         ScoreEntry(score=30, created_at=base_date + timedelta(days=1), source_type="session"),
@@ -112,7 +115,7 @@ def test_competency_evidence_pedagogy_rules():
     assert ev.level == "CONȘTIENTIZARE"
     assert ev.color == "#E24B4A"
 
-    # 2. Quiz scores and test in/out MUST NOT contribute to level
+    # Quiz scores and test in/out MUST NOT contribute to level
     quiz_entries = [
         ScoreEntry(score=100, created_at=base_date, source_type="cunostinte"),
         ScoreEntry(score=100, created_at=base_date + timedelta(days=5), source_type="quiz"),
@@ -121,48 +124,12 @@ def test_competency_evidence_pedagogy_rules():
     ev_quiz = compute_competency_evidence(quiz_entries)
     assert ev_quiz.level == "CONȘTIENTIZARE"
     assert ev_quiz.total_roleplays == 0
+    assert ev_quiz.points == 0
 
-    # 3. >= 1 role-play with >= 50% -> APLICARE
-    aplicare_entries = [
-        ScoreEntry(score=55, created_at=base_date, source_type="session"),
-    ]
-    ev_app = compute_competency_evidence(aplicare_entries)
-    assert ev_app.level == "APLICARE"
-    assert ev_app.color == "#BA7517"
-
-    # 4. 10 role-plays in a SINGLE DAY with score >= 70% -> only APLICARE (does not reach Consolidare because distinct days < 2)  # noqa: E501
-    single_day_entries = [
-        ScoreEntry(score=85, created_at=base_date + timedelta(hours=i), source_type="session")
-        for i in range(10)
-    ]
-    ev_single_day = compute_competency_evidence(single_day_entries)
-    assert ev_single_day.level == "APLICARE"
-
-    # 5. >= 2 role-plays with >= 70% in >= 2 different days -> CONSOLIDARE
-    consolidare_entries = [
-        ScoreEntry(score=75, created_at=base_date, source_type="session"),
-        ScoreEntry(score=80, created_at=base_date + timedelta(days=3), source_type="session"),
-    ]
-    ev_cons = compute_competency_evidence(consolidare_entries)
-    assert ev_cons.level == "CONSOLIDARE"
-    assert ev_cons.color == "#1A4A7A"
-
-    # 6. 3 role-plays with >= 70% in only 5 days span (< 14 days) -> CONSOLIDARE (not Integrare yet)
-    fast_3_entries = [
-        ScoreEntry(score=75, created_at=base_date, source_type="session"),
-        ScoreEntry(score=80, created_at=base_date + timedelta(days=2), source_type="session"),
-        ScoreEntry(score=90, created_at=base_date + timedelta(days=5), source_type="session"),
-    ]
-    ev_fast = compute_competency_evidence(fast_3_entries)
-    assert ev_fast.level == "CONSOLIDARE"
-
-    # 7. >= 3 role-plays with >= 70% spread across >= 14 days -> INTEGRARE
-    integrare_entries = [
-        ScoreEntry(score=75, created_at=base_date, source_type="session"),
-        ScoreEntry(score=80, created_at=base_date + timedelta(days=7), source_type="session"),
-        ScoreEntry(score=90, created_at=base_date + timedelta(days=15), source_type="session"),
-    ]
-    ev_int = compute_competency_evidence(integrare_entries)
-    assert ev_int.level == "INTEGRARE"
-    assert ev_int.color == "#639922"
-    assert "E reflex automat" in ev_int.level_description
+    # culorile și descrierile, pe nivelurile noi
+    aplicare = compute_competency_evidence(
+        [ScoreEntry(score=100, created_at=base_date + timedelta(days=d), source_type="session")
+         for d in range(2)],
+        today=(base_date + timedelta(days=1)).date(),
+    )
+    assert aplicare.level == "APLICARE" and aplicare.color == "#BA7517"

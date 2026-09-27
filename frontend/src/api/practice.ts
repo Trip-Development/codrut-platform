@@ -271,6 +271,10 @@ export type CompetencyDashboardItem = {
   distinctDays70: number;
   averageScore: number;
   whyNotHigher: string;
+  /** Punctajul nou — plicul 165. */
+  points: number;
+  pointsToday: number;
+  interlocutorTypes: number;
 };
 
 export type InsightMomentItem = {
@@ -299,6 +303,9 @@ export type PracticeDashboardData = {
   streakDays: number;
   streakBonusPct: number;
   evidenceCeiling: number;
+  /** Punctajul nou — plicul 165: fără plafon, fără bonus de serie. */
+  pointsToday: number;
+  pointsTotal: number;
   competencies: CompetencyDashboardItem[];
   insightMoments: InsightMomentItem[];
   sessionSamples: SessionSampleItem[];
@@ -401,6 +408,9 @@ type RawCompetency = {
   distinct_days_70: number;
   average_score: number;
   why_not_higher: string;
+  points?: number;
+  points_today?: number;
+  interlocutor_types?: number;
 };
 
 type RawInsightMoment = {
@@ -438,6 +448,8 @@ export async function getPracticeDashboard(
     streakDays: data.streak_days,
     streakBonusPct: data.streak_bonus_pct,
     evidenceCeiling: data.evidence_ceiling,
+    pointsToday: data.points_today ?? 0,
+    pointsTotal: data.points_total ?? 0,
     competencies: (data.competencies || []).map((c: RawCompetency) => ({
       name: c.name,
       level: c.level,
@@ -449,6 +461,9 @@ export async function getPracticeDashboard(
       distinctDays70: c.distinct_days_70,
       averageScore: c.average_score,
       whyNotHigher: c.why_not_higher,
+      points: c.points ?? 0,
+      pointsToday: c.points_today ?? 0,
+      interlocutorTypes: c.interlocutor_types ?? 0,
     })),
     insightMoments: (data.insight_moments || []).map((m: RawInsightMoment) => ({
       id: m.id,

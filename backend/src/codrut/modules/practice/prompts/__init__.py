@@ -224,7 +224,9 @@ _ACTOR_CAP_NOU = (
     "MODUL ROLE-PLAY — PROTOCOL STRICT:\n"
     "Ești personajul din scenă, atât. NU ești Cody-ca-profesor: evaluarea o scrie altcineva, "
     "în altă parte, și nu e treaba ta. NU IEȘI DIN ROL NICIODATĂ — nu comentezi, nu dai lecții, "
-    "nu spui „ies din rol” sau „pauză de rol”, și nu scrii niciodată „***”."
+    "nu spui „ies din rol” sau „pauză de rol”, și nu scrii niciodată „***”. "
+    "Joci NUMAI personajul: nu scrii niciodată ce spune participantul — nici o replică a lui, "
+    "nici un exemplu de replică; el răspunde singur, după tine."
 )
 ACTOR_PROMPT_DOUA_APELURI = ACTOR_PROMPT.replace(_ACTOR_CAP_VECHI, _ACTOR_CAP_NOU, 1)
 
@@ -727,12 +729,48 @@ def get_system_prompt_for_kind(
         )
 
 
+def regula_setupului_la_doua_apeluri(
+    profil_rol: dict[str, Any] | None,
+    name: str,
+    competenta_tinta: str | None = None,
+) -> str:
+    """Cum arată setup-ul, spus ultimul, lângă numele personajului — plicul 164, partea A.
+
+    Andrei, pe live, de două ori: după setup venea replica LUI, scrisă de Cody („— Tudor, te-am
+    auzit spunând…"). `actor.md` cere setup-ul „la persoana a 3-a", „cu prima ta replică", dar
+    nu spune nicăieri a cui e replica de la capăt; iar când povestea deja fapta personajului,
+    modelul ieftin scria replica firească de după — a participantului. Pe probă, 3 din 20 de
+    porniri, plus 3 cu persoanele amestecate („Sunt vizibil iritată", „să-mi dai feedback").
+
+    Numai la două apeluri: `actor.md` și drumul cu un singur apel rămân neatinse (lacătul de
+    la plicul 119). Numele e cel din distribuție, calculat la fel ca în `bloc_de_distributie`.
+    """
+    n = int((profil_rol or {}).get("nr_roleplay_anterioare") or 0)
+    prenume = (name or "").strip().split(" ")[0] or name
+    nume = _numele_personajului(n, prenume)
+    return (
+        f"\nCUM ARATĂ SETUP-UL: contextul îi vorbește participantului, la persoana a II-a "
+        f"(„tu”, „echipa ta”, „șefa ta”); personajul e numit pe nume, {nume}, la persoana a "
+        f"III-a — niciodată „eu” sau „mine” în context. Setup-ul se încheie cu PRIMA REPLICĂ A "
+        f"PERSONAJULUI: vorbește {nume}, către participant, cu eticheta „{nume}:”. Tu joci NUMAI "
+        f"personajul {nume}: nu scrii niciodată ce spune participantul — nici prima lui replică, "
+        f"nici un exemplu; el răspunde singur, după tine."
+    ) + (
+        # Plicul 165 C: competența proiectului cu cele mai puține note ale omului.
+        f"\nScenariul pune la încercare mai ales competența „{competenta_tinta}”; obiectivul "
+        f"participantului o urmărește pe ea. În „Obiectivul tău” se vede limpede competența "
+        f"asta: o numești sau o descrii pe față, nu alta în locul ei."
+        if competenta_tinta else ""
+    )
+
+
 def get_prompts_pe_meserii(
     name: str = "Participant",
     history_length: int = 0,
     memories: list[dict[str, Any]] | None = None,
     biblioteca_path: str = "",
     profil_rol: dict[str, Any] | None = None,
+    competenta_tinta: str | None = None,
 ) -> tuple[str, str]:
     """Cele doua prompturi ale despartirii actor/evaluator — plicul 112, decizia 7.
 
@@ -752,9 +790,13 @@ def get_prompts_pe_meserii(
     material_actor, _ = get_core_material(biblioteca_path, felie="actor")
     material_evaluator, _ = get_core_material(biblioteca_path, felie="evaluator")
 
+    # Plicul 164 A: la pornire, regula setup-ului stă ultima, lângă numele personajului.
+    regula_setupului = (
+        regula_setupului_la_doua_apeluri(profil_rol, name, competenta_tinta) if comanda else ""
+    )
     prompt_actor = (
         f"{material_actor}\n\n---\n\n{reguli_generale}\n\n---\n\n"
-        f"{ACTOR_PROMPT_DOUA_APELURI}{memory_block}{comanda}"
+        f"{ACTOR_PROMPT_DOUA_APELURI}{memory_block}{comanda}{regula_setupului}"
     )
     prompt_evaluator = (
         f"{material_evaluator}\n\n---\n\n{reguli_generale}\n\n---\n\n"
