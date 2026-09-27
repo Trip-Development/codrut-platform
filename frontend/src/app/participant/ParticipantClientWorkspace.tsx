@@ -76,6 +76,11 @@ type ParticipantClientWorkspaceProps = {
    * ajungea nicaieri. Acum ajunge aici, ca anunt.
    */
   onboardingHref?: string | null;
+  /**
+   * Proiectele pe tot contul, pentru schimbător și „Acasă” — plicul 162. Lipsă (previzualizarea
+   * trainerului): cele din sumar, ca înainte.
+   */
+  accountContexts?: ParticipantWorkspaceContext[];
 };
 
 export function ParticipantClientWorkspace({
@@ -83,6 +88,7 @@ export function ParticipantClientWorkspace({
   summaryData,
   readOnly = false,
   onboardingHref = null,
+  accountContexts,
 }: ParticipantClientWorkspaceProps) {
   const participantIdentity =
     summaryData.participantFullName?.trim() || summaryData.anonymousName?.trim() || "Participant";
@@ -118,6 +124,7 @@ export function ParticipantClientWorkspace({
   const hasMultipleProjects = taskProjects.length > 1;
   const projectCountCopy = participantProjectCountCopy(projects);
   const contexts = summaryData.contexts ?? [];
+  const contexteCont = accountContexts ?? contexts;
   const scopeParams = participantScopeParams(summaryData);
   const questionnairesHref = participantScopedHref("/participant/questionnaires", scopeParams);
   const resultsHref = participantResultsHref(scopeParams);
@@ -128,7 +135,7 @@ export function ParticipantClientWorkspace({
     : participantScopedNavItems(scopeParams, {
         projectType,
         showResults,
-        contexts: summaryData.contexts,
+        contexts: contexteCont,
       });
 
   return (
@@ -144,7 +151,7 @@ export function ParticipantClientWorkspace({
       sidebarTop={
         readOnly ? undefined : (
           <ParticipantContextSelector
-            contexts={contexts}
+            contexts={contexteCont}
             selectedProfileId={summaryData.participantProfileId}
             selectedProjectId={summaryData.projectId}
           />

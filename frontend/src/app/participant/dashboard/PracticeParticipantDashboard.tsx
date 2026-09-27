@@ -108,26 +108,17 @@ export function PracticeParticipantDashboard({ projectId }: PracticeParticipantD
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Puncte Azi (XP)
+                Puncte azi
               </CardTitle>
               <SparklesIcon className="size-4 text-amber-500" />
             </div>
           </CardHeader>
           <CardContent>
+            {/* Punctajul nou — plicul 165: fără plafon zilnic */}
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-foreground">{data.xpToday}</span>
-              <span className="text-xs text-muted-foreground">/ {data.xpDailyCap} XP</span>
+              <span className="text-2xl font-bold text-foreground">{data.pointsToday}</span>
+              <span className="text-xs text-muted-foreground">puncte</span>
             </div>
-            {/* Progress bar */}
-            <div className="w-full bg-muted rounded-full h-1.5 mt-2 overflow-hidden">
-              <div
-                className="bg-amber-500 h-1.5 rounded-full transition-all"
-                style={{ width: `${Math.min(100, (data.xpToday / data.xpDailyCap) * 100)}%` }}
-              />
-            </div>
-            <p className="text-[11px] text-muted-foreground mt-1.5">
-              Plafon zilnic: maxim 100 XP / zi.
-            </p>
           </CardContent>
         </Card>
 
@@ -136,7 +127,7 @@ export function PracticeParticipantDashboard({ projectId }: PracticeParticipantD
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Serie de Zile (Streak)
+                Serie de zile
               </CardTitle>
               <FlameIcon className="size-4 text-orange-500" />
             </div>
@@ -147,17 +138,6 @@ export function PracticeParticipantDashboard({ projectId }: PracticeParticipantD
               <span className="text-xs font-semibold text-foreground">
                 {data.streakDays === 1 ? "zi activă" : "zile consecutive"}
               </span>
-            </div>
-            <div className="mt-2">
-              {data.streakBonusPct > 0 ? (
-                <Badge className="bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-200 text-xs font-semibold">
-                  +{data.streakBonusPct}% Bonus XP
-                </Badge>
-              ) : (
-                <span className="text-[11px] text-muted-foreground">
-                  Serie sub 3 zile (fără bonus)
-                </span>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -173,10 +153,7 @@ export function PracticeParticipantDashboard({ projectId }: PracticeParticipantD
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">{data.xpTotal} XP</div>
-            <p className="text-[11px] text-muted-foreground mt-2">
-              Prag dovezi proiect: {data.evidenceCeiling}
-            </p>
+            <div className="text-2xl font-bold text-foreground">{data.pointsTotal} puncte</div>
           </CardContent>
         </Card>
 
@@ -365,22 +342,18 @@ function CompetencyCard({ item }: { item: CompetencyDashboardItem }) {
 
       {/* Metrics Row */}
       <div className="flex flex-wrap items-center gap-2 text-[11px] pt-1">
+        {/* Punctajul nou — plicul 165 */}
+        <Badge variant="outline" className="text-[11px] font-semibold">
+          {item.points} puncte
+        </Badge>
         <Badge variant="outline" className="text-[11px] font-normal">
           {item.totalRoleplays} simulări în rol
         </Badge>
         <Badge variant="outline" className="text-[11px] font-normal">
-          {item.scores70Count} scoruri ≥ 70%
-        </Badge>
-        <Badge variant="outline" className="text-[11px] font-normal">
-          {item.distinctDays70} zile diferite
-        </Badge>
-        {item.daysSpan70 > 0 && (
-          <Badge variant="outline" className="text-[11px] font-normal">
-            {item.daysSpan70} zile interval
-          </Badge>
-        )}
-        <Badge variant="outline" className="text-[11px] font-normal">
           Medie: {item.averageScore}%
+        </Badge>
+        <Badge variant="outline" className="text-[11px] font-normal">
+          {item.interlocutorTypes} {item.interlocutorTypes === 1 ? "tip" : "tipuri"} de interlocutor
         </Badge>
       </div>
 

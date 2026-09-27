@@ -13,6 +13,7 @@ import {
   type ParticipantRouteSearchParams,
 } from "../participant-context";
 import { TRAINING_PROJECT_TYPE } from "@/components/shell/nav";
+import { participantAccountContexts } from "../proiectele-contului";
 
 /**
  * Tabloul, pe proiectul ALES de om — plicul 143.
@@ -40,19 +41,20 @@ export default async function TablouParticipantPage({
   const projectType =
     (summary ? participantActiveProjectType(summary) : null) ?? TRAINING_PROJECT_TYPE;
 
+  const contexteCont = await participantAccountContexts(requestOptions.headers, routeParams, summary?.contexts);
   return (
     <AppShell
       audience="participant"
       eyebrow="Antrenament & Competențe"
-      title={`Tabloul tău, ${participantFirstName}`}
+      title="Tabloul tău"
       description="Evoluția deprinderilor dobândite în simulările de conversație cu Cody."
-      navItems={participantScopedNavItems(scopeParams, { projectType, contexts: summary?.contexts })}
+      navItems={participantScopedNavItems(scopeParams, { projectType, contexts: contexteCont })}
       activeHref={participantActiveHref("/participant/tablou", scopeParams)}
       userLabel={participantFirstName}
       session={participant}
       sidebarTop={
         <ParticipantContextSelector
-          contexts={summary?.contexts ?? []}
+          contexts={contexteCont}
           selectedProfileId={summary?.participantProfileId}
           selectedProjectId={summary?.projectId}
         />

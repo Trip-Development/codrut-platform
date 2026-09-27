@@ -61,4 +61,11 @@ describe("tabloul, pe proiectul ales", () => {
     render(await TablouParticipantPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("tabloul pe proiectul: niciunul")).toBeTruthy();
   });
+
+  it("titlul e „Tabloul tău”, fără nume — plicul 165 A", async () => {
+    // Lângă „Codul tău la Cody” apărea numele scos din adresa de email.
+    api.getParticipantWorkspaceSummary.mockResolvedValue(sumar);
+    render(await TablouParticipantPage({ searchParams: Promise.resolve({ project: "proiect-ales" }) }));
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Tabloul tău");
+  });
 });

@@ -26,6 +26,7 @@ from codrut.modules.companies.models import (
 )
 from codrut.modules.identity.models import User
 from codrut.modules.practice.competency_aliases import match_comp
+from codrut.modules.practice.interlocutor import intrarile_de_punctaj
 from codrut.modules.practice.models import (
     CompetencyScore,
     PracticeProgramSettings,
@@ -35,7 +36,6 @@ from codrut.modules.practice.models import (
 from codrut.modules.practice.scoring import (
     COMPETENCY_LEVEL_COLORS,
     COMPETENCY_LEVEL_DESCRIPTIONS,
-    ScoreEntry,
     compute_competency_evidence,
 )
 from codrut.modules.practice.setup_service import competency_names_for_project
@@ -118,14 +118,13 @@ class PracticeEvolutionService:
                 pe_competenta[s.competency_name].append(s)
 
         nume_afisate = competente or sorted(pe_competenta)
+        # plicul 165: aceleași reguli de punctaj; aici notele ÎNTREGII echipe, puse la un loc
+        intrari_punctaj = await intrarile_de_punctaj(self.session, scoruri)
         evolutie = []
         for nume in nume_afisate:
             canonic = match_comp(nume)
             lst = pe_competenta.get(nume) or (pe_competenta.get(canonic, []) if canonic else [])
-            intrari = [
-                ScoreEntry(score=s.score, created_at=s.created_at, source_type=s.source_type)
-                for s in lst
-            ]
+            intrari = [intrari_punctaj[s.id] for s in lst if s.id in intrari_punctaj]
             dovada = compute_competency_evidence(intrari)
             media = round(sum(s.score for s in lst) / len(lst), 1) if lst else None
             evolutie.append({
@@ -138,6 +137,7 @@ class PracticeEvolutionService:
                 "level_description": COMPETENCY_LEVEL_DESCRIPTIONS.get(dovada.level, ""),
                 "color": COMPETENCY_LEVEL_COLORS.get(dovada.level, "#888888"),
                 "scores_count": len(lst),
+                "points": dovada.points,
             })
 
         # --- media echipei, saptamana de saptamana (rd. 323-326) ---

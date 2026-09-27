@@ -16,6 +16,7 @@ import {
   participantWorkspaceRequestOptions,
   type ParticipantRouteSearchParams,
 } from "../participant-context";
+import { participantAccountContexts } from "../proiectele-contului";
 
 export default async function ParticipantChatPage({
   searchParams,
@@ -36,6 +37,7 @@ export default async function ParticipantChatPage({
   const identity = summary.participantFullName.trim() || summary.anonymousName?.trim() || "Participant";
   const openTasks = summary.tasks.filter((task) => task.status !== "completed").length;
 
+  const contexteCont = await participantAccountContexts(requestOptions.headers, routeParams, summary.contexts);
   return (
     <AppShell
       audience="participant"
@@ -45,14 +47,14 @@ export default async function ParticipantChatPage({
       navItems={participantScopedNavItems(scopeParams, {
         projectType,
         showResults,
-        contexts: summary.contexts,
+        contexts: contexteCont,
       })}
       activeHref={participantActiveHref("/participant/chat", scopeParams)}
       userLabel={identity.split(/\s+/)[0]}
       session={participant}
       sidebarTop={
         <ParticipantContextSelector
-          contexts={summary.contexts}
+          contexts={contexteCont}
           selectedProfileId={summary.participantProfileId}
           selectedProjectId={summary.projectId}
         />
