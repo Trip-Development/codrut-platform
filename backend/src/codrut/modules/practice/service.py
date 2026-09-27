@@ -127,6 +127,11 @@ class _FaraEvaluare(Exception):
     """Semnal intern: sedinta se inchide, dar nu se cheama modelul. Nu iese din serviciu."""
 
 
+def este_feedback(text: str | None) -> bool:
+    """Mesajul omului catre Cody, nu catre personaj: incepe cu „/feedback" — plicul 164 B."""
+    return (text or "").lstrip().casefold().startswith("/feedback")
+
+
 class PracticeSessionService:
     def __init__(
         self,
@@ -367,6 +372,10 @@ class PracticeSessionService:
 
         for t in existing_turns:
             if t.role == TurnRole.participant:
+                if meserie == "actor" and este_feedback(t.text):
+                    # Plicul 164 B: personajul nu vede niciodata discutia despre nota. Raspunsul
+                    # evaluatorului de dupa n-are bucata actorului, deci se sare si el mai jos.
+                    continue
                 if (t.text or "").strip():
                     pune_user(t.text)
                 continue
@@ -956,6 +965,12 @@ class PracticeSessionService:
             if history_length == REPLICA_DE_CONFIRMARE:
                 pornire_doar_actor = doua_apeluri
                 doua_apeluri = False
+            # „/feedback" e adresat lui Cody, nu personajului — plicul 164, partea B.
+            #
+            # Regula sta in `evaluare.md`, deci la doua apeluri actorul n-o primea si raspundea si
+            # el, iesit din rol (Andrei, pe live, 27 septembrie). Hotaraste aplicatia: numai
+            # evaluatorul. La un singur apel ramane ca pana acum — regula e in promptul combinat.
+            doar_evaluatorul = doua_apeluri and este_feedback(text)
             system_instruction = get_system_prompt_for_kind(
                 kind=session_obj.kind,
                 name=cod,
@@ -1041,6 +1056,8 @@ class PracticeSessionService:
                     temperature=0.2,
                     thinking_budget=self.settings.thinking_budget_evaluator,
                 )
+                if doar_evaluatorul:
+                    request, cerere_evaluator = cerere_evaluator, None
 
             # 7. Estimate pessimistic cost and reserve budget
             prompt_words = sum(len(m.text.split()) for m in request.messages)
@@ -1050,8 +1067,8 @@ class PracticeSessionService:
 
             estimated_usd = estimate_pessimistic_cost(
                 prompt_tokens=estimated_prompt_tokens,
-                max_output_tokens=self.settings.vertex_max_output_tokens,
-                thinking_budget=self.settings.thinking_budget_actor,
+                max_output_tokens=request.max_output_tokens,
+                thinking_budget=request.thinking_budget,
                 settings=self.settings,
             )
             # Plicul 112: se rezerva pentru AMANDOUA apelurile, cu preturile din mediu — lectia
@@ -1120,7 +1137,7 @@ class PracticeSessionService:
 
             # Ordinea o pune aplicatia acum, nu modelul: personajul intai, evaluarea dupa.
             # `***` e acelasi despartitor pe care il scrie azi un singur apel.
-            text_final = result.text
+            text_final = result.text.strip() if doar_evaluatorul else result.text
             doar_personajul = cerere_evaluator is not None or pornire_doar_actor
             text_personaj = _fara_despartitor(result.text) if doar_personajul else None
             if pornire_doar_actor:
@@ -1151,6 +1168,8 @@ class PracticeSessionService:
                 text_evaluator=(
                     (rezultat_evaluator.text or "").strip()
                     if cerere_evaluator is not None and rezultat_evaluator is not None
+                    # la /feedback raspunsul E evaluarea, iar bucata actorului ramane goala
+                    else (result.text or "").strip() if doar_evaluatorul
                     else None
                 ),
                 prompt_tokens=result.usage.prompt_tokens,
