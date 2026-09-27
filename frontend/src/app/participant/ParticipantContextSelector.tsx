@@ -9,6 +9,8 @@ import type {
   ParticipantWorkspaceCycle,
 } from "@/api/participants";
 import { CycleComparisonToolbar } from "@/components/reports/CycleComparisonToolbar";
+import { TRAINING_PROJECT_TYPE } from "@/components/shell/nav";
+import { useSidebarState } from "@/components/shell/sidebar-state";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
 /**
@@ -61,18 +63,31 @@ function uitaProiectul(cheie: string | null) {
   }
 }
 
+/**
+ * Unde duce alegerea unui proiect — plicul 160: un proiect de training la „Exersează", orice
+ * altul la pagina proiectului. Înainte alegerea lăsa omul pe aceeași pagină, și ajungea, de pildă,
+ * pe „Exersează" cu un proiect de chestionare.
+ */
+export function participantProjectDestination(projectType?: string | null): string {
+  return projectType === TRAINING_PROJECT_TYPE ? "/participant/practice" : "/participant";
+}
+
 export function ParticipantContextSelector({
   contexts,
   selectedProfileId,
   selectedProjectId,
+  keepPage = false,
 }: {
   contexts: ParticipantWorkspaceContext[];
   selectedProfileId?: string;
   selectedProjectId?: string | null;
+  /** Previzualizarea trainerului: alegerea rămâne pe aceeași pagină, ca înainte de plicul 160. */
+  keepPage?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { inSidebar, collapsed, mobile } = useSidebarState();
   const options = contexts
     .flatMap((context) =>
       context.projects.map((project) => {
@@ -89,6 +104,7 @@ export function ParticipantContextSelector({
           group: project.historyBucket === "history" ? "Istoric" : "În desfășurare",
           profileId: context.participantProfileId,
           projectId: project.id,
+          projectType: project.projectType ?? null,
           cycleId: preferredCycle?.id,
           recency: Date.parse(
             preferredCycle?.dueAt
@@ -111,6 +127,8 @@ export function ParticipantContextSelector({
   // Hookul stă ÎNAINTE de ieșirea de mai jos, fiindcă hookurile nu au voie să fie sărite: un om cu
   // un singur proiect n-ar mai ajunge niciodată să-și uite alegerea veche.
   useEffect(() => {
+    // Copia din meniul de pe telefon nu mai hotărăște nimic: o face deja cea din meniul lateral.
+    if (mobile) return;
     const cheie = cheiaProiectului(contexts);
     if (!cheie) return;
     if (selectedProjectId) {
@@ -130,9 +148,26 @@ export function ParticipantContextSelector({
     params.set("project", potrivit.projectId);
     // `replace`, nu `push`: altfel butonul Înapoi al browserului l-ar trimite tot aici
     router.replace(`${pathname}?${params.toString()}`);
-  }, [contexts, options, pathname, router, searchParams, selectedProjectId]);
+  }, [contexts, mobile, options, pathname, router, searchParams, selectedProjectId]);
 
-  if (options.length <= 1) return null;
+  if (options.length === 0) return null;
+  if (options.length === 1) {
+    // Cu un singur proiect nu e nimic de ales: în meniu se vede numai numele — plicul 160.
+    if (!inSidebar) return null;
+    const unic = options[0];
+    return (
+      <div
+        data-participant-project-name
+        title={unic.label}
+        className={collapsed
+          ? "mx-auto flex size-8 items-center justify-center text-muted-foreground"
+          : "flex min-w-0 items-center gap-2 px-2.5 py-2 text-sm font-semibold text-foreground"}
+      >
+        <BriefcaseBusinessIcon aria-hidden="true" className="size-4 shrink-0 text-foreground/45" strokeWidth={1.8} />
+        <span className={collapsed ? "sr-only" : "truncate"}>{unic.label}</span>
+      </div>
+    );
+  }
 
   const selectedValue = selectedProjectId
     ? options.find(
@@ -152,11 +187,33 @@ export function ParticipantContextSelector({
     params.delete("cycle");
     params.delete("baseline");
     params.delete("compare");
-    router.push(`${pathname}?${params.toString()}`);
+    const unde = keepPage ? pathname : participantProjectDestination(selected.projectType);
+    router.push(`${unde}?${params.toString()}`);
+  }
+
+  const alesul = options.find((option) => option.value === selectedValue);
+
+  if (collapsed) {
+    // Meniul strâns: o iconiță, cu numele proiectului la trecerea cu mouse-ul — plicul 160.
+    const eticheta = alesul?.label ?? "Alege proiectul";
+    return (
+      <div
+        data-participant-project-collapsed
+        title={eticheta}
+        aria-label={eticheta}
+        className="mx-auto flex size-8 items-center justify-center"
+      >
+        <BriefcaseBusinessIcon
+          aria-hidden="true"
+          className={alesul ? "size-4 text-foreground/45" : "size-4 text-destructive"}
+          strokeWidth={1.8}
+        />
+      </div>
+    );
   }
 
   return (
-    <div className="mb-6 w-full max-w-sm">
+    <div className={inSidebar ? "w-full" : "mb-6 w-full max-w-sm"}>
       <SearchableCombobox
         icon={BriefcaseBusinessIcon}
         label="Proiect"
@@ -166,6 +223,11 @@ export function ParticipantContextSelector({
         onValueChange={selectProject}
         size="sm"
       />
+      {!alesul ? (
+        <p data-participant-project-required className="mt-1.5 px-1 text-sm font-semibold text-destructive">
+          Alege proiectul
+        </p>
+      ) : null}
     </div>
   );
 }

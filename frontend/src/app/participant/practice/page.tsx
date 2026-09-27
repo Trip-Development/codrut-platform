@@ -46,12 +46,14 @@ export default async function ParticipantPracticePage({
       activeHref={participantActiveHref("/participant/practice", scopeParams)}
       userLabel={name.split(" ")[0]}
       session={participant}
+      sidebarTop={
+        <ParticipantContextSelector
+          contexts={summary.contexts}
+          selectedProfileId={summary.participantProfileId}
+          selectedProjectId={summary.projectId}
+        />
+      }
     >
-      <ParticipantContextSelector
-        contexts={summary.contexts}
-        selectedProfileId={summary.participantProfileId}
-        selectedProjectId={summary.projectId}
-      />
       <PracticeWorkspace
         projectId={summary.projectId}
         quizEnabled={quizEnabled}
