@@ -7,6 +7,7 @@ import {
   participantActiveHref,
   participantScopeParams,
   participantActiveProjectType,
+  participantDisplayName,
   participantScopedNavItems,
   participantWorkspaceRequestOptions,
   type ParticipantRouteSearchParams,
@@ -28,7 +29,8 @@ export default async function ParticipantPracticePage({
     ),
   ]);
 
-  const name = summary.participantFullName || participant.user.name || participant.user.id;
+  // plicul 166 A4: numele din profil, niciodată cel făcut din adresă
+  const name = participantDisplayName(summary);
   const scopeParams = participantScopeParams(summary);
   const projectType = participantActiveProjectType(summary);
   // „Verificăm cât ai reținut" se aprinde pe proiect — plicul 128, partea E. Îl căutăm pe

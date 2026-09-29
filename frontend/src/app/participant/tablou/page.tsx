@@ -7,6 +7,7 @@ import { ParticipantContextSelector } from "../ParticipantContextSelector";
 import {
   participantActiveHref,
   participantActiveProjectType,
+  participantDisplayName,
   participantScopeParams,
   participantScopedNavItems,
   participantWorkspaceRequestOptions,
@@ -35,8 +36,8 @@ export default async function TablouParticipantPage({
       participantWorkspaceRequestOptions(requestOptions.headers, routeParams),
     ).catch(() => null),
   ]);
-  const participantFirstName =
-    participant?.user?.name?.split(/\s+/)[0] || "Participant";
+  // plicul 166 A4: numele din profil, niciodată cel făcut din adresă
+  const participantFirstName = participantDisplayName(summary);
   const scopeParams = summary ? participantScopeParams(summary) : new URLSearchParams();
   const projectType =
     (summary ? participantActiveProjectType(summary) : null) ?? TRAINING_PROJECT_TYPE;
