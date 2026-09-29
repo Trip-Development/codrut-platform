@@ -124,8 +124,26 @@ class PracticeEvolutionService:
         for nume in nume_afisate:
             canonic = match_comp(nume)
             lst = pe_competenta.get(nume) or (pe_competenta.get(canonic, []) if canonic else [])
-            intrari = [intrari_punctaj[s.id] for s in lst if s.id in intrari_punctaj]
-            dovada = compute_competency_evidence(intrari)
+            # Plicul 166 D: întâi pe fiecare om, apoi adunat. Până acum regula „o notă pe zi” se
+            # aplica echipei puse la un loc. Acum: punctele echipei = media punctelor oamenilor cu
+            # cel puțin o notă la competența asta; nivelul echipei = nivelul omului median (ordonați
+            # după puncte; la număr par, cel de jos — alegerea prudentă); plus câți oameni sunt pe
+            # fiecare nivel. Fila rămâne numai a trainerului (`require_trainer_principal`, router).
+            pe_om: dict[uuid.UUID, list] = defaultdict(list)
+            for s in lst:
+                if s.id in intrari_punctaj:
+                    pe_om[s.user_id].append(intrari_punctaj[s.id])
+            dovezi = sorted(
+                (compute_competency_evidence(intrari) for intrari in pe_om.values()),
+                key=lambda d: d.points,
+            )
+            dovada = (
+                dovezi[(len(dovezi) - 1) // 2] if dovezi else compute_competency_evidence([])
+            )
+            puncte_echipa = round(sum(d.points for d in dovezi) / len(dovezi)) if dovezi else 0
+            pe_niveluri = {nivel: 0 for nivel in COMPETENCY_LEVEL_DESCRIPTIONS}
+            for d in dovezi:
+                pe_niveluri[d.level] += 1
             media = round(sum(s.score for s in lst) / len(lst), 1) if lst else None
             evolutie.append({
                 "name": nume,
@@ -137,7 +155,9 @@ class PracticeEvolutionService:
                 "level_description": COMPETENCY_LEVEL_DESCRIPTIONS.get(dovada.level, ""),
                 "color": COMPETENCY_LEVEL_COLORS.get(dovada.level, "#888888"),
                 "scores_count": len(lst),
-                "points": dovada.points,
+                "points": puncte_echipa,
+                "people_count": len(dovezi),
+                "levels_count": pe_niveluri,
             })
 
         # --- media echipei, saptamana de saptamana (rd. 323-326) ---
