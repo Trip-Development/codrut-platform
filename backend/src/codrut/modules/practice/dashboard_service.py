@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import and_, not_, or_, select
@@ -25,12 +25,14 @@ from codrut.modules.practice.models import (
     SessionSample,
 )
 from codrut.modules.practice.scoring import (
+    ZONA_ROMANIEI,
     ScoreEntry,
     compute_competency_evidence,
     compute_daily_xp,
     compute_streak,
     evidence_ceiling,
     streak_bonus_pct,
+    ziua_in_romania,
 )
 
 # Textele lui Andrei, copiate ca atare — plicul 98. Cel pentru omul neinscris e cel de la
@@ -119,15 +121,12 @@ class PracticeDashboardService:
         if user_obj and user_obj.id not in user_ids:
             user_ids.append(user_obj.id)
 
-        # 2. Base XP & Streak
+        # 2. XP-ul vechi (neafișat de la plicul 165). `streak` nu se mai citește — plicul 166, C.
         total_xp = 0
-        streak_val = 0
         if profile:
             total_xp = profile.xp or 0
-            streak_val = profile.streak or 0
         elif user_obj:
             total_xp = user_obj.xp or 0
-            streak_val = user_obj.streak or 0
 
         # 3. Query all competency scores for this user
         stmt_scores = (
@@ -142,10 +141,15 @@ class PracticeDashboardService:
         # primul lui tablou era facut din notele altora. Fara note, tabloul ramane gol — ca la
         # momente si mostre, unde aceeasi rezerva a fost scoasa la plicul 29.
 
-        # 4. Activity dates and Streak calculation
-        activity_dates = [s.created_at.date() for s in all_scores]
-        calculated_streak = compute_streak(activity_dates)
-        effective_streak = max(streak_val, calculated_streak)
+        # 4. Seria de zile — plicul 166, C: NUMAI zilele consecutive cu note, în ora României.
+        #
+        # Până acum era maximul dintre ele și `profile.streak`, un contor vechi care crește la
+        # fiecare ședință ÎNCHISĂ, nu la fiecare zi: la contul C arăta 19, la liderul complet 2 după
+        # două ședințe în aceeași zi. Contorul rămâne în bază, neafișat.
+        activity_dates = [ziua_in_romania(s.created_at) for s in all_scores]
+        effective_streak = compute_streak(
+            activity_dates, reference_date=datetime.now(ZONA_ROMANIEI).date()
+        )
         bonus_pct = streak_bonus_pct(effective_streak)
 
         # 5. Today's XP calculation (capped at 100)
