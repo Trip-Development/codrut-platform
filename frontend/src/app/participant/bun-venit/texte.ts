@@ -11,7 +11,8 @@ export const BUN_VENIT = {
   tipTraining: "Exersează cu Cody",
   tipAltul: "Chestionare și rezultate",
   buton: "Intră în proiect",
-  ajutor: "Poți trece oricând de la un proiect la altul din lista de sus, din meniul din stânga.",
+  // plicul 166 A2: pe telefon meniul e sub ☰, nu în stânga — formularea neutră
+  ajutor: "Poți trece oricând de la un proiect la altul din lista de proiecte din meniu.",
 };
 
 export const CITATE: ReadonlyArray<{ text: string; autor: string }> = [

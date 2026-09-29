@@ -8,6 +8,7 @@ import {
   participantCanViewResults,
   participantScopeParams,
   participantActiveProjectType,
+  participantDisplayName,
   participantScopedNavItems,
   participantWorkspaceRequestOptions,
   type ParticipantRouteSearchParams,
@@ -27,7 +28,8 @@ export default async function ParticipantAccountPage({
     getParticipantWorkspaceSummary(participantWorkspaceRequestOptions(requestOptions.headers, routeParams)),
   ]);
 
-  const name = summary.participantFullName || participant.user.name || participant.user.id;
+  // plicul 166 A4: în meniu, numele din profil; adresa rămâne numai în conținutul paginii Cont
+  const name = participantDisplayName(summary);
   const scopeParams = participantScopeParams(summary);
   const projectType = participantActiveProjectType(summary);
 

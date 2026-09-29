@@ -8,6 +8,7 @@ import { ParticipantContextSelector } from "../ParticipantContextSelector";
 import {
   participantActiveProjectType,
   participantCanViewResults,
+  participantDisplayName,
   participantHasWelcomePage,
   participantScopeParams,
   participantScopedHref,
@@ -62,6 +63,7 @@ export default async function ParticipantWelcomePage({
         contexts: contexteCont,
       })}
       activeHref={participantScopedHref(PARTICIPANT_WELCOME_PATH, scopeParams)}
+      userLabel={participantDisplayName({ ...summary, contexts: contexteCont })}
       session={participant}
       sidebarTop={
         <ParticipantContextSelector

@@ -107,17 +107,60 @@ export function participantScopedNavItems(
     ? lista
     : lista.filter((item) => item.href !== "/participant/results");
   const bunVenit = participantHasWelcomePage(contexts);
+  // plicul 166 A1: omul cu UN singur proiect, de training — „Acasă” duce la Exersează
+  const acasaLaCody = participantSingleTrainingProject(contexts) !== null;
   return items.map((item) => ({
     ...item,
     href: item.href === "/participant/results"
       ? participantResultsHref(params)
       : bunVenit && item.href === "/participant"
         ? participantScopedHref(PARTICIPANT_WELCOME_PATH, params)
-        : participantScopedHref(item.href, params),
+        : acasaLaCody && item.href === "/participant"
+          ? participantScopedHref("/participant/practice", params)
+          : participantScopedHref(item.href, params),
   }));
 }
 
-type ProiecteleOmului = Array<{ projects?: unknown[] | null }> | null | undefined;
+type ProiecteleOmului = Array<{
+  participantProfileId?: string;
+  projects?: Array<{ id?: string; projectType?: string | null } | unknown> | null;
+}> | null | undefined;
+
+/**
+ * Omul cu UN SINGUR proiect, și acela de training (Cody) — plicul 166, A1 (cererea chatului
+ * Aplicației, observația lui Andrei din 27 septembrie). Pentru el „Acasă” și `/participant` fără
+ * proiect duc la Exersează, nu la pagina de chestionare („Nu ai sarcini active”). Omul cu un singur
+ * proiect de alt tip vede exact ce vedea (poarta de la plicul 160).
+ */
+export function participantSingleTrainingProject(
+  contexts: ProiecteleOmului,
+): { profileId: string; projectId: string } | null {
+  const toate = (contexts ?? []).flatMap((context) =>
+    (context.projects ?? []).map((project) => ({
+      profileId: context.participantProfileId ?? "",
+      project: project as { id?: string; projectType?: string | null },
+    })),
+  );
+  if (toate.length !== 1) return null;
+  const [unic] = toate;
+  if (unic.project.projectType !== TRAINING_PROJECT_TYPE || !unic.project.id) return null;
+  return { profileId: unic.profileId, projectId: unic.project.id };
+}
+
+/**
+ * Numele omului în spațiul participantului — plicul 166, A4: numele din profil, pus de trainer,
+ * niciodată adresa sau numele contului (care se face din adresă). Adresa apare numai pe pagina Cont.
+ */
+export function participantDisplayName(summary?: {
+  participantFullName?: string | null;
+  anonymousName?: string | null;
+  contexts?: Array<{ participantFullName?: string | null }> | null;
+} | null): string {
+  const nume = summary?.participantFullName?.trim()
+    || (summary?.contexts ?? []).map((c) => c.participantFullName?.trim()).find(Boolean)
+    || summary?.anonymousName?.trim();
+  return nume?.split(/\s+/)[0] || "Participant";
+}
 
 /**
  * Pagina de bun venit — plicul 160 B, hotărârea lui Andrei din 27 septembrie.
