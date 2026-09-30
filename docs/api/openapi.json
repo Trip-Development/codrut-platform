@@ -4474,9 +4474,21 @@
             "title": "Level Description",
             "type": "string"
           },
+          "levels_count": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Levels Count",
+            "type": "object"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "people_count": {
+            "default": 0,
+            "title": "People Count",
+            "type": "integer"
           },
           "points": {
             "default": 0,

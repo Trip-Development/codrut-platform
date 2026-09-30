@@ -8,7 +8,9 @@ import { ParticipantClientWorkspace } from "./ParticipantClientWorkspace";
 import { participantAccountContexts } from "./proiectele-contului";
 import {
   participantScopedHref,
+  firstValue,
   participantShouldOpenWelcome,
+  participantSingleTrainingProject,
   participantWorkspaceRequestOptions,
   PARTICIPANT_WELCOME_PATH,
   type ParticipantRouteSearchParams,
@@ -33,6 +35,15 @@ export default async function ParticipantWorkspacePage({
     const profil = routeParams.profile;
     if (typeof profil === "string" && profil) params.set("profile", profil);
     redirect(participantScopedHref(PARTICIPANT_WELCOME_PATH, params));
+  }
+  // Plicul 166 A1: omul cu un singur proiect, de training, ajunge la Exersează, nu la pagina de
+  // chestionare. Cu proiectul ales în adresă, pagina e cea de până acum.
+  const unicTraining = firstValue(routeParams.project) ? null : participantSingleTrainingProject(contexteCont);
+  if (unicTraining) {
+    const params = new URLSearchParams();
+    if (unicTraining.profileId) params.set("profile", unicTraining.profileId);
+    params.set("project", unicTraining.projectId);
+    redirect(participantScopedHref("/participant/practice", params));
   }
   const onboarding = await getParticipantOnboardingState(summary.participantProfileId);
 
