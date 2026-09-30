@@ -299,7 +299,7 @@ export function AppShell({
 
         return (
           <Link
-            key={item.href}
+            key={`${item.label}:${item.href}`}
             href={item.href}
             data-sidebar-nav-link
             title={collapsed ? item.label : undefined}

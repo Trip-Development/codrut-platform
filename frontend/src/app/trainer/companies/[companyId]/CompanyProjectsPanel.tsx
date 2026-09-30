@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/empty";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { ProjectTypeChoice } from "@/components/projects/project-type-choice";
 import { ModalLayer } from "@/components/ui/modal-layer";
 import { SelectControl } from "@/components/ui/select-control";
 import { Textarea } from "@/components/ui/textarea";
@@ -74,7 +75,8 @@ export function CompanyProjectsPanel({
   const [projects, setProjects] = useState(initialProjects);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [projectType, setProjectType] = useState("team_coaching");
+  // Plicul 166 A5: nimic ales dinainte — trainerul alege tipul pe față.
+  const [projectType, setProjectType] = useState("");
   const [trainingTheme, setTrainingTheme] = useState("comunicare-asertiva");
   const [competencies, setCompetencies] = useState<string[]>([
     "Claritate și structură",
@@ -182,6 +184,11 @@ export function CompanyProjectsPanel({
       setMessage(null);
       return;
     }
+    if (!projectType) {
+      setFormError("Alege tipul proiectului.");
+      setMessage(null);
+      return;
+    }
 
     creatingRef.current = true;
     setIsCreating(true);
@@ -201,7 +208,7 @@ export function CompanyProjectsPanel({
       setProjects((current) => [created, ...current]);
       setName("");
       setDescription("");
-      setProjectType("team_coaching");
+      setProjectType("");
       setStartDate("");
       setDueDate("");
       setFormOpenDate("");
@@ -322,19 +329,13 @@ export function CompanyProjectsPanel({
               </Field>
               <Field>
                 <FieldLabel>Tip proiect</FieldLabel>
-                <SelectControl
-                  label="Tip proiect"
+                <ProjectTypeChoice
+                  name="create-project-type"
                   value={projectType}
-                  onChange={(event) => setProjectType(event.target.value)}
-                  className="bg-surface"
+                  onChange={setProjectType}
                   disabled={isCreating}
-                >
-                  <option value="training">Training</option>
-                  <option value="team_coaching">Coaching de echipă</option>
-                  <option value="individual_coaching">Coaching individual</option>
-                  <option value="leadership_program">Program de leadership</option>
-                  <option value="custom">Personalizat</option>
-                </SelectControl>
+                  invalid={Boolean(formError && !projectType)}
+                />
               </Field>
             </FieldGroup>
 

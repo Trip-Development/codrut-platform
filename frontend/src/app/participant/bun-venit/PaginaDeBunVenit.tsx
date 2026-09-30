@@ -60,7 +60,10 @@ export function PaginaDeBunVenit({
             >
               <div className="min-w-0">
                 <p className="truncate font-semibold text-foreground">{proiect.nume}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{proiect.ce}</p>
+                {/* plicul 166 A3: eticheta tipului nu se repetă când e chiar numele proiectului */}
+                {proiect.ce.trim().toLocaleLowerCase("ro") !== proiect.nume.trim().toLocaleLowerCase("ro") ? (
+                  <p className="mt-1 text-sm text-muted-foreground">{proiect.ce}</p>
+                ) : null}
               </div>
               <Link
                 href={proiect.unde}

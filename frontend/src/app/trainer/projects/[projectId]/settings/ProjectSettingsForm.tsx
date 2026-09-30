@@ -22,6 +22,7 @@ import {
   type ProjectLifecycleEvent,
 } from "@/api/companies";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
+import { ProjectTypeChoice } from "@/components/projects/project-type-choice";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -238,7 +239,16 @@ export function ProjectSettingsForm({
               </SelectControl>
             </Field>
 
-            <SettingsField label="Tip proiect" value={projectType} onChange={setProjectType} disabled={formLocked} />
+            <Field className="md:col-span-2">
+              <FieldLabel>Tip proiect</FieldLabel>
+              {/* Plicul 166 A5: listă, nu câmp liber */}
+              <ProjectTypeChoice
+                name="project-settings-type"
+                value={projectType}
+                onChange={setProjectType}
+                disabled={formLocked}
+              />
+            </Field>
             <SettingsField label="Start proiect" value={startsAt} onChange={setStartsAt} type="date" disabled={formLocked} />
             <SettingsField label="Final proiect" value={dueAt} onChange={setDueAt} type="date" disabled={formLocked} />
             <SettingsField label="Formulare active din" value={formOpensAt} onChange={setFormOpensAt} type="date" disabled={formLocked} />

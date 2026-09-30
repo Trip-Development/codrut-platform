@@ -3406,8 +3406,17 @@ export interface components {
              * @default
              */
             level_description: string;
+            /** Levels Count */
+            levels_count?: {
+                [key: string]: number;
+            };
             /** Name */
             name: string;
+            /**
+             * People Count
+             * @default 0
+             */
+            people_count: number;
             /**
              * Points
              * @default 0

@@ -179,13 +179,21 @@ describe("CompanyProjectsPanel", () => {
       .find((button) => !button.hasAttribute("disabled"));
     expect(openButton).toBeTruthy();
     fireEvent.click(openButton!);
-    expect(screen.getByLabelText("Tip proiect").getAttribute("data-slot")).toBe("select");
+    // Plicul 166 A5: „Tip proiect” e o listă cu explicații, fără nimic ales dinainte.
+    const tipuri = screen.getAllByRole("radio") as HTMLInputElement[];
+    expect(tipuri.length).toBeGreaterThan(1);
+    expect(tipuri.some((radio) => radio.checked)).toBe(false);
     expect(screen.getByLabelText("Notițe interne").getAttribute("data-slot")).toBe("textarea");
     fireEvent.change(screen.getByPlaceholderText("Ex: Leadership Q3 2026"), {
       target: { value: "Leadership Q4" },
     });
     const createForm = screen.getByPlaceholderText("Ex: Leadership Q3 2026").closest("form");
     expect(createForm).toBeTruthy();
+    // fără tip ales, proiectul nu se salvează
+    fireEvent.submit(createForm!);
+    expect(await screen.findByText("Alege tipul proiectului.")).toBeTruthy();
+    expect(createCompanyProject).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText(/Coaching de echipă/));
 
     fireEvent.click(screen.getByRole("button", { name: "Salvează proiectul" }));
     fireEvent.submit(createForm!);

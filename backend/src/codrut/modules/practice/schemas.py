@@ -225,7 +225,10 @@ class EvolutionCompetencyItem(BaseModel):
     level_description: str = ""
     color: str = ""
     scores_count: int = 0
-    points: int = 0  # plicul 165
+    points: int = 0  # plicul 165; de la 166 = media oamenilor cu note
+    # plicul 166 D: câți oameni au note la competență și câți sunt pe fiecare nivel
+    people_count: int = 0
+    levels_count: dict[str, int] = Field(default_factory=dict)
 
 
 class EvolutionWeekPoint(BaseModel):
