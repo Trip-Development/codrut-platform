@@ -3718,6 +3718,17 @@
             "title": "Average Score",
             "type": "number"
           },
+          "best_score_today": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Score Today"
+          },
           "color": {
             "title": "Color",
             "type": "string"
@@ -7855,6 +7866,24 @@
         "title": "PersonTheoryItem",
         "type": "object"
       },
+      "PointsEarnedItem": {
+        "properties": {
+          "competency": {
+            "title": "Competency",
+            "type": "string"
+          },
+          "points": {
+            "title": "Points",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "competency",
+          "points"
+        ],
+        "title": "PointsEarnedItem",
+        "type": "object"
+      },
       "PracticeConsentRequest": {
         "properties": {
           "amprenta": {
@@ -8486,6 +8515,14 @@
       },
       "PracticeSessionEndResponse": {
         "properties": {
+          "points_earned": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PointsEarnedItem"
+            },
+            "title": "Points Earned",
+            "type": "array"
+          },
           "session": {
             "$ref": "#/components/schemas/PracticeSessionResponse"
           },

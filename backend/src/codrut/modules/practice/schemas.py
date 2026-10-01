@@ -81,9 +81,16 @@ class PracticeSessionDetailResponse(BaseModel):
     turns: list[PracticeTurnResponse]
 
 
+class PointsEarnedItem(BaseModel):
+    competency: str
+    points: int
+
+
 class PracticeSessionEndResponse(BaseModel):
     session: PracticeSessionResponse
     summary: str | None = None
+    # plicul 177: cât a crescut Tabloul pe proiectul ședinței, pe competență (numai > 0)
+    points_earned: list[PointsEarnedItem] = []
 
 
 class PracticeStareSummaryResponse(BaseModel):
@@ -122,6 +129,8 @@ class CompetencyDashboardItem(BaseModel):
     points: int = 0
     points_today: int = 0
     interlocutor_types: int = 0
+    # plicul 177: nota de azi pe competență (pentru „încă X până la primele puncte”)
+    best_score_today: int | None = None
 
 
 class InsightMomentItem(BaseModel):
