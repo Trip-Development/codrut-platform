@@ -6,14 +6,14 @@ import { PracticeWorkspace } from "./PracticeWorkspace";
 // Plicul 83: pastram optiunile primite de hook, ca testul sa poata simula o trimitere prin voce.
 const voce = vi.hoisted(() => ({
   optiuni: null as null | {
-    onAutoSubmit: (text: string) => void;
+    onTranscript: (text: string) => void;
     onError: (err: string, pentruOm?: boolean) => void;
   },
 }));
 
 vi.mock("@/hooks/useVoiceToText", () => ({
   useVoiceToText: (optiuni: {
-    onAutoSubmit: (text: string) => void;
+    onTranscript: (text: string) => void;
     onError: (err: string, pentruOm?: boolean) => void;
   }) => {
     voce.optiuni = optiuni;
@@ -480,9 +480,13 @@ describe("PracticeWorkspace — raspunsul omului ramane pe ecran (plicul 83)", (
     await porneste();
     const amanat = raspunsAmanat();
     api.submitPracticeTurn.mockReturnValue(amanat.promisiune);
-    await screen.findByPlaceholderText(/Scrie un mesaj/);
+    const caseta = (await screen.findByPlaceholderText(/Scrie un mesaj/)) as HTMLTextAreaElement;
 
-    await act(async () => voce.optiuni?.onAutoSubmit("Vorbit la microfon."));
+    // Plicul 176: microfonul doar scrie in caseta; pleaca abia la Trimite.
+    await act(async () => voce.optiuni?.onTranscript("Vorbit la microfon."));
+    expect(caseta.value).toBe("Vorbit la microfon.");
+    expect(api.submitPracticeTurn).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Trimite" }));
 
     expect(await screen.findByText("Vorbit la microfon.")).toBeTruthy();
     await act(async () => amanat.rezolva(raspunsCu("Vorbit la microfon.")));

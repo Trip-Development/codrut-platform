@@ -102,9 +102,8 @@ describe("useVoiceToText — fara vorbire nu se inventeaza o replica (plicul 170
     // modelul intoarce gol — iar ecranul trebuie sa nu faca nimic cu golul.
     transcribeAudio.mockResolvedValue({ text: "", estimated_usd: 0 });
     const onTranscript = vi.fn();
-    const onAutoSubmit = vi.fn();
     const onError = vi.fn();
-    const { result } = renderHook(() => useVoiceToText({ onTranscript, onAutoSubmit, onError }));
+    const { result } = renderHook(() => useVoiceToText({ onTranscript, onError }));
 
     await act(async () => {
       await result.current.startListening();
@@ -115,7 +114,6 @@ describe("useVoiceToText — fara vorbire nu se inventeaza o replica (plicul 170
 
     await waitFor(() => expect(transcribeAudio).toHaveBeenCalledTimes(1));
     expect(onTranscript).not.toHaveBeenCalled();
-    expect(onAutoSubmit).not.toHaveBeenCalled();
     expect(result.current.transcript).toBe("");
     expect(result.current.error).toBe(TEXTE_MICROFON.nimicAuzit);
     expect(onError).toHaveBeenCalledWith(TEXTE_MICROFON.nimicAuzit, true);
@@ -123,8 +121,8 @@ describe("useVoiceToText — fara vorbire nu se inventeaza o replica (plicul 170
 
   it("textul numai din spatii se trateaza ca gol", async () => {
     transcribeAudio.mockResolvedValue({ text: "   \n ", estimated_usd: 0 });
-    const onAutoSubmit = vi.fn();
-    const { result } = renderHook(() => useVoiceToText({ onAutoSubmit }));
+    const onTranscript = vi.fn();
+    const { result } = renderHook(() => useVoiceToText({ onTranscript }));
 
     await act(async () => {
       await result.current.startListening();
@@ -134,7 +132,7 @@ describe("useVoiceToText — fara vorbire nu se inventeaza o replica (plicul 170
     });
 
     await waitFor(() => expect(result.current.error).toBe(TEXTE_MICROFON.nimicAuzit));
-    expect(onAutoSubmit).not.toHaveBeenCalled();
+    expect(onTranscript).not.toHaveBeenCalled();
   });
 
   it("vorbirea adevarata trece in caseta, ca pana acum", async () => {
@@ -195,5 +193,42 @@ describe("mesajDeMicrofon — microfonul blocat, pe limba omului (plicul 170)", 
       text: "Nu am putut accesa microfonul",
       pentruOm: false,
     });
+  });
+});
+
+describe("useVoiceToText — microfonul doar scrie (plicul 176)", () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    transcribeAudio.mockReset();
+    pregatesteBrowserul();
+  });
+
+  it("oprit singur pe tăcere: textul merge numai în casetă, niciun alt apel invers", async () => {
+    // Analizorul fals n-are citirea în virgulă mobilă → pragul lui 174 cade deschis („trimite la
+    // transcriere”); aici se verifică numai drumul textului, nu dacă e vorbire.
+    transcribeAudio.mockResolvedValue({
+      text: "Bună ziua, aș vrea să discutăm despre termenul de predare.",
+      estimated_usd: 0,
+    });
+    const onTranscript = vi.fn();
+    const onError = vi.fn();
+    // Opțiunile cârligului sunt numai acestea două: altă cale a textului n-are pe unde ieși.
+    const { result } = renderHook(() => useVoiceToText({ onTranscript, onError }));
+
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["setTimeout", "clearTimeout"] });
+    await act(async () => {
+      await result.current.startListening();
+    });
+    expect(result.current.isListening).toBe(true);
+    await act(() => vi.advanceTimersByTimeAsync(6000)); // oprirea pe tăcere a aplicației
+    vi.useRealTimers();
+
+    await waitFor(() => expect(transcribeAudio).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.isTranscribing).toBe(false));
+    expect(result.current.isListening).toBe(false);
+    expect(onTranscript).toHaveBeenCalledTimes(1);
+    expect(onTranscript).toHaveBeenCalledWith("Bună ziua, aș vrea să discutăm despre termenul de predare.");
+    expect(onError).not.toHaveBeenCalled();
   });
 });

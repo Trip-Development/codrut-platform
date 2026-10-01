@@ -221,6 +221,7 @@ export function PracticeWorkspace({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   // Ca „Vreau alta tema" sa poata pune cursorul la capatul textului pregatit.
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const cursorDupaMicrofon = useRef(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -346,44 +347,6 @@ export function PracticeWorkspace({
     setArataAlegerea(false);
   };
 
-  const handleAutoSubmitVoice = async (textToSend: string) => {
-    if (!session || !textToSend.trim() || isLoading || session.state !== "open") {
-      setInputText((prev) => (prev ? `${prev} ${textToSend}` : textToSend));
-      return;
-    }
-
-    setIsLoading(true);
-    setErrorMsg(null);
-    const provizorie = replicaInAsteptare(session.id, textToSend.trim());
-    setTurns((prev) => [...prev, provizorie]);
-
-    try {
-      const turnRes = await submitPracticeTurn(session.id, textToSend.trim());
-      setTurns((prev) => {
-        const next = [...prev.filter((turn) => turn.id !== provizorie.id), turnRes.participantTurn];
-        if (turnRes.actorTurn) {
-          next.push(turnRes.actorTurn);
-        }
-        return next;
-      });
-      setSession((prev) =>
-        prev
-          ? {
-              ...prev,
-              state: turnRes.sessionState,
-              turnCount: prev.turnCount + 1,
-            }
-          : null
-      );
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : "Eroare la trimiterea mesajului");
-      setTurns((prev) => prev.filter((turn) => turn.id !== provizorie.id));
-      setInputText(textToSend);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const {
     isListening,
     isTranscribing,
@@ -391,11 +354,10 @@ export function PracticeWorkspace({
     startListening,
     stopListening,
   } = useVoiceToText({
+    // Plicul 176: microfonul doar scrie în casetă, la ce era deja scris; omul apasă Trimite.
     onTranscript: (transcribedText) => {
       setInputText((prev) => (prev ? `${prev} ${transcribedText}` : transcribedText));
-    },
-    onAutoSubmit: (transcribedText) => {
-      handleAutoSubmitVoice(transcribedText);
+      cursorDupaMicrofon.current = true;
     },
     onError: (err, pentruOm) => {
       // Plicul 170: mesajele de microfon sunt deja scrise pentru om; „Eroare voce:" rămâne
@@ -403,6 +365,19 @@ export function PracticeWorkspace({
       setErrorMsg(pentruOm ? err : `Eroare voce: ${err}`);
     },
   });
+
+  // Plicul 176: după microfon, cursorul în casetă, la capătul textului — abia când caseta s-a
+  // deblocat (cât ascultă și transcrie e blocată, iar `focus()` n-ar face nimic). Numai după microfon.
+  useEffect(() => {
+    if (isListening || isTranscribing || isLoading || !cursorDupaMicrofon.current) return;
+    cursorDupaMicrofon.current = false;
+    const c = inputRef.current;
+    if (c) {
+      c.focus();
+      const n = c.value.length;
+      c.setSelectionRange(n, n);
+    }
+  }, [isListening, isTranscribing, isLoading]);
 
   // Ecran 1: Selecția modului și pornirea sesiunii
   if (!session || arataAlegerea) {
