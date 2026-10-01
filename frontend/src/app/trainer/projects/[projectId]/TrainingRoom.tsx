@@ -217,7 +217,8 @@ export function TrainingRoom({
                 </div>
                 <div className="flex gap-1">
                   <Coloana valoare={c.testIn} culoare={NEUTRU} titlu="Test IN (baseline)" />
-                  <Coloana valoare={c.acum} culoare={umplereScor(c.acum)} titlu="Nivel actual" />
+                  {/* sub 36%: roșul de risc, ca să nu se confunde cu Test IN (gri) — arhitectul, după 175 */}
+                  <Coloana valoare={c.acum} culoare={c.acum < 36 ? ROSU : umplereScor(c.acum)} titlu="Nivel actual" />
                   {c.testOut !== null ? (
                     <Coloana valoare={c.testOut} culoare={VERDE} titlu="Test OUT" />
                   ) : null}

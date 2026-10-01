@@ -665,7 +665,7 @@ export function QuestionnaireRunner({
                 {section.questions.map((question) => (
                   <article key={question.id} className="px-5 py-5 md:px-6">
                     <div className="grid gap-3 md:grid-cols-[1.5rem_1fr]">
-                      <span className="pt-0.5 text-sm font-bold tabular-nums text-primary/72">
+                      <span className="pt-0.5 text-sm font-bold tabular-nums text-brand-text">
                         {questionNumbers.get(question.id)}
                       </span>
                       <div className="min-w-0">
