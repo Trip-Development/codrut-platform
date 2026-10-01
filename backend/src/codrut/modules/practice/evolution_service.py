@@ -26,6 +26,7 @@ from codrut.modules.companies.models import (
 )
 from codrut.modules.identity.models import User
 from codrut.modules.practice.competency_aliases import match_comp
+from codrut.modules.practice.conturi_test import e_cont_de_test
 from codrut.modules.practice.interlocutor import intrarile_de_punctaj
 from codrut.modules.practice.models import (
     CompetencyScore,
@@ -66,6 +67,24 @@ class PracticeEvolutionService:
             )
             .where(ProjectMembership.project_id == project_id)
         )).all()
+
+        # Contul de test al lui Andrei iese din evolutia ECHIPEI (plicul 173): el porneste
+        # sedinte oricand, ca sa incerce aplicatia, iar notele lui ar trage media liderilor
+        # in sus sau in jos fara ca nimeni sa fi exersat. Filtrul sta AICI, inainte de
+        # `emailuri`/`user_ids`, deci niciuna din notele lui nu ajunge in `scoruri`, nici in
+        # numaratori, nici in lista pe om. Tabloul lui propriu (`dashboard_service`) ramane.
+        adrese_cont = {}
+        id_uri_cont = [p.user_id for p, _ in randuri if p.user_id]
+        if id_uri_cont:
+            adrese_cont = dict((await self.session.execute(
+                select(User.id, User.email).where(User.id.in_(id_uri_cont))
+            )).all())
+        randuri = [
+            (profil, membru)
+            for profil, membru in randuri
+            if not e_cont_de_test(profil.email)
+            and not e_cont_de_test(adrese_cont.get(profil.user_id))
+        ]
 
         emailuri = [p.email for p, _ in randuri if p.email]
         utilizatori = (await self.session.execute(
