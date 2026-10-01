@@ -68,7 +68,7 @@ function applyPageSecurityHeaders(
 ): NextResponse {
   response.headers.set("Content-Security-Policy", contentSecurityPolicy);
   response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
-  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(self), geolocation=(), payment=()");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   if (!isLocalRequest) {
     response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
