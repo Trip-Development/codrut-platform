@@ -1,6 +1,39 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { transcribeAudio } from "@/api/practice";
 
+/**
+ * Textele pe care le vede omul cand microfonul nu merge. Toate intr-un singur loc.
+ *
+ * Pana la plicul 170 ecranul arata textul englezesc al browserului („Permission denied"),
+ * cu „Eroare voce:" in fata — un om nu stie ce sa faca cu el.
+ */
+export const TEXTE_MICROFON = {
+  nimicAuzit: "Nu s-a auzit nimic. Mai încearcă o dată, mai aproape de microfon.",
+  faraPermisiune:
+    "Browserul nu are voie să folosească microfonul. Permite microfonul pentru acest site " +
+    "din setările browserului (pe calculator, în Chrome: lacătul de lângă adresă → Microfon " +
+    "→ Permite), apoi reîncarcă pagina.",
+  faraMicrofon: "Nu găsesc niciun microfon la acest dispozitiv.",
+} as const;
+
+/**
+ * Traduce refuzul lui `getUserMedia` in ceva ce omul poate urma.
+ *
+ * `pentruOm: true` = textul e deja scris pentru el, ecranul il arata ca atare.
+ * `pentruOm: false` = e o eroare tehnica neprevazuta, ramane cu „Eroare voce:" in fata.
+ */
+export function mesajDeMicrofon(err: unknown): { text: string; pentruOm: boolean } {
+  const nume = err instanceof Error ? err.name : "";
+  if (nume === "NotAllowedError" || nume === "SecurityError") {
+    return { text: TEXTE_MICROFON.faraPermisiune, pentruOm: true };
+  }
+  if (nume === "NotFoundError") {
+    return { text: TEXTE_MICROFON.faraMicrofon, pentruOm: true };
+  }
+  const text = err instanceof Error ? err.message : "Nu am putut accesa microfonul";
+  return { text, pentruOm: false };
+}
+
 export interface UseVoiceToTextOptions {
   onTranscript?: (text: string) => void;
   /**
@@ -8,7 +41,8 @@ export interface UseVoiceToTextOptions {
    * Use to trigger auto-send.
    */
   onAutoSubmit?: (text: string) => void;
-  onError?: (error: string) => void;
+  /** `pentruOm` = textul e deja scris pentru om, fara prefix tehnic. */
+  onError?: (error: string, pentruOm?: boolean) => void;
 }
 
 export function useVoiceToText(options?: UseVoiceToTextOptions) {
@@ -93,14 +127,21 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
     setError(null);
     try {
       const res = await transcribeAudio(audioBlob);
-      if (res.text && res.text.trim()) {
-        const text = res.text.trim();
+      const text = res.text?.trim() ?? "";
+      if (text) {
         setTranscript(text);
         if (options?.onTranscript) {
           options.onTranscript(text);
         }
         if (wasAutoStoppedRef.current && options?.onAutoSubmit) {
           options.onAutoSubmit(text);
+        }
+      } else {
+        // Plicul 170: fara vorbire, modelul intoarce text gol. Nu se pune in caseta si nu
+        // se trimite singur — altfel oprirea pe tacere scria o replica pe care omul n-a spus-o.
+        setError(TEXTE_MICROFON.nimicAuzit);
+        if (options?.onError) {
+          options.onError(TEXTE_MICROFON.nimicAuzit, true);
         }
       }
     } catch (err: unknown) {
@@ -196,10 +237,10 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
 
       checkSilence();
     } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : "Nu am putut accesa microfonul";
+      const { text: errMsg, pentruOm } = mesajDeMicrofon(err);
       setError(errMsg);
       if (options?.onError) {
-        options.onError(errMsg);
+        options.onError(errMsg, pentruOm);
       }
       setIsListening(false);
     }

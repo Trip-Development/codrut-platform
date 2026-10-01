@@ -397,8 +397,10 @@ export function PracticeWorkspace({
     onAutoSubmit: (transcribedText) => {
       handleAutoSubmitVoice(transcribedText);
     },
-    onError: (err) => {
-      setErrorMsg(`Eroare voce: ${err}`);
+    onError: (err, pentruOm) => {
+      // Plicul 170: mesajele de microfon sunt deja scrise pentru om; „Eroare voce:" rămâne
+      // numai pentru erorile tehnice neprevăzute.
+      setErrorMsg(pentruOm ? err : `Eroare voce: ${err}`);
     },
   });
 
