@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { transcribeAudio } from "@/api/practice";
+import { decizieClip, nivelDbfs, PRAG_VORBIRE_DBFS } from "./pragulVorbirii";
 
 /**
  * Textele pe care le vede omul cand microfonul nu merge. Toate intr-un singur loc.
@@ -65,6 +66,9 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
    */
   const wasAutoStoppedRef = useRef<boolean>(false);
 
+  // Plicul 174: cât din înregistrare a ascultat ecranul și cât a fost peste pragul vorbirii.
+  const masuraRef = useRef({ start: 0, stop: 0, msMasurate: 0, msPestePrag: 0, ultimulCadru: 0 });
+
   // silenceTimeoutMs = 6000    (crescut de la 4000: în quiz omul citește și gândește,
   //                             pauzele naturale trec de 4 secunde; 6 e mai uman)
   const silenceTimeoutMs = 6000;
@@ -96,6 +100,7 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
 
   const stopListening = useCallback((wasAuto: boolean = false) => {
     wasAutoStoppedRef.current = wasAuto;
+    masuraRef.current.stop = performance.now();
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
@@ -121,6 +126,24 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
 
   const handleAudioComplete = useCallback(async (audioBlob: Blob) => {
     if (audioBlob.size < 100) {
+      return;
+    }
+    // Plicul 174: fără vorbire, clipul nu mai pleacă la transcriere și nu se trimite nimic. Ecranul
+    // hotărăște numai dacă a ascultat; altfel trimite, ca înainte.
+    const masura = masuraRef.current;
+    const msInregistrare = Math.max(0, (masura.stop || performance.now()) - masura.start);
+    const decizie = decizieClip({
+      msInregistrare,
+      msMasurate: masura.msMasurate,
+      msPestePrag: masura.msPestePrag,
+    });
+    if (decizie === "nimic") {
+      wasAutoStoppedRef.current = false;
+      setIsTranscribing(false);
+      setError(TEXTE_MICROFON.nimicAuzit);
+      if (options?.onError) {
+        options.onError(TEXTE_MICROFON.nimicAuzit, true);
+      }
       return;
     }
     setIsTranscribing(true);
@@ -159,6 +182,7 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
   const startListening = useCallback(async () => {
     setError(null);
     wasAutoStoppedRef.current = false;
+    masuraRef.current = { start: performance.now(), stop: 0, msMasurate: 0, msPestePrag: 0, ultimulCadru: 0 };
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -206,6 +230,9 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
       // Silence detection loop
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
+      // Plicul 174: citirea în virgulă mobilă — cea pe octeți are pasul de ~−42 dBFS și n-ar vedea
+      // vorbirea încetă.
+      const fereastra = new Float32Array(analyser.fftSize);
 
       const checkSilence = () => {
         if (!analyserRef.current) return;
@@ -218,6 +245,21 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
           sumSquares += val * val;
         }
         const rms = Math.sqrt(sumSquares / bufferLength) * 100;
+
+        // Plicul 174: cât timp a ascultat ecranul și cât a fost peste pragul vorbirii.
+        if (typeof analyserRef.current.getFloatTimeDomainData === "function") {
+          const acum = performance.now();
+          const masura = masuraRef.current;
+          if (masura.ultimulCadru > 0) {
+            const pas = Math.min(100, Math.max(0, acum - masura.ultimulCadru));
+            analyserRef.current.getFloatTimeDomainData(fereastra);
+            masura.msMasurate += pas;
+            if (nivelDbfs(fereastra) > PRAG_VORBIRE_DBFS) {
+              masura.msPestePrag += pas;
+            }
+          }
+          masura.ultimulCadru = acum;
+        }
 
         if (rms < silenceThreshold) {
           if (!silenceTimerRef.current) {
