@@ -13,6 +13,7 @@ import {
 
 import type { TrainingRoom as TrainingRoomData } from "@/api/practice";
 import { Card } from "@/components/ui/card";
+import { CULOARE_NIVEL } from "@/lib/culori-nivel";
 
 /**
  * Camera de training — ecranul proiectului.
@@ -27,16 +28,28 @@ import { Card } from "@/components/ui/card";
  * secțiunea. Camera trebuie văzută întreagă, chiar dacă unele rafturi sunt goale.
  */
 
-// Cele patru culori ale nivelurilor se copiază ca atare: sunt limbaj, nu decor.
-const NIVEL_BUN = "#639922";
-const NIVEL_MIJLOC = "#BA7517";
-const NIVEL_SLAB = "#E24B4A";
+// Culorile nivelurilor sunt limbaj, nu decor: vin din paleta A (plicul 175), aceleași ca pe Tablou.
+// `culoareScor` dă cerneala (text), `umplereScor` grafica (bare).
+function nivelScor(scor: number) {
+  if (scor >= 70) return CULOARE_NIVEL.INTEGRARE;
+  if (scor >= 36) return CULOARE_NIVEL.APLICARE;
+  return CULOARE_NIVEL["CONȘTIENTIZARE"];
+}
 
 function culoareScor(scor: number): string {
-  if (scor >= 70) return NIVEL_BUN;
-  if (scor >= 36) return NIVEL_MIJLOC;
-  return NIVEL_SLAB;
+  return nivelScor(scor).cerneala;
 }
+
+function umplereScor(scor: number): string {
+  return nivelScor(scor).punct;
+}
+
+// Culorile de stare — jetoane (plicul 175).
+const VERDE = "var(--success-ink)";
+const ROSU = "var(--danger-ink)";
+const NEUTRU = "var(--muted-foreground)";
+// Pe tema întunecată textul de brand e `--brand-text`; pe cea deschisă e același vișiniu.
+const BRAND = "var(--brand-text)";
 
 function dataRo(iso: string | null): string {
   if (!iso) return "Niciodată";
@@ -113,7 +126,7 @@ export function TrainingRoom({
           eticheta="Inactivi"
           valoare={room.inactiveCount}
           icon={<AlertTriangleIcon className="size-5" aria-hidden />}
-          culoare={room.inactiveCount > 0 ? NIVEL_SLAB : undefined}
+          culoare={room.inactiveCount > 0 ? ROSU : undefined}
         />
       </div>
 
@@ -151,14 +164,14 @@ export function TrainingRoom({
             eticheta="Test IN completat"
             numar={room.testInCompleted}
             total={room.participantsTotal}
-            culoare="#9B0021"
+            culoare={BRAND}
             icon={<CheckCircleIcon className="size-4" aria-hidden />}
           />
           <Bara
             eticheta="Test OUT completat"
             numar={room.testOutCompleted}
             total={room.participantsTotal}
-            culoare="#15803d"
+            culoare={VERDE}
             icon={<CheckCircleIcon className="size-4" aria-hidden />}
           />
           <Bara
@@ -203,10 +216,10 @@ export function TrainingRoom({
                   </span>
                 </div>
                 <div className="flex gap-1">
-                  <Coloana valoare={c.testIn} culoare="#94a3b8" titlu="Test IN (baseline)" />
-                  <Coloana valoare={c.acum} culoare={culoareScor(c.acum)} titlu="Nivel actual" />
+                  <Coloana valoare={c.testIn} culoare={NEUTRU} titlu="Test IN (baseline)" />
+                  <Coloana valoare={c.acum} culoare={umplereScor(c.acum)} titlu="Nivel actual" />
                   {c.testOut !== null ? (
-                    <Coloana valoare={c.testOut} culoare="#15803d" titlu="Test OUT" />
+                    <Coloana valoare={c.testOut} culoare={VERDE} titlu="Test OUT" />
                   ) : null}
                 </div>
               </li>
@@ -233,12 +246,12 @@ export function TrainingRoom({
               {room.growthRanking.map((c, i) => {
                 const delta = c.delta ?? 0;
                 const sus = i < Math.ceil(room.growthRanking.length / 2);
-                const culoare = delta > 0 ? "#15803d" : delta < 0 ? "#dc2626" : "#94a3b8";
+                const culoare = delta > 0 ? VERDE : delta < 0 ? ROSU : NEUTRU;
                 return (
                   <li key={c.name} className="flex items-center gap-3">
                     <span
                       className="w-5 text-center text-xs font-bold"
-                      style={{ color: sus ? "#15803d" : "#dc2626" }}
+                      style={{ color: sus ? VERDE : ROSU }}
                       aria-hidden
                     >
                       {sus ? "▲" : "▼"}
@@ -258,7 +271,7 @@ export function TrainingRoom({
                         {c.testOut !== null ? (
                           <>
                             <span aria-hidden>→</span>
-                            <span style={{ color: "#15803d" }}>OUT: {c.testOut}%</span>
+                            <span style={{ color: VERDE }}>OUT: {c.testOut}%</span>
                           </>
                         ) : null}
                       </div>
@@ -298,7 +311,7 @@ export function TrainingRoom({
                   <div className="mt-1 h-2.5 w-full overflow-hidden rounded-full bg-muted">
                     <div
                       className="h-full rounded-full"
-                      style={{ width: `${q.average}%`, backgroundColor: culoareScor(q.average) }}
+                      style={{ width: `${q.average}%`, backgroundColor: umplereScor(q.average) }}
                     />
                   </div>
                 </li>
@@ -332,7 +345,7 @@ export function TrainingRoom({
                 <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                   <div
                     className="h-full rounded-full"
-                    style={{ width: `${w.average}%`, backgroundColor: culoareScor(w.average) }}
+                    style={{ width: `${w.average}%`, backgroundColor: umplereScor(w.average) }}
                   />
                 </div>
               </li>
@@ -387,27 +400,29 @@ export function TrainingRoom({
                       <span
                         className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
                         style={{
-                          color: p.inactive ? "#991b1b" : "#166534",
-                          backgroundColor: p.inactive ? "#fee2e2" : "#dcfce7",
+                          color: p.inactive ? ROSU : VERDE,
+                          backgroundColor: p.inactive
+                            ? "color-mix(in oklab, var(--danger) 10%, var(--surface))"
+                            : "var(--success-soft)",
                         }}
                       >
                         <span
                           className="size-1.5 rounded-full"
-                          style={{ backgroundColor: p.inactive ? "#ef4444" : "#22c55e" }}
+                          style={{ backgroundColor: p.inactive ? "var(--danger)" : "var(--success)" }}
                         />
                         {p.inactive ? "Inactiv" : "Activ"}
                       </span>
                     </td>
                     <td className="p-4 text-center">
                       {p.hasTestIn ? (
-                        <CheckCircleIcon className="mx-auto size-4" style={{ color: "#9B0021" }} aria-label="da" />
+                        <CheckCircleIcon className="mx-auto size-4" style={{ color: BRAND }} aria-label="da" />
                       ) : (
                         <XCircleIcon className="mx-auto size-4 text-muted-foreground/40" aria-label="nu" />
                       )}
                     </td>
                     <td className="p-4 text-center">
                       {p.hasTestOut ? (
-                        <CheckCircleIcon className="mx-auto size-4" style={{ color: "#15803d" }} aria-label="da" />
+                        <CheckCircleIcon className="mx-auto size-4" style={{ color: VERDE }} aria-label="da" />
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
@@ -420,7 +435,7 @@ export function TrainingRoom({
                             className="h-full rounded-full"
                             style={{
                               width: `${p.averageScore}%`,
-                              backgroundColor: culoareScor(p.averageScore),
+                              backgroundColor: umplereScor(p.averageScore),
                             }}
                           />
                         </div>
