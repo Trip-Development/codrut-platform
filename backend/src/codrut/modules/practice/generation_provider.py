@@ -101,7 +101,9 @@ TRANSCRIBE_PROMPT = (
     # tacerea si zgomotul „00:00" — si oprirea pe tacere le trimitea singure in conversatie,
     # ca replici ale omului. Vorbirea slaba NU are voie sa fie aruncata (controlorul, 3).
     "Numai dacă în înregistrare nu există deloc vorbire omenească (doar tăcere, zgomot, "
-    "muzică sau un ton), returnează exact textul gol, fără niciun cuvânt. "
+    "muzică sau un ton), răspunsul tău trebuie să fie complet gol: zero caractere. "
+    "Nu scrie niciun cuvânt, nicio cifră, niciun marcaj de timp (de exemplu „00:00\"), "
+    "nicio linie și niciun semn de punctuație. "
     "Vorbirea încetă sau neclară se transcrie, cât se înțelege."
 )
 
