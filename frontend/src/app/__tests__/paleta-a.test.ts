@@ -110,3 +110,25 @@ describe.each(Object.entries(TEME))("contrastul, tema %s", (_, t) => {
     expect(contrast("--focus-ring", "--background", t)).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe("vișiniul ca text, cu opacitate — după 175", () => {
+  it("nicio clasă `text-primary/NN` sau `text-burgundy/NN` în afara stărilor de hover", () => {
+    // Variantele cu opacitate scapă regulii de pe tema întunecată (`--brand-text`): ~1,4 : 1 pe fond închis.
+    const radacina = path.resolve(__dirname, "..", "..", "..");
+    const gasite: string[] = [];
+    const umbla = (dir: string) => {
+      for (const intrare of fs.readdirSync(dir, { withFileTypes: true })) {
+        const cale = path.join(dir, intrare.name);
+        if (intrare.isDirectory()) umbla(cale);
+        else if (/\.tsx?$/.test(intrare.name) && !/\.test\./.test(intrare.name) && !/ \d\./.test(intrare.name)) {
+          const text = fs.readFileSync(cale, "utf8");
+          for (const m of text.matchAll(/(\S*)text-(?:primary|burgundy)\/\d+/g)) {
+            if (!/hover:/.test(m[1])) gasite.push(`${path.relative(radacina, cale)}: ${m[0]}`);
+          }
+        }
+      }
+    };
+    umbla(path.join(radacina, "src"));
+    expect(gasite).toEqual([]);
+  });
+});
