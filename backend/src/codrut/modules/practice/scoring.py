@@ -122,6 +122,8 @@ class CompetencyEvidence:
     points: int = 0
     points_today: int = 0
     interlocutor_types: int = 0
+    # plicul 177: cea mai mare notă role-play de azi (ora României) — aceeași care dă punctele
+    best_score_today: int | None = None
 
 
 def compute_daily_xp(entries: Sequence[tuple[str, int | float, datetime]]) -> int:
@@ -231,6 +233,7 @@ def compute_competency_evidence(
         pe_zi.setdefault(ziua_in_romania(e.created_at), []).append(e)
     puncte = 0
     puncte_azi = 0
+    nota_azi: int | None = None
     tipuri_reusite: set[str] = set()
     for zi in sorted(pe_zi):
         ale_zilei = pe_zi[zi]
@@ -243,6 +246,7 @@ def compute_competency_evidence(
         puncte += castig
         if zi == azi:
             puncte_azi = castig
+            nota_azi = int(max(e.score for e in ale_zilei))
 
     tipuri = len(tipuri_reusite)
     prima_zi = min(pe_zi) if pe_zi else None
@@ -307,4 +311,5 @@ def compute_competency_evidence(
         points=puncte,
         points_today=puncte_azi,
         interlocutor_types=tipuri,
+        best_score_today=nota_azi,
     )

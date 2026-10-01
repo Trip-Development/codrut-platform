@@ -21,7 +21,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { CULOARE_NIVEL, culoareNivel, type Nivel } from "@/lib/culori-nivel";
-import { procentPanaLaPragulUrmator } from "@/lib/praguri-puncte";
+import { NOTA_MINIMA, procentPanaLaPragulUrmator } from "@/lib/praguri-puncte";
+import { PRAG_AFISARE_IMPINGERE, textImpingere } from "../texte-177";
 
 interface PracticeParticipantDashboardProps {
   projectId?: string | null;
@@ -352,6 +353,8 @@ function CompetencyCard({ item }: { item: CompetencyDashboardItem }) {
         />
       </div>
 
+      <MesajulNoteiDeAzi item={item} />
+
       {/* Metrics Row */}
       <div className="flex flex-wrap items-center gap-2 text-[11px] pt-1">
         {/* Punctajul nou — plicul 165 */}
@@ -380,6 +383,27 @@ function CompetencyCard({ item }: { item: CompetencyDashboardItem }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Mesajul (a) — plicul 177, text propus (Andrei îl vede pe probă). Numai când nota de azi e între 50 și
+ * 59 și competența n-are încă niciun punct: „până la primele puncte” ar minți la cine are deja puncte.
+ */
+function MesajulNoteiDeAzi({ item }: { item: CompetencyDashboardItem }) {
+  const nota = item.bestScoreToday;
+  if (nota === null || nota < PRAG_AFISARE_IMPINGERE || nota >= NOTA_MINIMA || item.points > 0) {
+    return null;
+  }
+  const text = textImpingere(item.name, nota);
+  const bucata = `nota ${nota}`;
+  const i = text.indexOf(bucata);
+  return (
+    <p role="status" className="rounded-[14px] bg-gold-soft px-[13px] py-[11px] text-[0.8rem] text-nudge-ink">
+      {text.slice(0, i)}
+      <strong>{bucata}</strong>
+      {text.slice(i + bucata.length)}
+    </p>
   );
 }
 

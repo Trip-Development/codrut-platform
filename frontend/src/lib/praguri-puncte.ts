@@ -9,6 +9,10 @@ export const PRAG_APLICARE = 100;
 export const PRAG_CONSOLIDARE = 400;
 export const PRAG_INTEGRARE = 1000;
 
+/** Nota de la care încep punctele (plicul 177) — copie a `scoring.py` `NOTA_MINIMA`;
+ * testul `backend/tests/test_pragurile_ecranului.py` pică dacă diferă (la fel pentru pragurile de sus). */
+export const NOTA_MINIMA = 60;
+
 const PRAGUL_URMATOR: Record<string, number | null> = {
   CONȘTIENTIZARE: PRAG_APLICARE,
   APLICARE: PRAG_CONSOLIDARE,

@@ -20,6 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { MicIcon, MicOffIcon, Loader2Icon } from "lucide-react";
 import { useVoiceToText } from "@/hooks/useVoiceToText";
+import { textPuncteCastigate } from "../texte-177";
 import { LoadingStatus } from "@/components/shell/route-loading";
 
 // Replica omului intra in fir IMEDIAT ce apasa trimite — plicul 83, cerinta lui Andrei.
@@ -308,6 +309,8 @@ export function PracticeWorkspace({
   };
 
   const [sessionSummary, setSessionSummary] = useState<string | null>(null);
+  // Plicul 177: „+N puncte la …” după închidere (text propus — Andrei îl vede pe probă).
+  const [puncteCastigate, setPuncteCastigate] = useState<{ competency: string; points: number }[]>([]);
 
   const handleEndSession = async () => {
     if (!session || isEnding) return;
@@ -319,6 +322,7 @@ export function PracticeWorkspace({
       });
       setSession(res.session);
       setSessionSummary(res.summary);
+      setPuncteCastigate(res.pointsEarned ?? []);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Eroare la încheierea sesiunii");
     } finally {
@@ -332,6 +336,7 @@ export function PracticeWorkspace({
     setInputText("");
     setErrorMsg(null);
     setSessionSummary(null);
+    setPuncteCastigate([]);
     setArataAlegerea(false);
   };
 
@@ -760,6 +765,18 @@ export function PracticeWorkspace({
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Sinteza rămâne mai jos. Poți începe alta oricând.
               </p>
+              {puncteCastigate.length > 0 ? (
+                <div role="status" className="mt-2 flex flex-wrap gap-2">
+                  {puncteCastigate.map((p) => (
+                    <span
+                      key={p.competency}
+                      className="rounded-full bg-success-soft px-3 py-1 text-[0.75rem] font-bold text-success-ink"
+                    >
+                      {textPuncteCastigate(p.competency, p.points)}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
             <Button size="sm" onClick={handleReset}>
               ← Înapoi la alegerea modului

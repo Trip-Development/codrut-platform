@@ -606,3 +606,41 @@ describe("PracticeWorkspace — ședința prea scurtă (plicul 144)", () => {
     expect(screen.queryByText(/##/)).toBeNull();
   });
 });
+
+
+// --- plicul 177 (b): „+N puncte la …” după „Încheie sesiunea” (text propus) ---
+
+describe("PracticeWorkspace — punctele câștigate la închidere (plicul 177, b)", () => {
+  async function inchide(pointsEarned: { competency: string; points: number }[]) {
+    await porneste();
+    api.endPracticeSession.mockResolvedValue({
+      session: { ...SESIUNE_DESCHISA, state: "closed" },
+      summary: "Sinteza.",
+      pointsEarned,
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Încheie sesiunea/ }));
+    expect(await screen.findByText("Sesiunea s-a încheiat.")).toBeTruthy();
+  }
+
+  it("arată câte o pastilă pe competență, în verdele de reușită", async () => {
+    await inchide([{ competency: "Ascultare activă", points: 15 }]);
+    const pastila = await screen.findByText("+15 puncte la Ascultare activă");
+    expect(pastila.className).toContain("bg-success-soft");
+    expect(pastila.className).toContain("text-success-ink");
+    expect(pastila.closest("[role='status']")).not.toBeNull();
+    // textele existente rămân
+    expect(screen.getByText("Sinteza rămâne mai jos. Poți începe alta oricând.")).toBeTruthy();
+  });
+
+  it("fără puncte: niciun text nou", async () => {
+    await inchide([]);
+    expect(document.body.textContent).not.toContain("puncte la");
+  });
+
+  it("după „Înapoi la alegerea modului” pastila dispare", async () => {
+    await inchide([{ competency: "Ascultare activă", points: 15 }]);
+    await screen.findByText("+15 puncte la Ascultare activă");
+    fireEvent.click(screen.getAllByRole("button", { name: /Înapoi la alegerea modului/ })[0]);
+    expect(screen.queryByText("+15 puncte la Ascultare activă")).toBeNull();
+  });
+});
