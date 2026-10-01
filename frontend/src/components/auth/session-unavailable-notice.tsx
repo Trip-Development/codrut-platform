@@ -12,7 +12,7 @@ export function SessionUnavailableNotice({ audience }: SessionUnavailableNoticeP
       <section className="mx-auto flex min-h-[60vh] max-w-2xl flex-col justify-center">
         <div className="rounded-lg border border-border bg-surface p-6">
           <div className="grid gap-2">
-            <p className="text-xs font-bold uppercase tracking-wider text-primary/75">
+            <p className="text-xs font-bold uppercase tracking-wider text-brand-text">
               Verificare sesiune
             </p>
             <h1 className="font-heading text-2xl font-medium tracking-tight text-foreground">
