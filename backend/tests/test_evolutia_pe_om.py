@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 
 from codrut.core.database import SessionLocal
 from codrut.modules.companies.models import ParticipantProfile, ProjectMembership
@@ -85,6 +86,58 @@ async def test_la_trei_oameni_nivelul_e_al_celui_din_mijloc() -> None:
         assert comp["level"] == "APLICARE"
         assert comp["points"] == round((10 + 150 + 250) / 3)
         await s.rollback()
+
+
+@pytest.mark.asyncio
+async def test_contul_de_test_nu_intra_in_evolutia_echipei() -> None:
+    """Plicul 173: contul de test al lui Andrei nu are ce cauta in media liderilor.
+
+    El porneste sedinte oricand, ca sa incerce aplicatia. Daca notele lui ar intra in
+    evolutia echipei, fiecare incercare ar misca media unor oameni care n-au exersat.
+    Masurat pe aceeasi echipa, cu si fara el: aceleasi cifre, pana la ultima.
+    """
+    from codrut.modules.practice.conturi_test import CONTURI_DE_TEST
+
+    async def _cifrele(cu_contul_de_test: bool):
+        async with SessionLocal() as s:
+            ctx = await create_test_context(s)
+            s.add(ProjectCompetency(project_id=ctx["project"].id, name=COMP, order_index=0))
+            a = await _om(s, ctx, "Om A")
+            b = await _om(s, ctx, "Om B")
+            await _note(s, ctx, a, [(0, 80)])                    # 30 de puncte
+            await _note(s, ctx, b, [(0, 90), (1, 90), (2, 90)])  # 120 de puncte
+            if cu_contul_de_test:
+                # acelasi om, dar pe adresa contului de test, cu note foarte diferite
+                adresa = next(iter(CONTURI_DE_TEST))
+                t = await _om(s, ctx, "Contul de test")
+                profil = (await s.execute(
+                    select(ParticipantProfile).where(ParticipantProfile.user_id == t)
+                )).scalars().one()
+                # Adresa e unica in `users`: daca o rulare dinainte a lasat contul, il legam
+                # pe el (`start_session` comite la mijloc, deci nu se poate intoarce).
+                existent = (await s.execute(
+                    select(User).where(User.email == adresa)
+                )).scalars().first()
+                if existent is not None:
+                    t = existent.id
+                    profil.user_id = existent.id
+                else:
+                    (await s.get(User, t)).email = adresa
+                profil.email = adresa
+                await s.flush()
+                await _note(s, ctx, t, [(z, 100) for z in range(6)])  # 300 de puncte
+            date = await PracticeEvolutionService(s).project_evolution(ctx["project"].id)
+            comp = next(c for c in date["competencies"] if c["name"] == COMP)
+            rezultat = (comp["points"], comp["people_count"], comp["level"],
+                        dict(comp["levels_count"]), date["participants_total"],
+                        date["participants_active"])
+            await s.rollback()
+            return rezultat
+
+    fara = await _cifrele(cu_contul_de_test=False)
+    cu = await _cifrele(cu_contul_de_test=True)
+    assert cu == fara, f"contul de test a miscat evolutia echipei: {fara} -> {cu}"
+    assert fara[0] == 75, "plasa: media celor doi oameni adevarati e tot (30 + 120) / 2"
 
 
 @pytest.mark.asyncio
