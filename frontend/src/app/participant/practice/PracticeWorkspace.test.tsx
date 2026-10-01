@@ -257,6 +257,21 @@ describe("PracticeWorkspace — refuzul spune de ce", () => {
     expect(text.textContent).not.toContain("Daily practice session limit");
   });
 
+  it("cu Cody oprit pe proiect scrie textul de pauza, nu engleza serverului", async () => {
+    // Plicul 147 a gasit ca la stingerea de urgenta omul vedea textul serverului,
+    // "Practice is not enabled for this project". Textul de acum e al lui Andrei
+    // (30 sept, [text-stingere]), cuvant cu cuvant.
+    api.startPracticeSession.mockRejectedValue(
+      new PracticeError("Practice is not enabled for this project", "practice_not_enabled", {}),
+    );
+    render(<PracticeWorkspace projectId="proiect-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
+
+    const text = await screen.findByText("Cody e în pauză. Revine în curând.");
+    expect(text.textContent).toBe("Cody e în pauză. Revine în curând.");
+    expect(document.body.textContent).not.toContain("Practice is not enabled");
+  });
+
   it("la orice alta eroare arata mesajul venit de la server", async () => {
     api.startPracticeSession.mockRejectedValue(new Error("Programul nu e pornit."));
     render(<PracticeWorkspace projectId="proiect-1" />);

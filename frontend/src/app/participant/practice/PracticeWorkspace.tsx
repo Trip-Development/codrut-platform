@@ -81,6 +81,9 @@ const PRACTICE_OPTIONS: {
  * Plafonul zilnic nu e cod stricat, e o setare — dar pana la plicul 35 omul apasa si
  * primea acelasi text generic, deci parea ca aplicatia s-a blocat. Acum spune cate
  * sesiuni are pe zi, cate a facut, si ca numaratoarea se reia maine.
+ *
+ * Cand Cody e oprit pe proiect, textul de pe ecran e al lui Andrei (30 sept,
+ * [text-stingere]): "Cody e în pauză. Revine în curând." — nu engleza serverului.
  */
 function mesajDeRefuz(err: unknown): string {
   if (err instanceof PracticeError && err.code === "practice_daily_limit") {
@@ -95,6 +98,9 @@ function mesajDeRefuz(err: unknown): string {
       "Numărătoarea se reia mâine. Dacă ai nevoie de mai multe, cere-i trainerului " +
       "să ridice limita din fila Setări a proiectului."
     );
+  }
+  if (err instanceof PracticeError && err.code === "practice_not_enabled") {
+    return "Cody e în pauză. Revine în curând.";
   }
   if (err instanceof Error) return err.message;
   return "Nu am putut porni sesiunea de practică";
