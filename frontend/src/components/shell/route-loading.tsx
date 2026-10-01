@@ -184,7 +184,7 @@ function DashboardSkeleton() {
   return (
     <div className="flex flex-col gap-6">
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
-        <section className="rounded-lg bg-primary p-6 text-primary-foreground shadow-[0_24px_60px_-36px_rgba(137,5,5,0.75)]">
+        <section className="rounded-lg bg-primary p-6 text-primary-foreground shadow-[0_24px_60px_-36px_color-mix(in_oklab,var(--burgundy)_75%,transparent)]">
           <Skeleton tone="inverted" className="h-7 w-80 max-w-full" />
           <Skeleton tone="inverted" className="mt-4 h-4 w-full max-w-2xl" />
           <Skeleton tone="inverted" className="mt-2 h-4 w-2/3" />
@@ -233,7 +233,7 @@ function SettingsSkeleton({ compact = false }: { compact?: boolean }) {
 function ParticipantHomeSkeleton() {
   return (
     <div className="flex flex-col gap-5">
-      <section className="rounded-lg bg-primary p-6 text-primary-foreground shadow-[0_24px_60px_-36px_rgba(137,5,5,0.75)]">
+      <section className="rounded-lg bg-primary p-6 text-primary-foreground shadow-[0_24px_60px_-36px_color-mix(in_oklab,var(--burgundy)_75%,transparent)]">
         <Skeleton tone="inverted" className="h-4 w-44" />
         <Skeleton tone="inverted" className="mt-3 h-8 w-72 max-w-full" />
         <Skeleton tone="inverted" className="mt-6 h-10 w-40" />

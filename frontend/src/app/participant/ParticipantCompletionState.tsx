@@ -21,7 +21,7 @@ export function ParticipantCompletionState({
       aria-labelledby="participant-completion-title"
       className={
         resultsReady
-          ? "overflow-hidden rounded-lg bg-burgundy px-6 py-7 text-white shadow-[0_24px_48px_-32px_rgba(137,5,5,0.8)] md:px-8 md:py-8"
+          ? "overflow-hidden rounded-lg bg-burgundy px-6 py-7 text-white shadow-[0_24px_48px_-32px_color-mix(in_oklab,var(--burgundy)_80%,transparent)] md:px-8 md:py-8"
           : "rounded-lg border border-border bg-surface px-6 py-7 shadow-none md:px-8 md:py-8"
       }
     >
