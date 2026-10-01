@@ -4,6 +4,7 @@ import { CheckCircleIcon } from "lucide-react";
 import { getProjectEvolution } from "@/api/practice";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { Card } from "@/components/ui/card";
+import { culoareNivel } from "@/lib/culori-nivel";
 import { ScaledBar } from "@/components/reports/native-charts";
 
 /**
@@ -149,8 +150,7 @@ export default async function ProjectEvolutionPage({
                   <span className="text-sm font-medium text-foreground">{c.name}</span>
                   <span className="text-xs text-muted-foreground">
                     <span
-                      className="mr-2 inline-block rounded px-1.5 py-0.5 text-[11px] font-medium text-white"
-                      style={{ backgroundColor: c.color }}
+                      className={`mr-2 inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${culoareNivel(c.level).fond} ${culoareNivel(c.level).text}`}
                     >
                       {c.level}
                     </span>
