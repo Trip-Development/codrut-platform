@@ -160,13 +160,11 @@ describe("useVoiceToText — fără vorbire, nimic nu pleacă (plicul 174, a)", 
   it("liniștea (−50 dBFS) nu se transcrie și nu se trimite; apoi vorbirea trece (starea nu rămâne agățată)", async () => {
     transcribeAudio.mockResolvedValue({ text: "Da.", estimated_usd: 0 });
     const onTranscript = vi.fn();
-    const onAutoSubmit = vi.fn();
     const onError = vi.fn();
-    const { result } = renderHook(() => useVoiceToText({ onTranscript, onAutoSubmit, onError }));
+    const { result } = renderHook(() => useVoiceToText({ onTranscript, onError }));
 
     await inregistrare(result, 10 ** (-50 / 20), 3000);
     expect(transcribeAudio).not.toHaveBeenCalled();
-    expect(onAutoSubmit).not.toHaveBeenCalled();
     expect(onTranscript).not.toHaveBeenCalled();
     expect(result.current.error).toBe(TEXTE_MICROFON.nimicAuzit);
     expect(onError).toHaveBeenCalledWith(TEXTE_MICROFON.nimicAuzit, true);

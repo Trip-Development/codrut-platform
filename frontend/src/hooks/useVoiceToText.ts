@@ -36,12 +36,8 @@ export function mesajDeMicrofon(err: unknown): { text: string; pentruOm: boolean
 }
 
 export interface UseVoiceToTextOptions {
+  /** Singurul drum al textului: ecranul îl pune în casetă; omul apasă Trimite (plicul 176). */
   onTranscript?: (text: string) => void;
-  /**
-   * Called when auto-stop fired due to silence (NOT manual stop).
-   * Use to trigger auto-send.
-   */
-  onAutoSubmit?: (text: string) => void;
   /** `pentruOm` = textul e deja scris pentru om, fara prefix tehnic. */
   onError?: (error: string, pentruOm?: boolean) => void;
 }
@@ -59,12 +55,6 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
   const streamRef = useRef<MediaStream | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const animFrameRef = useRef<number | null>(null);
-
-  /**
-   * Ține minte dacă oprirea a venit din timerul de tăcere (auto) sau manual.
-   * Doar dacă a fost auto-stop se declanșează onAutoSubmit.
-   */
-  const wasAutoStoppedRef = useRef<boolean>(false);
 
   // Plicul 174: cât din înregistrare a ascultat ecranul și cât a fost peste pragul vorbirii.
   const masuraRef = useRef({ start: 0, stop: 0, msMasurate: 0, msPestePrag: 0, ultimulCadru: 0 });
@@ -98,8 +88,7 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
     }
   }, []);
 
-  const stopListening = useCallback((wasAuto: boolean = false) => {
-    wasAutoStoppedRef.current = wasAuto;
+  const stopListening = useCallback(() => {
     masuraRef.current.stop = performance.now();
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
@@ -138,7 +127,6 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
       msPestePrag: masura.msPestePrag,
     });
     if (decizie === "nimic") {
-      wasAutoStoppedRef.current = false;
       setIsTranscribing(false);
       setError(TEXTE_MICROFON.nimicAuzit);
       if (options?.onError) {
@@ -153,11 +141,9 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
       const text = res.text?.trim() ?? "";
       if (text) {
         setTranscript(text);
+        // Plicul 176: oprit de om sau oprit singur pe tăcere, textul numai se scrie în casetă.
         if (options?.onTranscript) {
           options.onTranscript(text);
-        }
-        if (wasAutoStoppedRef.current && options?.onAutoSubmit) {
-          options.onAutoSubmit(text);
         }
       } else {
         // Plicul 170: fara vorbire, modelul intoarce text gol. Nu se pune in caseta si nu
@@ -175,13 +161,11 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
       }
     } finally {
       setIsTranscribing(false);
-      wasAutoStoppedRef.current = false;
     }
   }, [options]);
 
   const startListening = useCallback(async () => {
     setError(null);
-    wasAutoStoppedRef.current = false;
     masuraRef.current = { start: performance.now(), stop: 0, msMasurate: 0, msPestePrag: 0, ultimulCadru: 0 };
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -264,7 +248,7 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
         if (rms < silenceThreshold) {
           if (!silenceTimerRef.current) {
             silenceTimerRef.current = setTimeout(() => {
-              stopListening(true); // Auto-stopped due to silence!
+              stopListening(); // oprit singur pe tăcere — textul tot numai în casetă
             }, silenceTimeoutMs);
           }
         } else {
@@ -312,7 +296,7 @@ export function useVoiceToText(options?: UseVoiceToTextOptions) {
     transcript,
     error,
     startListening,
-    stopListening: () => stopListening(false),
+    stopListening,
     resetTranscript,
   };
 }
