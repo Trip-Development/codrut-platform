@@ -4,10 +4,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PracticeWorkspace } from "./PracticeWorkspace";
 
 // Plicul 83: pastram optiunile primite de hook, ca testul sa poata simula o trimitere prin voce.
-const voce = vi.hoisted(() => ({ optiuni: null as null | { onAutoSubmit: (text: string) => void } }));
+const voce = vi.hoisted(() => ({
+  optiuni: null as null | {
+    onAutoSubmit: (text: string) => void;
+    onError: (err: string, pentruOm?: boolean) => void;
+  },
+}));
 
 vi.mock("@/hooks/useVoiceToText", () => ({
-  useVoiceToText: (optiuni: { onAutoSubmit: (text: string) => void }) => {
+  useVoiceToText: (optiuni: {
+    onAutoSubmit: (text: string) => void;
+    onError: (err: string, pentruOm?: boolean) => void;
+  }) => {
     voce.optiuni = optiuni;
     return {
     isListening: false,
@@ -501,6 +509,33 @@ describe("PracticeWorkspace — raspunsul omului ramane pe ecran (plicul 83)", (
   });
 });
 
+
+describe("PracticeWorkspace — mesajele microfonului (plicul 170)", () => {
+  it("un mesaj scris pentru om se arata fara „Eroare voce:”", async () => {
+    // Pana la plicul 170 omul vedea „Eroare voce: Permission denied". Textul care e deja
+    // scris pentru el ajunge pe ecran cuvant cu cuvant.
+    await porneste();
+    const text =
+      "Browserul nu are voie să folosească microfonul. Permite microfonul pentru acest site.";
+
+    await act(async () => {
+      voce.optiuni?.onError(text, true);
+    });
+
+    expect(await screen.findByText(text)).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Eroare voce:");
+  });
+
+  it("o eroare tehnica neprevazuta ramane cu prefixul, ca sa se vada ca e defect", async () => {
+    await porneste();
+
+    await act(async () => {
+      voce.optiuni?.onError("ceva neasteptat", false);
+    });
+
+    expect(await screen.findByText("Eroare voce: ceva neasteptat")).toBeTruthy();
+  });
+});
 
 describe("PracticeWorkspace — acordul la prima intrare (plicul 139)", () => {
   it("fără acord: textul și codul se văd, iar butonul se aprinde numai cu bifa", async () => {
