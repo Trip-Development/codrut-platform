@@ -15,10 +15,21 @@ from codrut.modules.practice.generation_provider import TRANSCRIBE_PROMPT
 
 def test_promptul_cere_text_gol_cand_nu_e_vorbire() -> None:
     assert "nu există deloc vorbire omenească" in TRANSCRIBE_PROMPT
-    assert "returnează exact textul gol" in TRANSCRIBE_PROMPT
+    assert "complet gol: zero caractere" in TRANSCRIBE_PROMPT
     # Cele patru feluri de sunet fara vorba, numite pe fata.
     for fel in ("tăcere", "zgomot", "muzică", "ton"):
         assert fel in TRANSCRIBE_PROMPT, fel
+
+
+def test_marcajul_de_timp_e_interzis_pe_fata() -> None:
+    """Masurat pe proba: cu prima forma a regulii, tacerea iesea „00:00".
+
+    Tonul si zgomotul ieseau deja goale, dar tacerea curata scotea un marcaj de timp —
+    care nu e „cuvant", deci trecea de regula. Acum e interzis pe nume.
+    """
+    assert "nicio cifră" in TRANSCRIBE_PROMPT
+    assert "niciun marcaj de timp" in TRANSCRIBE_PROMPT
+    assert "00:00" in TRANSCRIBE_PROMPT
 
 
 def test_vorbirea_inceata_nu_se_arunca() -> None:
