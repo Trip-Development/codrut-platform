@@ -4,10 +4,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PracticeWorkspace } from "./PracticeWorkspace";
 
 // Plicul 83: pastram optiunile primite de hook, ca testul sa poata simula o trimitere prin voce.
-const voce = vi.hoisted(() => ({ optiuni: null as null | { onAutoSubmit: (text: string) => void } }));
+const voce = vi.hoisted(() => ({
+  optiuni: null as null | {
+    onTranscript: (text: string) => void;
+    onError: (err: string, pentruOm?: boolean) => void;
+  },
+}));
 
 vi.mock("@/hooks/useVoiceToText", () => ({
-  useVoiceToText: (optiuni: { onAutoSubmit: (text: string) => void }) => {
+  useVoiceToText: (optiuni: {
+    onTranscript: (text: string) => void;
+    onError: (err: string, pentruOm?: boolean) => void;
+  }) => {
     voce.optiuni = optiuni;
     return {
     isListening: false,
@@ -257,6 +265,21 @@ describe("PracticeWorkspace — refuzul spune de ce", () => {
     expect(text.textContent).not.toContain("Daily practice session limit");
   });
 
+  it("cu Cody oprit pe proiect scrie textul de pauza, nu engleza serverului", async () => {
+    // Plicul 147 a gasit ca la stingerea de urgenta omul vedea textul serverului,
+    // "Practice is not enabled for this project". Textul de acum e al lui Andrei
+    // (30 sept, [text-stingere]), cuvant cu cuvant.
+    api.startPracticeSession.mockRejectedValue(
+      new PracticeError("Practice is not enabled for this project", "practice_not_enabled", {}),
+    );
+    render(<PracticeWorkspace projectId="proiect-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Începe conversația" }));
+
+    const text = await screen.findByText("Cody e în pauză. Revine în curând.");
+    expect(text.textContent).toBe("Cody e în pauză. Revine în curând.");
+    expect(document.body.textContent).not.toContain("Practice is not enabled");
+  });
+
   it("la orice alta eroare arata mesajul venit de la server", async () => {
     api.startPracticeSession.mockRejectedValue(new Error("Programul nu e pornit."));
     render(<PracticeWorkspace projectId="proiect-1" />);
@@ -457,9 +480,13 @@ describe("PracticeWorkspace — raspunsul omului ramane pe ecran (plicul 83)", (
     await porneste();
     const amanat = raspunsAmanat();
     api.submitPracticeTurn.mockReturnValue(amanat.promisiune);
-    await screen.findByPlaceholderText(/Scrie un mesaj/);
+    const caseta = (await screen.findByPlaceholderText(/Scrie un mesaj/)) as HTMLTextAreaElement;
 
-    await act(async () => voce.optiuni?.onAutoSubmit("Vorbit la microfon."));
+    // Plicul 176: microfonul doar scrie in caseta; pleaca abia la Trimite.
+    await act(async () => voce.optiuni?.onTranscript("Vorbit la microfon."));
+    expect(caseta.value).toBe("Vorbit la microfon.");
+    expect(api.submitPracticeTurn).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Trimite" }));
 
     expect(await screen.findByText("Vorbit la microfon.")).toBeTruthy();
     await act(async () => amanat.rezolva(raspunsCu("Vorbit la microfon.")));
@@ -486,6 +513,33 @@ describe("PracticeWorkspace — raspunsul omului ramane pe ecran (plicul 83)", (
   });
 });
 
+
+describe("PracticeWorkspace — mesajele microfonului (plicul 170)", () => {
+  it("un mesaj scris pentru om se arata fara „Eroare voce:”", async () => {
+    // Pana la plicul 170 omul vedea „Eroare voce: Permission denied". Textul care e deja
+    // scris pentru el ajunge pe ecran cuvant cu cuvant.
+    await porneste();
+    const text =
+      "Browserul nu are voie să folosească microfonul. Permite microfonul pentru acest site.";
+
+    await act(async () => {
+      voce.optiuni?.onError(text, true);
+    });
+
+    expect(await screen.findByText(text)).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Eroare voce:");
+  });
+
+  it("o eroare tehnica neprevazuta ramane cu prefixul, ca sa se vada ca e defect", async () => {
+    await porneste();
+
+    await act(async () => {
+      voce.optiuni?.onError("ceva neasteptat", false);
+    });
+
+    expect(await screen.findByText("Eroare voce: ceva neasteptat")).toBeTruthy();
+  });
+});
 
 describe("PracticeWorkspace — acordul la prima intrare (plicul 139)", () => {
   it("fără acord: textul și codul se văd, iar butonul se aprinde numai cu bifa", async () => {

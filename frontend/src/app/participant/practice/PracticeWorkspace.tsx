@@ -81,6 +81,9 @@ const PRACTICE_OPTIONS: {
  * Plafonul zilnic nu e cod stricat, e o setare — dar pana la plicul 35 omul apasa si
  * primea acelasi text generic, deci parea ca aplicatia s-a blocat. Acum spune cate
  * sesiuni are pe zi, cate a facut, si ca numaratoarea se reia maine.
+ *
+ * Cand Cody e oprit pe proiect, textul de pe ecran e al lui Andrei (30 sept,
+ * [text-stingere]): "Cody e în pauză. Revine în curând." — nu engleza serverului.
  */
 function mesajDeRefuz(err: unknown): string {
   if (err instanceof PracticeError && err.code === "practice_daily_limit") {
@@ -95,6 +98,9 @@ function mesajDeRefuz(err: unknown): string {
       "Numărătoarea se reia mâine. Dacă ai nevoie de mai multe, cere-i trainerului " +
       "să ridice limita din fila Setări a proiectului."
     );
+  }
+  if (err instanceof PracticeError && err.code === "practice_not_enabled") {
+    return "Cody e în pauză. Revine în curând.";
   }
   if (err instanceof Error) return err.message;
   return "Nu am putut porni sesiunea de practică";
@@ -215,6 +221,7 @@ export function PracticeWorkspace({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   // Ca „Vreau alta tema" sa poata pune cursorul la capatul textului pregatit.
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const cursorDupaMicrofon = useRef(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -340,44 +347,6 @@ export function PracticeWorkspace({
     setArataAlegerea(false);
   };
 
-  const handleAutoSubmitVoice = async (textToSend: string) => {
-    if (!session || !textToSend.trim() || isLoading || session.state !== "open") {
-      setInputText((prev) => (prev ? `${prev} ${textToSend}` : textToSend));
-      return;
-    }
-
-    setIsLoading(true);
-    setErrorMsg(null);
-    const provizorie = replicaInAsteptare(session.id, textToSend.trim());
-    setTurns((prev) => [...prev, provizorie]);
-
-    try {
-      const turnRes = await submitPracticeTurn(session.id, textToSend.trim());
-      setTurns((prev) => {
-        const next = [...prev.filter((turn) => turn.id !== provizorie.id), turnRes.participantTurn];
-        if (turnRes.actorTurn) {
-          next.push(turnRes.actorTurn);
-        }
-        return next;
-      });
-      setSession((prev) =>
-        prev
-          ? {
-              ...prev,
-              state: turnRes.sessionState,
-              turnCount: prev.turnCount + 1,
-            }
-          : null
-      );
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : "Eroare la trimiterea mesajului");
-      setTurns((prev) => prev.filter((turn) => turn.id !== provizorie.id));
-      setInputText(textToSend);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const {
     isListening,
     isTranscribing,
@@ -385,16 +354,30 @@ export function PracticeWorkspace({
     startListening,
     stopListening,
   } = useVoiceToText({
+    // Plicul 176: microfonul doar scrie în casetă, la ce era deja scris; omul apasă Trimite.
     onTranscript: (transcribedText) => {
       setInputText((prev) => (prev ? `${prev} ${transcribedText}` : transcribedText));
+      cursorDupaMicrofon.current = true;
     },
-    onAutoSubmit: (transcribedText) => {
-      handleAutoSubmitVoice(transcribedText);
-    },
-    onError: (err) => {
-      setErrorMsg(`Eroare voce: ${err}`);
+    onError: (err, pentruOm) => {
+      // Plicul 170: mesajele de microfon sunt deja scrise pentru om; „Eroare voce:" rămâne
+      // numai pentru erorile tehnice neprevăzute.
+      setErrorMsg(pentruOm ? err : `Eroare voce: ${err}`);
     },
   });
+
+  // Plicul 176: după microfon, cursorul în casetă, la capătul textului — abia când caseta s-a
+  // deblocat (cât ascultă și transcrie e blocată, iar `focus()` n-ar face nimic). Numai după microfon.
+  useEffect(() => {
+    if (isListening || isTranscribing || isLoading || !cursorDupaMicrofon.current) return;
+    cursorDupaMicrofon.current = false;
+    const c = inputRef.current;
+    if (c) {
+      c.focus();
+      const n = c.value.length;
+      c.setSelectionRange(n, n);
+    }
+  }, [isListening, isTranscribing, isLoading]);
 
   // Ecran 1: Selecția modului și pornirea sesiunii
   if (!session || arataAlegerea) {
