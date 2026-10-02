@@ -135,4 +135,9 @@ describe("middleware", () => {
     );
   });
 
+  it("allows the microphone on our own pages and nothing else", () => {
+    const policy = middleware(requestFor("/login")).headers.get("permissions-policy");
+
+    expect(policy).toBe("camera=(), microphone=(self), geolocation=(), payment=()");
+  });
 });

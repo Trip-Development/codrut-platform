@@ -96,7 +96,15 @@ TRANSCRIBE_PROMPT = (
     "Elimină bâlbele, repetițiile involuntare și sunetele de ezitare "
     "(„ăăă\", „îîî\", „mda\", „păi\").\n"
     "Păstrează doar textul curat și inteligibil. Nu adăuga comentarii, explicații sau "
-    "note proprii. Returnează doar transcrierea."
+    "note proprii. Returnează doar transcrierea.\n"
+    # Plicul 170: fara regula asta, 2 secunde de ton ieseau transcrise „Buna ziua.", iar
+    # tacerea si zgomotul „00:00" — si oprirea pe tacere le trimitea singure in conversatie,
+    # ca replici ale omului. Vorbirea slaba NU are voie sa fie aruncata (controlorul, 3).
+    "Numai dacă în înregistrare nu există deloc vorbire omenească (doar tăcere, zgomot, "
+    "muzică sau un ton), răspunsul tău trebuie să fie complet gol: zero caractere. "
+    "Nu scrie niciun cuvânt, nicio cifră, niciun marcaj de timp (de exemplu „00:00\"), "
+    "nicio linie și niciun semn de punctuație. "
+    "Vorbirea încetă sau neclară se transcrie, cât se înțelege."
 )
 
 
