@@ -174,7 +174,7 @@ async def test_team_invitation_email_has_no_header_and_preserves_manager_signatu
             context=AssignmentInvitationContext(
                 company_name=ctx["company"].name,
                 trainer_name="Andrei Văcaru",
-                manager_name="Zoltan Claudiu Suloman",
+                manager_name="Laurentiu Catalin Vasilescu",
                 action_url="https://cody.andreivacaru.ro/invite/test-token",
                 task_count=1,
             ),
@@ -196,9 +196,9 @@ async def test_team_invitation_email_has_no_header_and_preserves_manager_signatu
         assert "Andrei Văcaru" not in html
 
         # Manager signature is intact
-        assert "Zoltan Claudiu Suloman" in html
+        assert "Laurentiu Catalin Vasilescu" in html
         assert "Cu mulțumiri," in html
-        assert "Cu mulțumiri,\nZoltan Claudiu Suloman" in text
+        assert "Cu mulțumiri,\nLaurentiu Catalin Vasilescu" in text
 
         # Shell frame is intact
         assert "font-family:Inter" in html

@@ -40,6 +40,7 @@ from codrut.modules.identity.models import (
     UserAccountType,
     UserRole,
 )
+from codrut.modules.practice.conturi_test import fara_conturile_de_test
 from codrut.modules.practice.models import (
     CompetencyScore,
     PracticeProgramSettings,
@@ -102,6 +103,12 @@ class PracticeRoomService:
             .where(ProjectMembership.project_id == project_id)
         )).all()
 
+        # Contul de test al lui Andrei iese si din Camera (plicul 180), ca din Evolutie (173):
+        # trainerul trebuie sa vada acelasi numar de oameni pe ambele ecrane, iar testele lui nu
+        # au voie sa miste media echipei. Camera ia notele pe PROIECT, nu pe oameni, deci filtrul
+        # sta inainte de orice socoteala pe DOUA intrari: oamenii (aici) si notele (mai jos).
+        randuri, conturi_test = await fara_conturile_de_test(self.session, randuri)
+
         emailuri = [p.email for p, _ in randuri if p.email]
         utilizatori = (await self.session.execute(
             select(User).where(User.email.in_(emailuri))
@@ -118,6 +125,7 @@ class PracticeRoomService:
         scoruri = (await self.session.execute(
             select(CompetencyScore).where(CompetencyScore.project_id == project_id)
         )).scalars().all()
+        scoruri = [s for s in scoruri if s.user_id not in conturi_test]
 
         # ---- cele patru feluri de scor, ca in aplicatia veche ----
         test_in = [s for s in scoruri if s.conversation_id == TEST_IN_ID]

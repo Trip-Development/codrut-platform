@@ -24,15 +24,20 @@ import uuid
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from codrut.contracts.generation import (
     GenerationMessage,
     GenerationPurpose,
     GenerationRequest,
 )
-from codrut.modules.companies.models import ProjectMembership
-from codrut.modules.practice.budget import BudgetExceeded, release, reserve, settle
+from codrut.modules.practice.budget import (
+    BudgetExceeded,
+    plafonul_programului,
+    release,
+    reserve,
+    settle,
+)
 from codrut.modules.practice.models import (
     CompetencyScore,
     InsightMoment,
@@ -272,15 +277,7 @@ class PracticeEvaluator:
         ).scalars().first()
         if setari is None:
             return None, Decimal("0")
-        activi = (
-            await self.session.execute(
-                select(func.count(ProjectMembership.id)).where(
-                    ProjectMembership.project_id == project_id,
-                    ProjectMembership.active.is_(True),
-                )
-            )
-        ).scalar_one() or 0
-        return setari, Decimal(activi) * setari.usd_cap_per_participant
+        return setari, await plafonul_programului(self.session, setari)
 
     async def _persist(
         self,

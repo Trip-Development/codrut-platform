@@ -827,21 +827,21 @@ async def test_active_cycle_michelin_e2e_flow_and_mailpit() -> None:
         first_leader_db_assignment.status = AssignmentStatus.submitted
         await session.commit()
 
-        # 4. Now Andrei adds Remy Bedu to the project under Director Tehnic (leader_b)
-        remy = ParticipantProfile(
+        # 4. Now Andrei adds Dinu Sava to the project under Director Tehnic (leader_b)
+        dinu = ParticipantProfile(
             id=uuid.uuid4(),
             company_id=company.id,
-            full_name="Remy Bedu",
-            email=f"remy.bedu-{uuid.uuid4().hex[:4]}@michelin-replica.com",
+            full_name="Dinu Sava",
+            email=f"dinu.sava-{uuid.uuid4().hex[:4]}@michelin-replica.com",
         )
-        session.add(remy)
+        session.add(dinu)
         await session.flush()
         session.add(
             ProjectMembership(
                 id=uuid.uuid4(),
                 company_id=company.id,
                 project_id=project.id,
-                participant_profile_id=remy.id,
+                participant_profile_id=dinu.id,
                 reports_to_name=leader_b.full_name,
             )
         )
@@ -884,11 +884,11 @@ async def test_active_cycle_michelin_e2e_flow_and_mailpit() -> None:
         assert reloaded_response.status == QuestionnaireResponseStatus.submitted
         assert reloaded_response.answers == {"q1": "val1"}
 
-        # Check Remy has assignments created (e.g. feedback 360 for leader_b / distress / etc.)
-        remy_assignments = [
+        # Check Dinu has assignments created (e.g. feedback 360 for leader_b / distress / etc.)
+        dinu_assignments = [
             a for a in saved_regen.assignments
-            if a.respondent_profile_id == remy.id
+            if a.respondent_profile_id == dinu.id
         ]
-        assert len(remy_assignments) > 0
+        assert len(dinu_assignments) > 0
         assert saved_regen.created_count > 0
         assert saved_regen.existing_count == len(saved_initial.assignments)

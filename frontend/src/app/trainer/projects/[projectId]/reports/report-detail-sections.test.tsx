@@ -159,9 +159,9 @@ describe("Lencioni team detail", () => {
     expect(screen.getByText(/2\/4 \(50%\)/)).toBeTruthy();
   });
 
-  it("uses leadershipAssignedCount for Frederic-Remy case where sum of displayed assignments equals lens total", () => {
-    // Lens total: 51 assignments (8 regular team tasks + 43 total leadership tasks: 21 Frederic + 22 Remy)
-    // leaderAssignedCount is only 21 (Frederic), but leadershipAssignedCount is 43 (Frederic + Remy).
+  it("uses leadershipAssignedCount for Sever-Dinu case where sum of displayed assignments equals lens total", () => {
+    // Lens total: 51 assignments (8 regular team tasks + 43 total leadership tasks: 21 Sever + 22 Dinu)
+    // leaderAssignedCount is only 21 (Sever), but leadershipAssignedCount is 43 (Sever + Dinu).
     const teamWorkAssigned = 8;
     const teamWorkCompleted = 6;
     const leadershipWorkAssigned = 43;
@@ -173,8 +173,8 @@ describe("Lencioni team detail", () => {
         overviewHref="/reports"
         teams={[
           team({
-            id: "frederic-team",
-            name: "Echipa Frederic Cauquil",
+            id: "sever-team",
+            name: "Echipa Sever Cozma",
             teamType: "functional",
             memberCount: 6,
             assignedCount: teamWorkAssigned,
@@ -191,7 +191,7 @@ describe("Lencioni team detail", () => {
       />,
     );
 
-    expect(screen.getByText("Echipa Frederic Cauquil")).toBeTruthy();
+    expect(screen.getByText("Echipa Sever Cozma")).toBeTruthy();
     // Verifică că se afișează munca de echipă (8)
     expect(screen.getByText("Muncă echipă:")).toBeTruthy();
     expect(screen.getByText(/6\/8 \(75%\)/)).toBeTruthy();
