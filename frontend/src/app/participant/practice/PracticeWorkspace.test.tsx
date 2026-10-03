@@ -416,6 +416,53 @@ describe("PracticeWorkspace — pornirea în doi pași", () => {
     expect(api.submitPracticeTurn).not.toHaveBeenCalled();
   });
 
+  // Plicul 179: „Da, hai” trimite fără să atingă caseta — nici la reușită, nici la eroare.
+  it("„Da, hai” păstrează ce era scris în casetă, iar textul păstrat se poate trimite apoi", async () => {
+    await pornesteCuIntrebarea();
+    const amanat = raspunsAmanat();
+    api.submitPracticeTurn.mockReturnValueOnce(amanat.promisiune);
+    const caseta = screen.getByPlaceholderText(/Scrie un mesaj/) as HTMLTextAreaElement;
+    fireEvent.change(caseta, { target: { value: "Vreau să întreb ceva." } });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Da, hai" }));
+    await waitFor(() => expect(api.submitPracticeTurn).toHaveBeenCalledWith("sesiune-1", "Da, hai."));
+    await act(async () => amanat.rezolva({
+      participantTurn: { ...SALUT, id: "om-1", ordinal: 2, role: "participant" as const, text: "Da, hai." },
+      actorTurn: SCENA,
+      sessionState: "open" as const,
+    }));
+    expect(caseta.value).toBe("Vreau să întreb ceva.");
+
+    api.submitPracticeTurn.mockResolvedValueOnce(raspunsCu("Vreau să întreb ceva."));
+    fireEvent.click(screen.getByRole("button", { name: "Trimite" }));
+    await waitFor(() =>
+      expect(api.submitPracticeTurn).toHaveBeenLastCalledWith("sesiune-1", "Vreau să întreb ceva."),
+    );
+    expect(api.submitPracticeTurn).toHaveBeenCalledTimes(2);
+  });
+
+  it("„Da, hai” cu eroare: caseta rămâne cu textul omului, butonul revine", async () => {
+    await pornesteCuIntrebarea();
+    api.submitPracticeTurn.mockRejectedValueOnce(new Error("Serverul nu răspunde."));
+    const caseta = screen.getByPlaceholderText(/Scrie un mesaj/) as HTMLTextAreaElement;
+    fireEvent.change(caseta, { target: { value: "Vreau să întreb ceva." } });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Da, hai" }));
+    expect(await screen.findByText("Serverul nu răspunde.")).toBeTruthy();
+    expect(caseta.value).toBe("Vreau să întreb ceva.");
+    expect(await screen.findByRole("button", { name: "Da, hai" })).toBeTruthy();
+  });
+
+  it("„Da, hai” cu eroare și casetă goală: caseta rămâne goală", async () => {
+    await pornesteCuIntrebarea();
+    api.submitPracticeTurn.mockRejectedValueOnce(new Error("Serverul nu răspunde."));
+    const caseta = screen.getByPlaceholderText(/Scrie un mesaj/) as HTMLTextAreaElement;
+
+    fireEvent.click(await screen.findByRole("button", { name: "Da, hai" }));
+    expect(await screen.findByText("Serverul nu răspunde.")).toBeTruthy();
+    expect(caseta.value).toBe("");
+  });
+
   it("nu apar la coaching sau la quiz", async () => {
     for (const kind of ["coaching", "knowledge"] as const) {
       cleanup();

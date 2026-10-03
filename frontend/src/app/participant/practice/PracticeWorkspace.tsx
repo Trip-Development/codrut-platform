@@ -259,16 +259,18 @@ export function PracticeWorkspace({
     }
   };
 
-  // `textDirect` exista pentru butonul „Da, hai": trimite fara sa treaca prin caseta.
+  // `textDirect` exista pentru butonul „Da, hai": trimite fara sa atinga caseta, nici la reusita,
+  // nici la eroare — ce scrisese omul ramane acolo (plicul 179).
   const handleSendMessage = async (e?: React.FormEvent, textDirect?: string) => {
     if (e) e.preventDefault();
     const brut = textDirect ?? inputText;
+    const dinCaseta = textDirect === undefined;
     if (!session || !brut.trim() || isLoading || session.state !== "open") {
       return;
     }
 
     const textToSend = brut.trim();
-    setInputText("");
+    if (dinCaseta) setInputText("");
     setIsLoading(true);
     setErrorMsg(null);
     const provizorie = replicaInAsteptare(session.id, textToSend.trim());
@@ -295,7 +297,7 @@ export function PracticeWorkspace({
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Eroare la trimiterea mesajului");
       setTurns((prev) => prev.filter((turn) => turn.id !== provizorie.id));
-      setInputText(textToSend); // restabilim textul pentru retrimitere
+      if (dinCaseta) setInputText(textToSend); // restabilim textul pentru retrimitere
     } finally {
       setIsLoading(false);
     }
