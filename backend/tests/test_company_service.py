@@ -1896,19 +1896,19 @@ async def test_import_roster_accepts_manual_project_leadership_overrides() -> No
             project_id=project.id,
             rows=[
                 {
-                    "Name": "Titus Botis",
+                    "Name": "Sabin Zamfir",
                     "Reports To": "Manager",
-                    "email": "titus@example.com",
+                    "email": "sabin@example.com",
                 },
                 {
                     "Name": "Mircea Ciprian Iacob",
-                    "Reports To": "Titus Botis",
+                    "Reports To": "Sabin Zamfir",
                     "Role Group": "leadership",
                     "email": "mircea@example.com",
                 },
                 {
                     "Name": "Veronica Grecu",
-                    "Reports To": "Titus Botis",
+                    "Reports To": "Sabin Zamfir",
                     "Role Group": "leadership",
                     "email": "veronica@example.com",
                 },
@@ -1927,7 +1927,7 @@ async def test_import_roster_accepts_manual_project_leadership_overrides() -> No
         membership.participant_profile_id: membership
         for membership in repository.project_memberships
     }
-    assert participants_by_email["titus@example.com"].reports_to_name is None
+    assert participants_by_email["sabin@example.com"].reports_to_name is None
     assert (
         memberships_by_participant_id[participants_by_email["mircea@example.com"].id].role_group
         == "leadership"
@@ -1958,7 +1958,7 @@ async def test_update_project_participant_persists_leadership_override() -> None
         ParticipantCreateRequest(
             full_name="Veronica Grecu",
             email="veronica@example.com",
-            reports_to_name="Titus Botis",
+            reports_to_name="Sabin Zamfir",
             role_group="member",
         ),
     )
@@ -1967,7 +1967,7 @@ async def test_update_project_participant_persists_leadership_override() -> None
             company_id=company.id,
             project_id=project.id,
             participant_profile_id=participant.id,
-            reports_to_name="Titus Botis",
+            reports_to_name="Sabin Zamfir",
             role_group="member",
             active=True,
         )
@@ -1993,14 +1993,14 @@ def test_hierarchy_includes_explicit_leadership_reporters() -> None:
         [
             HierarchyParticipant(
                 id=leader_id,
-                full_name="Titus Botis",
+                full_name="Sabin Zamfir",
                 reports_to_name=None,
                 role_group="leadership",
             ),
             HierarchyParticipant(
                 id=middle_manager_id,
                 full_name="Mircea Ciprian Iacob",
-                reports_to_name="Titus Botis",
+                reports_to_name="Sabin Zamfir",
                 role_group="leadership",
             ),
             HierarchyParticipant(
