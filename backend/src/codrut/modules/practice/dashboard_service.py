@@ -128,10 +128,18 @@ class PracticeDashboardService:
         elif user_obj:
             total_xp = user_obj.xp or 0
 
-        # 3. Query all competency scores for this user
+        # 3. Notele omului — NUMAI din proiectul deschis (plicul 184; Andrei, 30 sept:
+        # „pe proiect”). Fără proiect deschis: numai notele care nu țin de niciun proiect.
+        # Filtrul stă aici, înaintea oricărei socoteli: puncte, serie, nota de azi, textul
+        # de gol și „+N” vin din același cuprins.
         stmt_scores = (
             select(CompetencyScore)
             .where(CompetencyScore.user_id.in_(user_ids))
+            .where(
+                CompetencyScore.project_id == project_id
+                if project_id is not None
+                else CompetencyScore.project_id.is_(None)
+            )
             .order_by(CompetencyScore.created_at.desc())
         )
         all_scores = list((await self.session.execute(stmt_scores)).scalars().all())
