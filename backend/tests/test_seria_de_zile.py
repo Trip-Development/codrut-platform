@@ -33,7 +33,9 @@ async def test_doua_sedinte_in_aceeasi_zi_fac_o_zi_iar_contorul_vechi_nu_mai_con
         for ora in (9, 11):
             sed = await _sedinta(s, ctx, SessionKind.roleplay, _azi_ro_la(ora))
             await _nota(s, ctx, sed, 80, _azi_ro_la(ora))
-        date = await PracticeDashboardService(s).get_participant_dashboard_data(ctx["principal"])
+        date = await PracticeDashboardService(s).get_participant_dashboard_data(
+            ctx["principal"], ctx["project"].id
+        )
         assert date["streak_days"] == 1
         await s.rollback()
 
@@ -49,6 +51,8 @@ async def test_zile_consecutive_in_ora_romaniei() -> None:
         for cand in (ieri, _azi_ro_la(10)):
             sed = await _sedinta(s, ctx, SessionKind.roleplay, cand)
             await _nota(s, ctx, sed, 80, cand)
-        date = await PracticeDashboardService(s).get_participant_dashboard_data(ctx["principal"])
+        date = await PracticeDashboardService(s).get_participant_dashboard_data(
+            ctx["principal"], ctx["project"].id
+        )
         assert date["streak_days"] == 2
         await s.rollback()
