@@ -1628,23 +1628,23 @@ def test_pcm_distribution_requires_completed_known_profiles() -> None:
     assert _get_pcm_color("custom") is None
 
 
-def test_frederic_cauquil_team_with_peer_leadership_member_work_separation() -> None:
+def test_sever_cozma_team_with_peer_leadership_member_work_separation() -> None:
     """Corecția 1: Munca de conducere se scoate pentru ORICE membru din conducere
     (lider sau subordonat).
     """
-    frederic_leader_id = uuid.uuid4()
-    remy_peer_id = uuid.uuid4()
+    sever_leader_id = uuid.uuid4()
+    dinu_peer_id = uuid.uuid4()
     sub_1_id = uuid.uuid4()
     sub_2_id = uuid.uuid4()
     sub_3_id = uuid.uuid4()
     sub_4_id = uuid.uuid4()
     leadership_team_id = uuid.uuid4()
-    frederic_team_id = uuid.uuid4()
+    sever_team_id = uuid.uuid4()
 
     participants = [
         ReportParticipant(
-            id=frederic_leader_id,
-            full_name="Frederic Cauquil",
+            id=sever_leader_id,
+            full_name="Sever Cozma",
             reports_to_name=None,
             role_group="leadership",
             pcm_base=None,
@@ -1652,9 +1652,9 @@ def test_frederic_cauquil_team_with_peer_leadership_member_work_separation() -> 
             user_id=None,
         ),
         ReportParticipant(
-            id=remy_peer_id,
-            full_name="Remy Bedu",
-            reports_to_name="Frederic Cauquil",
+            id=dinu_peer_id,
+            full_name="Dinu Sava",
+            reports_to_name="Sever Cozma",
             role_group="leadership",
             pcm_base=None,
             pcm_phase=None,
@@ -1663,7 +1663,7 @@ def test_frederic_cauquil_team_with_peer_leadership_member_work_separation() -> 
         ReportParticipant(
             id=sub_1_id,
             full_name="Sub 1",
-            reports_to_name="Frederic Cauquil",
+            reports_to_name="Sever Cozma",
             role_group="member",
             pcm_base=None,
             pcm_phase=None,
@@ -1672,7 +1672,7 @@ def test_frederic_cauquil_team_with_peer_leadership_member_work_separation() -> 
         ReportParticipant(
             id=sub_2_id,
             full_name="Sub 2",
-            reports_to_name="Frederic Cauquil",
+            reports_to_name="Sever Cozma",
             role_group="member",
             pcm_base=None,
             pcm_phase=None,
@@ -1681,7 +1681,7 @@ def test_frederic_cauquil_team_with_peer_leadership_member_work_separation() -> 
         ReportParticipant(
             id=sub_3_id,
             full_name="Sub 3",
-            reports_to_name="Frederic Cauquil",
+            reports_to_name="Sever Cozma",
             role_group="member",
             pcm_base=None,
             pcm_phase=None,
@@ -1690,7 +1690,7 @@ def test_frederic_cauquil_team_with_peer_leadership_member_work_separation() -> 
         ReportParticipant(
             id=sub_4_id,
             full_name="Sub 4",
-            reports_to_name="Frederic Cauquil",
+            reports_to_name="Sever Cozma",
             role_group="member",
             pcm_base=None,
             pcm_phase=None,
@@ -1699,49 +1699,49 @@ def test_frederic_cauquil_team_with_peer_leadership_member_work_separation() -> 
     ]
 
     snapshot = AssessmentCycleTeamSnapshot(
-        leadership_ids=frozenset({frederic_leader_id, remy_peer_id}),
+        leadership_ids=frozenset({sever_leader_id, dinu_peer_id}),
         direct_report_ids_by_leader_id={
-            frederic_leader_id: frozenset({remy_peer_id, sub_1_id, sub_2_id, sub_3_id, sub_4_id})
+            sever_leader_id: frozenset({dinu_peer_id, sub_1_id, sub_2_id, sub_3_id, sub_4_id})
         },
         teams=(
             AssessmentCycleTeam(
                 id=leadership_team_id,
                 name="Leadership",
                 type=TeamType.leadership,
-                member_ids=frozenset({frederic_leader_id, remy_peer_id}),
+                member_ids=frozenset({sever_leader_id, dinu_peer_id}),
             ),
             AssessmentCycleTeam(
-                id=frederic_team_id,
-                name="Echipa Frederic Cauquil",
+                id=sever_team_id,
+                name="Echipa Sever Cozma",
                 type=TeamType.functional,
                 member_ids=frozenset(
-                    {frederic_leader_id, remy_peer_id, sub_1_id, sub_2_id, sub_3_id, sub_4_id}
+                    {sever_leader_id, dinu_peer_id, sub_1_id, sub_2_id, sub_3_id, sub_4_id}
                 ),
-                leader_id=frederic_leader_id,
+                leader_id=sever_leader_id,
             ),
         ),
     )
 
     rows: list[AssignmentResultWithDefinition] = []
-    # Frederic has 21 leadership tasks in lens (19 icare + 1 driver + 1 pcm; his lencioni is
+    # Sever has 21 leadership tasks in lens (19 icare + 1 driver + 1 pcm; his lencioni is
     # targeted to leadership_team_id)
     for _ in range(19):
-        rows.append((_assignment("icare", respondent_profile_id=frederic_leader_id), None, None))
+        rows.append((_assignment("icare", respondent_profile_id=sever_leader_id), None, None))
     rows.append(
-        (_assignment("distress_drivers", respondent_profile_id=frederic_leader_id), None, None)
+        (_assignment("distress_drivers", respondent_profile_id=sever_leader_id), None, None)
     )
-    rows.append((_assignment("pcm_base", respondent_profile_id=frederic_leader_id), None, None))
+    rows.append((_assignment("pcm_base", respondent_profile_id=sever_leader_id), None, None))
 
-    # Remy has 22 leadership tasks (19 icare + 1 driver + 1 pcm + 1 lencioni targeted to leadership)
+    # Dinu has 22 leadership tasks (19 icare + 1 driver + 1 pcm + 1 lencioni targeted to leadership)
     for _ in range(19):
-        rows.append((_assignment("icare", respondent_profile_id=remy_peer_id), None, None))
-    rows.append((_assignment("distress_drivers", respondent_profile_id=remy_peer_id), None, None))
-    rows.append((_assignment("pcm_base", respondent_profile_id=remy_peer_id), None, None))
+        rows.append((_assignment("icare", respondent_profile_id=dinu_peer_id), None, None))
+    rows.append((_assignment("distress_drivers", respondent_profile_id=dinu_peer_id), None, None))
+    rows.append((_assignment("pcm_base", respondent_profile_id=dinu_peer_id), None, None))
     rows.append(
         (
             _assignment(
                 "lencioni",
-                respondent_profile_id=remy_peer_id,
+                respondent_profile_id=dinu_peer_id,
                 target_team_id=leadership_team_id,
             ),
             None,
@@ -1749,12 +1749,12 @@ def test_frederic_cauquil_team_with_peer_leadership_member_work_separation() -> 
         )
     )
 
-    # The 4 regular members each have 2 tasks: 1 Lencioni targeted to frederic_team_id + 1 team task
+    # The 4 regular members each have 2 tasks: 1 Lencioni targeted to sever_team_id + 1 team task
     for sub_id in (sub_1_id, sub_2_id, sub_3_id, sub_4_id):
         rows.append(
             (
                 _assignment(
-                    "lencioni", respondent_profile_id=sub_id, target_team_id=frederic_team_id
+                    "lencioni", respondent_profile_id=sub_id, target_team_id=sever_team_id
                 ),
                 None,
                 None,
@@ -1763,7 +1763,7 @@ def test_frederic_cauquil_team_with_peer_leadership_member_work_separation() -> 
         rows.append(
             (
                 _assignment(
-                    "feedback_team", respondent_profile_id=sub_id, target_team_id=frederic_team_id
+                    "feedback_team", respondent_profile_id=sub_id, target_team_id=sever_team_id
                 ),
                 None,
                 None,
@@ -1772,16 +1772,16 @@ def test_frederic_cauquil_team_with_peer_leadership_member_work_separation() -> 
 
     result = _build_team_lenses(participants, rows, team_snapshot=snapshot)
     by_id = {team.id: team for team in result.team_lenses}
-    frederic_lens = by_id[str(frederic_team_id)]
+    sever_lens = by_id[str(sever_team_id)]
 
     # Expected: Team work = 8 assignments (from the 4 non-leadership members)
-    assert frederic_lens.assigned_count == 8
-    # Expected: Leadership work = 42 assignments (21 from Frederic + 21 from Remy in this lens)
-    assert frederic_lens.leadership_assigned_count == 42
-    # Expected: Leader-specific work = 21 assignments (from Frederic)
-    assert frederic_lens.leader_assigned_count == 21
+    assert sever_lens.assigned_count == 8
+    # Expected: Leadership work = 42 assignments (21 from Sever + 21 from Dinu in this lens)
+    assert sever_lens.leadership_assigned_count == 42
+    # Expected: Leader-specific work = 21 assignments (from Sever)
+    assert sever_lens.leader_assigned_count == 21
     # Corecția 2: Sum of parts equals total assignments in lens (8 + 42 = 50)
-    assert frederic_lens.assigned_count + frederic_lens.leadership_assigned_count == 50
+    assert sever_lens.assigned_count + sever_lens.leadership_assigned_count == 50
 
 
 def test_team_lens_lencioni_privacy_threshold() -> None:

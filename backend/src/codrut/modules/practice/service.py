@@ -25,7 +25,14 @@ from codrut.modules.identity.models import User, UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.practice.acord import cere_acordul
 from codrut.modules.practice.alias import ascunde_numele, codul_omului
-from codrut.modules.practice.budget import BudgetExceeded, release, reserve, settle
+from codrut.modules.practice.budget import (
+    BudgetExceeded,
+    plafonul_programului,
+    release,
+    reserve,
+    settle,
+)
+from codrut.modules.practice.conturi_test import e_cont_de_test
 from codrut.modules.practice.evaluator import sedinta_prea_scurta, text_sedinta_prea_scurta
 from codrut.modules.practice.generation_provider import (
     GenerationProvider,
@@ -308,10 +315,13 @@ class PracticeSessionService:
             PracticeSession.started_at >= today_start,
         )
         sessions_today_count = (await self.session.execute(stmt_count)).scalar_one() or 0
-        ensure_daily_session_limit(
-            sessions_today_count=sessions_today_count,
-            max_sessions_per_day=program_settings.max_sessions_per_day,
-        )
+        # Contul de test nu e oprit de limita pe zi (plicul 173, hotararea lui Andrei din
+        # 1 oct). Frana lui e alta: plafonul lunar propriu, verificat la rezervare.
+        if not e_cont_de_test(getattr(principal, "email", None)):
+            ensure_daily_session_limit(
+                sessions_today_count=sessions_today_count,
+                max_sessions_per_day=program_settings.max_sessions_per_day,
+            )
 
         # 5. Check active knowledge pack
         if program_settings.active_pack_id is None:
@@ -604,12 +614,7 @@ class PracticeSessionService:
             thinking_budget=self.settings.thinking_budget_actor,
             settings=self.settings,
         )
-        stmt_active_members = select(func.count(ProjectMembership.id)).where(
-            ProjectMembership.project_id == program_settings.project_id,
-            ProjectMembership.active.is_(True),
-        )
-        activi = (await self.session.execute(stmt_active_members)).scalar_one() or 0
-        cap_usd = Decimal(activi) * program_settings.usd_cap_per_participant
+        cap_usd = await plafonul_programului(self.session, program_settings)
 
         try:
             reservation_id = await reserve(
@@ -1123,14 +1128,7 @@ class PracticeSessionService:
                     settings=self.settings,
                 )
 
-            stmt_active_members = select(func.count(ProjectMembership.id)).where(
-                ProjectMembership.project_id == program_settings.project_id,
-                ProjectMembership.active.is_(True),
-            )
-            active_participants_count = (
-                await self.session.execute(stmt_active_members)
-            ).scalar_one() or 0
-            cap_usd = Decimal(active_participants_count) * program_settings.usd_cap_per_participant
+            cap_usd = await plafonul_programului(self.session, program_settings)
 
             reservation_id = await reserve(
                 session=self.session,
@@ -1357,13 +1355,10 @@ class PracticeSessionService:
                     thinking_budget=self.settings.thinking_budget_evaluator,
                     settings=self.settings,
                 )
-                stmt_activi = select(func.count(ProjectMembership.id)).where(
-                    ProjectMembership.project_id == proiect_id,
-                    ProjectMembership.active.is_(True),
-                )
-                activi = (await self.session.execute(stmt_activi)).scalar_one() or 0
-                plafon = Decimal(activi) * (
-                    _setari.usd_cap_per_participant if _setari else Decimal("0")
+                plafon = (
+                    await plafonul_programului(self.session, _setari)
+                    if _setari
+                    else Decimal("0")
                 )
                 rezervare_id = await reserve(
                     session=self.session,
