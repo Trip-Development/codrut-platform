@@ -133,6 +133,7 @@ async def test_niciun_fragment_din_nume_nu_pleaca_spre_model(doua_apeluri: bool)
         await session.flush()
         session.add(ParticipantMemory(
             user_id=cont.id,
+            project_id=ctx["project"].id,
             session_id="sedinta-veche",
             summary="Ionela Zăvoianu-Testescu a cerut un termen clar. Zavoianu a ezitat.",
             key_quotes=["Eu, Ionela, nu mai pot așa."],
@@ -317,6 +318,10 @@ async def test_memoria_scrisa_sub_alt_profil_al_aceluiasi_om_nu_scapa_numele() -
     Același om poate avea mai multe profiluri (la companii diferite), cu nume scrise diferit.
     Memoria scrisă sub unul („Dragă <nume>, în acest joc de rol...") pleca spre model și când
     omul exersa sub celălalt. Se curăță de numele tuturor profilurilor lui.
+
+    De la 185 memoria e pe proiect: cea din altă firmă nu mai ajunge deloc la Cody (t2/t5 din
+    `test_memoria_pe_proiect.py`). Însemnarea stă aici în proiectul ședinței, ca să ajungă la model
+    și curățarea numelor să aibă ce prinde.
     """
     from codrut.modules.companies.models import Company, ParticipantProfile
 
@@ -341,6 +346,7 @@ async def test_memoria_scrisa_sub_alt_profil_al_aceluiasi_om_nu_scapa_numele() -
         ))
         session.add(ParticipantMemory(
             user_id=cont.id,
+            project_id=ctx["project"].id,
             session_id="sedinta-de-sub-celalalt-profil",
             summary="Dragă Ionela Zăvoianu-Testescu, în acest joc de rol ai exersat feedbackul.",
             key_quotes=[],
