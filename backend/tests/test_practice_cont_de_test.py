@@ -20,8 +20,6 @@ from decimal import Decimal
 import pytest
 from redis.asyncio import Redis
 from sqlalchemy import func, select
-from tests.test_practice_session_flow import create_test_context
-from tests.test_tabloul_pe_proiect import COMPETENTE, FurnizorCuNote
 
 from codrut.core.config import Settings
 from codrut.core.database import SessionLocal
@@ -48,6 +46,8 @@ from codrut.modules.practice.models import (
     SessionState,
 )
 from codrut.modules.practice.service import PracticeSessionService
+from test_practice_session_flow import create_test_context
+from test_tabloul_pe_proiect import COMPETENTE, FurnizorCuNote
 
 ADRESA_DE_TEST = "andreyvacaru@gmail.com"
 
