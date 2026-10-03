@@ -95,20 +95,20 @@ async def run_mailpit_proof() -> None:
         await db_session.flush()
 
         # 3. Create 4 Participants representing all hierarchy scenarios
-        frederic = ParticipantProfile(
+        sever = ParticipantProfile(
             id=uuid4(),
             company_id=company.id,
-            full_name="Frederic Cauquil",
-            email=f"frederic.cauquil+{run_id}@{test_domain}",
-            reports_to_name="Titus Botis",
+            full_name="Sever Cozma",
+            email=f"sever.cozma+{run_id}@{test_domain}",
+            reports_to_name="Sabin Zamfir",
             role_group="leadership",
         )
-        remy = ParticipantProfile(
+        dinu = ParticipantProfile(
             id=uuid4(),
             company_id=company.id,
-            full_name="Remy Bedu",
-            email=f"remy.bedu+{run_id}@{test_domain}",
-            reports_to_name="FredericCauquil",
+            full_name="Dinu Sava",
+            email=f"dinu.sava+{run_id}@{test_domain}",
+            reports_to_name="SeverCozma",
             role_group="leadership",
         )
         ioana = ParticipantProfile(
@@ -119,16 +119,16 @@ async def run_mailpit_proof() -> None:
             reports_to_name="   Manager Necunoscut Extern   ",
             role_group="member",
         )
-        titus = ParticipantProfile(
+        sabin = ParticipantProfile(
             id=uuid4(),
             company_id=company.id,
-            full_name="Titus Botis",
-            email=f"titus.botis+{run_id}@{test_domain}",
+            full_name="Sabin Zamfir",
+            email=f"sabin.zamfir+{run_id}@{test_domain}",
             reports_to_name="fara manager",
             role_group="leadership",
         )
 
-        participants = [frederic, remy, ioana, titus]
+        participants = [sever, dinu, ioana, sabin]
         for p in participants:
             db_session.add(p)
 
@@ -137,8 +137,8 @@ async def run_mailpit_proof() -> None:
                 id=uuid4(),
                 project_id=project.id,
                 company_id=company.id,
-                participant_profile_id=frederic.id,
-                reports_to_name="Titus Botis",
+                participant_profile_id=sever.id,
+                reports_to_name="Sabin Zamfir",
                 active=True,
             )
         )
@@ -147,8 +147,8 @@ async def run_mailpit_proof() -> None:
                 id=uuid4(),
                 project_id=project.id,
                 company_id=company.id,
-                participant_profile_id=remy.id,
-                reports_to_name="FredericCauquil",
+                participant_profile_id=dinu.id,
+                reports_to_name="SeverCozma",
                 active=True,
             )
         )
@@ -167,7 +167,7 @@ async def run_mailpit_proof() -> None:
                 id=uuid4(),
                 project_id=project.id,
                 company_id=company.id,
-                participant_profile_id=titus.id,
+                participant_profile_id=sabin.id,
                 reports_to_name="fara manager",
                 active=True,
             )
@@ -244,10 +244,10 @@ async def run_mailpit_proof() -> None:
         print(f"  - ID Proiect: {project.id}")
         print(f"  - Șablon utilizat: {tmpl_key} (conține ${{manager_name}})")
         print("  - Participanți:")
-        print(f"    * {frederic.full_name} ({frederic.email}) -> reports_to: 'Titus Botis'")
-        print(f"    * {remy.full_name} ({remy.email}) -> reports_to: 'FredericCauquil'")
+        print(f"    * {sever.full_name} ({sever.email}) -> reports_to: 'Sabin Zamfir'")
+        print(f"    * {dinu.full_name} ({dinu.email}) -> reports_to: 'SeverCozma'")
         print(f"    * {ioana.full_name} ({ioana.email}) -> reports_to: 'Manager Necunoscut Extern'")
-        print(f"    * {titus.full_name} ({titus.email}) -> reports_to: 'fara manager' (top level)")
+        print(f"    * {sabin.full_name} ({sabin.email}) -> reports_to: 'fara manager' (top level)")
 
         # 5. Dispatch invitations
         print("\n[2] Trimitere invitații prin CompanyService.send_participant_invites...")
@@ -287,16 +287,16 @@ async def run_mailpit_proof() -> None:
 
         expected_checks = [
             {
-                "recipient": remy.email,
-                "name": remy.full_name,
-                "scenario": "Manager real din proiect (FredericCauquil -> Frederic Cauquil)",
-                "expected_manager": "Frederic Cauquil",
+                "recipient": dinu.email,
+                "name": dinu.full_name,
+                "scenario": "Manager real din proiect (SeverCozma -> Sever Cozma)",
+                "expected_manager": "Sever Cozma",
             },
             {
-                "recipient": frederic.email,
-                "name": frederic.full_name,
-                "scenario": "Manager real din proiect (Titus Botis)",
-                "expected_manager": "Titus Botis",
+                "recipient": sever.email,
+                "name": sever.full_name,
+                "scenario": "Manager real din proiect (Sabin Zamfir)",
+                "expected_manager": "Sabin Zamfir",
             },
             {
                 "recipient": ioana.email,
@@ -305,8 +305,8 @@ async def run_mailpit_proof() -> None:
                 "expected_manager": "Manager Necunoscut Extern",
             },
             {
-                "recipient": titus.email,
-                "name": titus.full_name,
+                "recipient": sabin.email,
+                "name": sabin.full_name,
                 "scenario": "Fără manager / top-level (fallback la trainer)",
                 "expected_manager": trainer_user.email.split("@", 1)[0],
             },

@@ -133,15 +133,15 @@ def test_manager_name_resolves_to_canonical_project_participant():
     manager_profile = ParticipantProfile(
         id=uuid4(),
         company_id=uuid4(),
-        full_name="Ioan-Gabriel Brândușan",
-        email="gabriel@example.com",
+        full_name="Costel-Ovidiu Dumitrașcu",
+        email="ovidiu@example.com",
     )
     membership = ProjectMembership(
         id=uuid4(),
         project_id=uuid4(),
         company_id=manager_profile.company_id,
         participant_profile_id=uuid4(),
-        reports_to_name="Ioan-GabrielBrandusan",
+        reports_to_name="Costel-OvidiuDumitrascu",
         active=True,
     )
     project_participants_by_key = {
@@ -154,7 +154,7 @@ def test_manager_name_resolves_to_canonical_project_participant():
         duplicate_name_keys=set(),
         fallback_trainer_name="Andrei Văcaru",
     )
-    assert result == "Ioan-Gabriel Brândușan"
+    assert result == "Costel-Ovidiu Dumitrașcu"
 
 
 def test_manager_name_unresolved_uses_cleaned_raw_text():
@@ -307,7 +307,7 @@ async def test_enqueue_assignment_invitation_renders_manager_name():
         context = AssignmentInvitationContext(
             company_name="Test Company",
             trainer_name="Andrei Văcaru",
-            manager_name="Frederic Cauquil",
+            manager_name="Sever Cozma",
             action_url="https://cody.andreivacaru.ro/invite/token-123",
             task_count=1,
         )
@@ -326,10 +326,10 @@ async def test_enqueue_assignment_invitation_renders_manager_name():
             )
         ).scalar_one_or_none()
         assert send is not None
-        expected_subj = f"Salut {participant.full_name} de la Frederic Cauquil"
+        expected_subj = f"Salut {participant.full_name} de la Sever Cozma"
         assert send.message_payload["subject"] == expected_subj
         assert (
-            "Managerul tău: Frederic Cauquil."
+            "Managerul tău: Sever Cozma."
             in send.message_payload["html_body"]
         )
 
@@ -509,28 +509,28 @@ async def test_company_service_send_invitations_end_to_end_manager_resolution():
         await db_session.flush()
 
         # 4 participants
-        titus = ParticipantProfile(
+        sabin = ParticipantProfile(
             id=uuid4(),
             company_id=company.id,
-            full_name="Titus Botis",
-            email="titus@example.com",
+            full_name="Sabin Zamfir",
+            email="sabin@example.com",
             reports_to_name="fara manager",
             role_group="leadership",
         )
-        frederic = ParticipantProfile(
+        sever = ParticipantProfile(
             id=uuid4(),
             company_id=company.id,
-            full_name="Frederic Cauquil",
-            email="frederic@example.com",
-            reports_to_name="Titus Botis",
+            full_name="Sever Cozma",
+            email="sever@example.com",
+            reports_to_name="Sabin Zamfir",
             role_group="leadership",
         )
-        remy = ParticipantProfile(
+        dinu = ParticipantProfile(
             id=uuid4(),
             company_id=company.id,
-            full_name="Remy Bedu",
-            email="remy@example.com",
-            reports_to_name="FredericCauquil",
+            full_name="Dinu Sava",
+            email="dinu@example.com",
+            reports_to_name="SeverCozma",
             role_group="leadership",
         )
         ioana = ParticipantProfile(
@@ -541,7 +541,7 @@ async def test_company_service_send_invitations_end_to_end_manager_resolution():
             reports_to_name="Manager Necunoscut",
             role_group="member",
         )
-        for p in [titus, frederic, remy, ioana]:
+        for p in [sabin, sever, dinu, ioana]:
             db_session.add(p)
 
         db_session.add(
@@ -549,7 +549,7 @@ async def test_company_service_send_invitations_end_to_end_manager_resolution():
                 id=uuid4(),
                 project_id=project.id,
                 company_id=company.id,
-                participant_profile_id=titus.id,
+                participant_profile_id=sabin.id,
                 reports_to_name="fara manager",
                 active=True,
             )
@@ -559,8 +559,8 @@ async def test_company_service_send_invitations_end_to_end_manager_resolution():
                 id=uuid4(),
                 project_id=project.id,
                 company_id=company.id,
-                participant_profile_id=frederic.id,
-                reports_to_name="Titus Botis",
+                participant_profile_id=sever.id,
+                reports_to_name="Sabin Zamfir",
                 active=True,
             )
         )
@@ -569,8 +569,8 @@ async def test_company_service_send_invitations_end_to_end_manager_resolution():
                 id=uuid4(),
                 project_id=project.id,
                 company_id=company.id,
-                participant_profile_id=remy.id,
-                reports_to_name="FredericCauquil",
+                participant_profile_id=dinu.id,
+                reports_to_name="SeverCozma",
                 active=True,
             )
         )
@@ -601,7 +601,7 @@ async def test_company_service_send_invitations_end_to_end_manager_resolution():
         db_session.add(definition)
         await db_session.flush()
 
-        for p in [titus, frederic, remy, ioana]:
+        for p in [sabin, sever, dinu, ioana]:
             db_session.add(
                 QuestionnaireAssignment(
                     id=uuid4(),
@@ -644,7 +644,7 @@ async def test_company_service_send_invitations_end_to_end_manager_resolution():
             payload=ParticipantInviteBatchRequest(
                 project_id=project.id,
                 assessment_cycle_id=cycle.id,
-                participant_ids=[titus.id, frederic.id, remy.id, ioana.id],
+                participant_ids=[sabin.id, sever.id, dinu.id, ioana.id],
                 mode="email",
             ),
         )
@@ -653,10 +653,10 @@ async def test_company_service_send_invitations_end_to_end_manager_resolution():
 
         # Verify each rendered email send in database
         target_emails = [
-            "remy@example.com",
-            "frederic@example.com",
+            "dinu@example.com",
+            "sever@example.com",
             "ioana@example.com",
-            "titus@example.com",
+            "sabin@example.com",
         ]
         sends = (
             await db_session.execute(
@@ -667,24 +667,24 @@ async def test_company_service_send_invitations_end_to_end_manager_resolution():
         ).scalars().all()
         sends_by_email = {s.recipient_email: s for s in sends}
 
-        # 1. Remy -> manager resolves to Frederic Cauquil (canonical)
+        # 1. Dinu -> manager resolves to Sever Cozma (canonical)
         assert (
-            "Frederic Cauquil"
-            in sends_by_email["remy@example.com"].message_payload["subject"]
+            "Sever Cozma"
+            in sends_by_email["dinu@example.com"].message_payload["subject"]
         )
         assert (
-            "Managerul tau: Frederic Cauquil."
-            in sends_by_email["remy@example.com"].message_payload["html_body"]
+            "Managerul tau: Sever Cozma."
+            in sends_by_email["dinu@example.com"].message_payload["html_body"]
         )
 
-        # 2. Frederic -> manager resolves to Titus Botis (canonical)
+        # 2. Sever -> manager resolves to Sabin Zamfir (canonical)
         assert (
-            "Titus Botis"
-            in sends_by_email["frederic@example.com"].message_payload["subject"]
+            "Sabin Zamfir"
+            in sends_by_email["sever@example.com"].message_payload["subject"]
         )
         assert (
-            "Managerul tau: Titus Botis."
-            in sends_by_email["frederic@example.com"].message_payload["html_body"]
+            "Managerul tau: Sabin Zamfir."
+            in sends_by_email["sever@example.com"].message_payload["html_body"]
         )
 
         # 3. Ioana -> manager is unresolvable "Manager Necunoscut" -> raw cleaned string
@@ -697,14 +697,14 @@ async def test_company_service_send_invitations_end_to_end_manager_resolution():
             in sends_by_email["ioana@example.com"].message_payload["html_body"]
         )
 
-        # 4. Titus -> top level without manager -> falls back to trainer
+        # 4. Sabin -> top level without manager -> falls back to trainer
         assert (
             trainer_expected_name
-            in sends_by_email["titus@example.com"].message_payload["subject"]
+            in sends_by_email["sabin@example.com"].message_payload["subject"]
         )
         assert (
             f"Managerul tau: {trainer_expected_name}."
-            in sends_by_email["titus@example.com"].message_payload["html_body"]
+            in sends_by_email["sabin@example.com"].message_payload["html_body"]
         )
 
         # Clean up test sends

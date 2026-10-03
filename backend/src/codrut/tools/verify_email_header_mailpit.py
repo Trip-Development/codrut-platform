@@ -137,7 +137,7 @@ async def run_mailpit_proof() -> None:
             company_id=company.id,
             project_id=project.id,
             participant_profile_id=team_member.id,
-            reports_to_name="Zoltan Claudiu Suloman",
+            reports_to_name="Laurentiu Catalin Vasilescu",
             role_group="member",
         )
         db_session.add(pm_team)
@@ -332,7 +332,7 @@ async def run_mailpit_proof() -> None:
                 "recipient": team_member.email,
                 "name": team_member.full_name,
                 "should_have_header": False,
-                "expected_signature": "Zoltan Claudiu Suloman",
+                "expected_signature": "Laurentiu Catalin Vasilescu",
             },
             {
                 "type": "Invitație Conducere",

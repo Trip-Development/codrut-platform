@@ -36,9 +36,9 @@ describe("roster manager formatting", () => {
   });
 
   it("builds roster lookup keys that resolve compact manager references", () => {
-    const keys = buildManagerReferenceKeySet(["Titus Julien Botis", "Ștefan Manager", ""]);
+    const keys = buildManagerReferenceKeySet(["Sabin Aurel Zamfir", "Ștefan Manager", ""]);
 
-    expect(keys.has(managerReferenceKey("TitusJulienBotis"))).toBe(true);
+    expect(keys.has(managerReferenceKey("SabinAurelZamfir"))).toBe(true);
     expect(keys.has(managerReferenceKey("StefanManager"))).toBe(true);
   });
 
