@@ -12,13 +12,12 @@ from codrut.modules.identity.models import User
 from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.practice.competency_aliases import (
     CANONICAL_COMPETENCIES,
-    NUMELE_DIN_REZUMAT,
     _strip_accents,
     match_comp,
     normalize_competency_name,
 )
 from codrut.modules.practice.evaluator import TRAINER_PREFIX
-from codrut.modules.practice.interlocutor import intrarile_de_punctaj, sedintele_notelor
+from codrut.modules.practice.interlocutor import intrarile_de_punctaj
 from codrut.modules.practice.models import (
     CompetencyScore,
     InsightMoment,
@@ -28,7 +27,6 @@ from codrut.modules.practice.models import (
     SessionSample,
 )
 from codrut.modules.practice.scoring import (
-    _NU_ROLEPLAY,
     ZONA_ROMANIEI,
     ScoreEntry,
     compute_competency_evidence,
@@ -54,27 +52,6 @@ def _cheie(nume: str) -> str:
     """Numele unei competente, normalizat: litere mici, fara diacritice si punctuatie, fara spatii
     in plus — plicul 143. „rezolvarea  colaborativa" si „Rezolvarea colaborativă" sunt aceeasi."""
     return _strip_accents(normalize_competency_name(nume or ""))
-
-def _rand_competenta(name: str, entries: list[ScoreEntry]) -> dict[str, Any]:
-    """Rândul unei competențe pe Tablou — același pentru lista proiectului și pentru „alte”."""
-    ev = compute_competency_evidence(entries)
-    return {
-        "name": name,
-        "level": ev.level,
-        "level_description": ev.level_description,
-        "color": ev.color,
-        "total_roleplays": ev.total_roleplays,
-        "scores_70_count": ev.scores_70_count,
-        "days_span_70": ev.days_span_70,
-        "distinct_days_70": ev.distinct_days_70,
-        "average_score": ev.average_score,
-        "why_not_higher": ev.why_not_higher,
-        "points": ev.points,
-        "points_today": ev.points_today,
-        "interlocutor_types": ev.interlocutor_types,
-        "best_score_today": ev.best_score_today,
-    }
-
 
 class PracticeDashboardService:
     def __init__(self, session: AsyncSession) -> None:
@@ -212,8 +189,6 @@ class PracticeDashboardService:
         competente = await self._competentele_proiectului(project_id)
         # plicul 165: numai notele role-play-urilor, fiecare cu tipul interlocutorului
         intrari = await intrarile_de_punctaj(self.session, all_scores)
-        # plicul 178: notele care intră în punctaj, dar n-au loc pe lista proiectului deschis
-        fara_loc: list[CompetencyScore] = []
         if competente:
             dupa_nume = {_cheie(n): n for n in competente}
             scores_by_comp: dict[str, list[ScoreEntry]] = {c: [] for c in competente}
@@ -222,10 +197,7 @@ class PracticeDashboardService:
                 if nume is None:
                     canonic = match_comp(s.competency_name)
                     nume = dupa_nume.get(_cheie(canonic)) if canonic else None
-                if s.id not in intrari:
-                    continue
-                if nume is None:
-                    fara_loc.append(s)
+                if nume is None or s.id not in intrari:
                     continue
                 scores_by_comp[nume].append(intrari[s.id])
         else:
@@ -233,15 +205,30 @@ class PracticeDashboardService:
             scores_by_comp = {c: [] for c in CANONICAL_COMPETENCIES}
             for s in all_scores:
                 matched_canonical = match_comp(s.competency_name)
-                if s.id not in intrari:
-                    continue
-                if not matched_canonical:
-                    fara_loc.append(s)
+                if not matched_canonical or s.id not in intrari:
                     continue
                 scores_by_comp[matched_canonical].append(intrari[s.id])
 
-        competency_results = [_rand_competenta(name, scores_by_comp[name]) for name in competente]
-        other_results = await self._alte_competente(fara_loc, intrari)
+        competency_results = []
+        for name in competente:
+            entries = scores_by_comp[name]
+            ev = compute_competency_evidence(entries)
+            competency_results.append({
+                "name": name,
+                "level": ev.level,
+                "level_description": ev.level_description,
+                "color": ev.color,
+                "total_roleplays": ev.total_roleplays,
+                "scores_70_count": ev.scores_70_count,
+                "days_span_70": ev.days_span_70,
+                "distinct_days_70": ev.distinct_days_70,
+                "average_score": ev.average_score,
+                "why_not_higher": ev.why_not_higher,
+                "points": ev.points,
+                "points_today": ev.points_today,
+                "interlocutor_types": ev.interlocutor_types,
+                "best_score_today": ev.best_score_today,
+            })
 
         # 7. Insight moments
         #
@@ -290,10 +277,9 @@ class PracticeDashboardService:
             "streak_bonus_pct": bonus_pct,
             "evidence_ceiling": evidence_ceiling(30),
             # punctajul nou — plicul 165: sume peste competențele arătate, fără plafon
-            "points_today": sum(c["points_today"] for c in competency_results + other_results),
-            "points_total": sum(c["points"] for c in competency_results + other_results),
+            "points_today": sum(c["points_today"] for c in competency_results),
+            "points_total": sum(c["points"] for c in competency_results),
             "competencies": competency_results,
-            "other_competencies": other_results,
             "insight_moments": [
                 {
                     "id": str(m.id),
@@ -367,51 +353,10 @@ class PracticeDashboardService:
         inainte = await self.get_participant_dashboard_data(
             principal, proiect, fara_sedinta=session_id
         )
-        # plicul 178: și „alte competențe”, potrivite pe numele normalizat (scrierea poate diferi)
-        puncte_inainte = {
-            _cheie(c["name"]): c["points"]
-            for c in inainte["competencies"] + inainte["other_competencies"]
-        }
+        puncte_inainte = {c["name"]: c["points"] for c in inainte["competencies"]}
         castig = []
-        for c in dupa["competencies"] + dupa["other_competencies"]:
-            n = c["points"] - puncte_inainte.get(_cheie(c["name"]), 0)
+        for c in dupa["competencies"]:
+            n = c["points"] - puncte_inainte.get(c["name"], 0)
             if n > 0:
                 castig.append({"competency": c["name"], "points": n})
         return castig
-
-    async def _alte_competente(
-        self,
-        fara_loc: list[CompetencyScore],
-        intrari: dict[uuid.UUID, ScoreEntry],
-    ) -> list[dict[str, Any]]:
-        """„Alte competențe exersate” — plicul 178 (H4).
-
-        Notele care intră în punctaj și nu au loc pe lista proiectului deschis se grupează separat,
-        cu aceeași socoteală, ca punctele unei competențe să nu depindă de proiectul deschis. Rămân
-        afară, ca de la plicul 143: notele rezumatului de la închidere (cele 4 nume fixe și orice
-        notă `session` scrisă pe o ședință existentă — corecția 2 a controlorului) și quiz-ul.
-        Numele afișat: cel canonic, dacă există, altfel scrierea celei mai vechi note (nu depinde de
-        ședința scoasă la „+N puncte”).
-        """
-        rezumat = {_cheie(n) for n in NUMELE_DIN_REZUMAT.values()}
-        candidati = [
-            s for s in fara_loc
-            if _cheie(s.competency_name or "") not in rezumat
-            and (s.source_type or "").lower() not in _NU_ROLEPLAY
-        ]
-        sedinte = await sedintele_notelor(
-            self.session, {s.conversation_id for s in candidati if s.source_type == "session"}
-        )
-        grupuri: dict[str, list[ScoreEntry]] = {}
-        nume_afisat: dict[str, str] = {}
-        for s in candidati:  # notele vin de la cea mai nouă la cea mai veche
-            if s.source_type == "session" and s.conversation_id in sedinte:
-                continue
-            canonic = match_comp(s.competency_name)
-            cheie = _cheie(canonic or s.competency_name or "")
-            if not cheie:
-                continue
-            grupuri.setdefault(cheie, []).append(intrari[s.id])
-            nume_afisat[cheie] = canonic or (s.competency_name or "").strip()
-        randuri = [_rand_competenta(nume_afisat[k], v) for k, v in grupuri.items()]
-        return sorted(randuri, key=lambda c: (-c["points"], c["name"]))

@@ -32,7 +32,6 @@ from codrut.modules.practice.budget import (
     reserve,
     settle,
 )
-from codrut.modules.practice.competency_aliases import NUMELE_DIN_REZUMAT
 from codrut.modules.practice.conturi_test import e_cont_de_test
 from codrut.modules.practice.evaluator import sedinta_prea_scurta, text_sedinta_prea_scurta
 from codrut.modules.practice.generation_provider import (
@@ -1394,7 +1393,12 @@ class PracticeSessionService:
                         topic = eval_data.get("topic", "")
                         characters = eval_data.get("characters", [])
 
-                        score_name_map = NUMELE_DIN_REZUMAT
+                        score_name_map = {
+                            "questionsRatio": "Abilități de Coach și Întrebări",
+                            "assertiveness": "Comunicare Asertivă",
+                            "sbiFeedback": "Feedback Structurat (SBI)",
+                            "conciseness": "Concizie și Echilibru",
+                        }
                         for k, v in scores_dict.items():
                             if isinstance(v, (int, float)):
                                 c_name = score_name_map.get(k, k)

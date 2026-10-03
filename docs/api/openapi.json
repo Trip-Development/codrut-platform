@@ -7980,14 +7980,6 @@
             "title": "Insight Moments",
             "type": "array"
           },
-          "other_competencies": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/CompetencyDashboardItem"
-            },
-            "title": "Other Competencies",
-            "type": "array"
-          },
           "participant_name": {
             "title": "Participant Name",
             "type": "string"

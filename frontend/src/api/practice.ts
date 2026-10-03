@@ -309,8 +309,6 @@ export type PracticeDashboardData = {
   pointsToday: number;
   pointsTotal: number;
   competencies: CompetencyDashboardItem[];
-  /** Competențele exersate care nu sunt pe lista proiectului deschis — plicul 178 (H4). */
-  otherCompetencies: CompetencyDashboardItem[];
   insightMoments: InsightMomentItem[];
   sessionSamples: SessionSampleItem[];
   // plicul 98: de ce e gol tabloul omului fara nicio nota; lipseste la cine are note
@@ -440,26 +438,6 @@ type RawSessionSample = {
   created_at: string;
 };
 
-/** Un rând de competență din răspunsul Tabloului — aceeași mapare pentru listă și pentru „alte” (178). */
-function competentaDinRaspuns(c: RawCompetency): CompetencyDashboardItem {
-  return {
-    name: c.name,
-    level: c.level,
-    levelDescription: c.level_description,
-    color: c.color,
-    totalRoleplays: c.total_roleplays,
-    scores70Count: c.scores_70_count,
-    daysSpan70: c.days_span_70,
-    distinctDays70: c.distinct_days_70,
-    averageScore: c.average_score,
-    whyNotHigher: c.why_not_higher,
-    points: c.points ?? 0,
-    pointsToday: c.points_today ?? 0,
-    interlocutorTypes: c.interlocutor_types ?? 0,
-    bestScoreToday: c.best_score_today ?? null,
-  };
-}
-
 export async function getPracticeDashboard(
   projectId?: string,
 ): Promise<PracticeDashboardData> {
@@ -481,8 +459,22 @@ export async function getPracticeDashboard(
     evidenceCeiling: data.evidence_ceiling,
     pointsToday: data.points_today ?? 0,
     pointsTotal: data.points_total ?? 0,
-    competencies: (data.competencies || []).map(competentaDinRaspuns),
-    otherCompetencies: (data.other_competencies || []).map(competentaDinRaspuns),
+    competencies: (data.competencies || []).map((c: RawCompetency) => ({
+      name: c.name,
+      level: c.level,
+      levelDescription: c.level_description,
+      color: c.color,
+      totalRoleplays: c.total_roleplays,
+      scores70Count: c.scores_70_count,
+      daysSpan70: c.days_span_70,
+      distinctDays70: c.distinct_days_70,
+      averageScore: c.average_score,
+      whyNotHigher: c.why_not_higher,
+      points: c.points ?? 0,
+      pointsToday: c.points_today ?? 0,
+      interlocutorTypes: c.interlocutor_types ?? 0,
+      bestScoreToday: c.best_score_today ?? null,
+    })),
     insightMoments: (data.insight_moments || []).map((m: RawInsightMoment) => ({
       id: m.id,
       summary: m.summary,

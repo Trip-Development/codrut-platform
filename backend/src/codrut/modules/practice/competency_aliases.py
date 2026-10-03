@@ -14,15 +14,6 @@ CANONICAL_COMPETENCIES = [
     "Feedback constructiv",
 ]
 
-# Notele rezumatului de la închidere (aplicația veche, 4 axe) — nu intră pe Tablou, plicul 143;
-# de hotărât de Andrei (plicul 178). Un singur loc: `service.py` le scrie, Tabloul le lasă afară.
-NUMELE_DIN_REZUMAT: dict[str, str] = {
-    "questionsRatio": "Abilități de Coach și Întrebări",
-    "assertiveness": "Comunicare Asertivă",
-    "sbiFeedback": "Feedback Structurat (SBI)",
-    "conciseness": "Concizie și Echilibru",
-}
-
 # Dicționar complet de aliasuri (variante fără diacritice, engleză, prescurtări)
 COMPETENCY_ALIASES: dict[str, str] = {
     # 1. Ascultare activă
