@@ -24,6 +24,7 @@ from codrut.modules.practice.models import (
     ProjectCompetency,
     SessionSample,
 )
+from codrut.modules.practice.pe_proiect import sedintele_proiectului, toate_sedintele
 from codrut.modules.practice.scoring import (
     ZONA_ROMANIEI,
     ScoreEntry,
@@ -244,10 +245,20 @@ class PracticeDashboardService:
         #    Pana la plicul 29 exista, ca sa se vada ceva pe datele de arhiva; cu date
         #    adevarate si mai multi participanti, ar fi insemnat ca unul citeste
         #    reflectiile altuia. Ecranul gol e raspunsul corect.
+        # Plicul 185 — momentele și mostrele numai din ședințele proiectului deschis (Andrei,
+        # 30 sept: „pe proiect”). Fără proiect deschis: numai cele care nu țin de nicio ședință
+        # (arhiva) — ca la 184.
+        if project_id is not None:
+            pe_proiect_m = InsightMoment.conversation_id.in_(sedintele_proiectului(project_id))
+            pe_proiect_s = SessionSample.conversation_id.in_(sedintele_proiectului(project_id))
+        else:
+            pe_proiect_m = not_(InsightMoment.conversation_id.in_(toate_sedintele()))
+            pe_proiect_s = not_(SessionSample.conversation_id.in_(toate_sedintele()))
         stmt_moments = (
             select(InsightMoment)
             .where(
                 InsightMoment.user_id.in_(user_ids),
+                pe_proiect_m,
                 not_(InsightMoment.summary.startswith(TRAINER_PREFIX)),
             )
             .order_by(InsightMoment.created_at.desc())
@@ -262,7 +273,7 @@ class PracticeDashboardService:
         # pe tabloul oricui. Pe proba erau zero; le poate scrie doar importul arhivei.
         stmt_samples = (
             select(SessionSample)
-            .where(SessionSample.user_id.in_(user_ids))
+            .where(SessionSample.user_id.in_(user_ids), pe_proiect_s)
             .order_by(SessionSample.created_at.desc())
             .limit(10)
         )
