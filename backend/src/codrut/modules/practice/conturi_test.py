@@ -20,7 +20,7 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.modules.companies.models import ParticipantProfile
@@ -40,6 +40,37 @@ def e_cont_de_test(adresa: str | None) -> bool:
     if not adresa:
         return False
     return adresa.strip().lower() in CONTURI_DE_TEST
+
+
+async def fara_conturile_de_test(
+    session: AsyncSession,
+    randuri: list,
+) -> tuple[list, set[uuid.UUID]]:
+    """Oamenii unui proiect fara conturile de test + id-urile conturilor de test — plicul 180.
+
+    `randuri` = perechile (profil, apartenenta) ale proiectului. Un profil iese daca adresa lui
+    sau a contului legat e de test (regula lui 173, din Evolutie). Id-urile intorse = conturile
+    legate ale profilurilor scoase si conturile cu adresa de test, ca ecranele echipei sa le scoata
+    si notele cand contul de test NU e membru (sedintele „ca trainer” poarta `project_id`).
+    O singura regula pentru Evolutie si Camera de training, nu doua copii care se despart.
+    """
+    adrese_cont: dict[uuid.UUID, str] = {}
+    id_uri_cont = [p.user_id for p, _ in randuri if p.user_id]
+    if id_uri_cont:
+        adrese_cont = dict((await session.execute(
+            select(User.id, User.email).where(User.id.in_(id_uri_cont))
+        )).all())
+    pastrate, conturi_test = [], set()
+    for profil, membru in randuri:
+        if e_cont_de_test(profil.email) or e_cont_de_test(adrese_cont.get(profil.user_id)):
+            if profil.user_id:
+                conturi_test.add(profil.user_id)
+            continue
+        pastrate.append((profil, membru))
+    conturi_test |= set((await session.execute(
+        select(User.id).where(func.lower(User.email).in_(CONTURI_DE_TEST))
+    )).scalars().all())
+    return pastrate, conturi_test
 
 
 async def contul_de_test_al_sedintei(
