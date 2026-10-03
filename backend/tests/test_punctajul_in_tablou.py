@@ -87,7 +87,9 @@ async def test_tipul_dedus_din_rotatie_si_punctele_pe_tablou() -> None:
         await _nota(s, ctx, rp1, 50, zile[1])                 # sub 60: 0, fără bonus
         await _nota(s, ctx, rp2, 70, zile[2])                 # 20 + 25 (sus)
 
-        date = await PracticeDashboardService(s).get_participant_dashboard_data(ctx["principal"])
+        date = await PracticeDashboardService(s).get_participant_dashboard_data(
+            ctx["principal"], ctx["project"].id
+        )
         comp = next(c for c in date["competencies"] if c["name"] == COMP)
         assert comp["points"] == 30 + 25 + 20 + 25
         assert comp["interlocutor_types"] == 2
