@@ -4634,6 +4634,11 @@ export interface components {
             evidence_ceiling: number;
             /** Insight Moments */
             insight_moments: components["schemas"]["InsightMomentItem"][];
+            /**
+             * Other Competencies
+             * @default []
+             */
+            other_competencies: components["schemas"]["CompetencyDashboardItem"][];
             /** Participant Name */
             participant_name: string;
             /**
