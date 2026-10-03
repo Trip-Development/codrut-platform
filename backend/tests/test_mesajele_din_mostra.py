@@ -237,7 +237,9 @@ async def test_competenta_din_afara_proiectului_nu_apare() -> None:
         ctx = await _context(s)
         sed = await _sedinta(s, ctx, _azi(1))
         await _nota(s, ctx, sed, 90, _azi(1), "Negociere")  # nu e a proiectului — ca pe Tablou
-        assert await _castig_si_crestere(s, ctx, sed) == []
+        # plicul 178: pe Tablou apare la „Alte competențe exersate”, deci și în „+N”
+        castig = await _castig_si_crestere(s, ctx, sed)
+        assert castig == [{"competency": "Negociere", "points": 40 + 25}]
         await s.rollback()
 
 

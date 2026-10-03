@@ -170,6 +170,8 @@ class PracticeDashboardResponse(BaseModel):
     points_today: int = 0
     points_total: int = 0
     competencies: list[CompetencyDashboardItem]
+    # plicul 178 (H4): competențele exersate care nu sunt pe lista proiectului deschis
+    other_competencies: list[CompetencyDashboardItem] = []
     insight_moments: list[InsightMomentItem]
     session_samples: list[SessionSampleItem]
     empty_state: DashboardEmptyState | None = None

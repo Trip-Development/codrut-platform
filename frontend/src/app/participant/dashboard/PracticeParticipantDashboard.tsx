@@ -23,6 +23,7 @@ import Link from "next/link";
 import { CULOARE_NIVEL, culoareNivel, type Nivel } from "@/lib/culori-nivel";
 import { NOTA_MINIMA, procentPanaLaPragulUrmator } from "@/lib/praguri-puncte";
 import { PRAG_AFISARE_IMPINGERE, textImpingere } from "../texte-177";
+import { DESCRIERE_ALTE_COMPETENTE, TITLU_ALTE_COMPETENTE } from "../texte-178";
 
 interface PracticeParticipantDashboardProps {
   projectId?: string | null;
@@ -219,6 +220,19 @@ export function PracticeParticipantDashboard({ projectId }: PracticeParticipantD
               <CompetencyCard key={comp.name} item={comp} />
             ))}
           </div>
+
+          {/* Plicul 178 (H4): competențele exersate care nu sunt în lista programului — texte propuse */}
+          {(data.otherCompetencies ?? []).length > 0 && (
+            <div className="space-y-3 pt-2">
+              <div>
+                <h3 className="text-base font-semibold text-foreground">{TITLU_ALTE_COMPETENTE}</h3>
+                <p className="text-xs text-muted-foreground">{DESCRIERE_ALTE_COMPETENTE}</p>
+              </div>
+              {data.otherCompetencies.map((comp) => (
+                <CompetencyCard key={comp.name} item={comp} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
