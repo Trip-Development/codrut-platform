@@ -275,6 +275,8 @@ export type CompetencyDashboardItem = {
   points: number;
   pointsToday: number;
   interlocutorTypes: number;
+  /** Nota de azi pe competență (cea mai mare, ora României) — plicul 177. */
+  bestScoreToday: number | null;
 };
 
 export type InsightMomentItem = {
@@ -322,7 +324,12 @@ export type DashboardEmptyState = {
 export async function endPracticeSession(
   sessionId: string,
   payload?: { note?: string },
-): Promise<{ session: PracticeSession; summary: string | null }> {
+): Promise<{
+  session: PracticeSession;
+  summary: string | null;
+  /** Plicul 177: cât a crescut Tabloul datorită ședinței, pe competență (numai > 0). */
+  pointsEarned: { competency: string; points: number }[];
+}> {
   const res = await apiFetch(`${getApiBaseUrl()}/practice/sessions/${sessionId}/end`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -349,6 +356,7 @@ export async function endPracticeSession(
       updatedAt: sessionData.updated_at,
     },
     summary: data.summary ?? null,
+    pointsEarned: data.points_earned ?? [],
   };
 }
 
@@ -411,6 +419,7 @@ type RawCompetency = {
   points?: number;
   points_today?: number;
   interlocutor_types?: number;
+  best_score_today?: number | null;
 };
 
 type RawInsightMoment = {
@@ -464,6 +473,7 @@ export async function getPracticeDashboard(
       points: c.points ?? 0,
       pointsToday: c.points_today ?? 0,
       interlocutorTypes: c.interlocutor_types ?? 0,
+      bestScoreToday: c.best_score_today ?? null,
     })),
     insightMoments: (data.insight_moments || []).map((m: RawInsightMoment) => ({
       id: m.id,

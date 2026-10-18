@@ -3126,6 +3126,8 @@ export interface components {
         CompetencyDashboardItem: {
             /** Average Score */
             average_score: number;
+            /** Best Score Today */
+            best_score_today?: number | null;
             /** Color */
             color: string;
             /** Days Span 70 */
@@ -4591,6 +4593,13 @@ export interface components {
             /** Test Out */
             test_out?: number | null;
         };
+        /** PointsEarnedItem */
+        PointsEarnedItem: {
+            /** Competency */
+            competency: string;
+            /** Points */
+            points: number;
+        };
         /** PracticeConsentRequest */
         PracticeConsentRequest: {
             /** Amprenta */
@@ -4851,6 +4860,11 @@ export interface components {
         };
         /** PracticeSessionEndResponse */
         PracticeSessionEndResponse: {
+            /**
+             * Points Earned
+             * @default []
+             */
+            points_earned: components["schemas"]["PointsEarnedItem"][];
             session: components["schemas"]["PracticeSessionResponse"];
             /** Summary */
             summary?: string | null;

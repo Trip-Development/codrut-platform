@@ -243,7 +243,7 @@ function Semn({ da }: { da: boolean }) {
   return (
     <td className="p-4 text-center">
       {da ? (
-        <CheckCircleIcon className="mx-auto size-4" style={{ color: "#15803d" }} aria-label="da" />
+        <CheckCircleIcon className="mx-auto size-4" style={{ color: "var(--success-ink)" }} aria-label="da" />
       ) : (
         <XCircleIcon className="mx-auto size-4 text-muted-foreground/40" aria-label="nu" />
       )}

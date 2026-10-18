@@ -50,6 +50,7 @@ from codrut.modules.practice.models import (
     SessionState,
     TurnRole,
 )
+from codrut.modules.practice.pe_proiect import sedintele_proiectului
 from codrut.modules.practice.policies import ensure_participant_may_practice
 from codrut.modules.practice.pricing import estimate_pessimistic_cost
 from codrut.modules.practice.prompts import (
@@ -573,7 +574,8 @@ class PracticeSessionService:
         # Spre model pleaca CODUL omului, niciodata numele — plicul 138.
         cod = await codul_omului(self.session, profile)
         memorii = await self._memoria_participantului(
-            profile.user_id, history_length=0, profil=profile, cod=cod
+            profile.user_id, history_length=0, profil=profile, cod=cod,
+            project_id=program_settings.project_id,
         )
 
         system_instruction = get_system_prompt_for_kind(
@@ -758,6 +760,7 @@ class PracticeSessionService:
         history_length: int,
         profil: ParticipantProfile | None = None,
         cod: str | None = None,
+        project_id: uuid.UUID,
     ) -> list[dict]:
         """Ce stie Codrut despre omul asta din sesiunile dinainte.
 
@@ -768,6 +771,8 @@ class PracticeSessionService:
         cel putin 40, date in ordine cronologica, si numai la inceputul sesiunii —
         promptul le foloseste oricum doar la `history_length <= 2`, deci mai tarziu nici
         nu se citesc din baza.
+
+        Numai din proiectul ședinței (plicul 185).
         """
         if user_id is None or history_length > MEMORIE_PANA_LA_REPLICA:
             return []
@@ -777,6 +782,13 @@ class PracticeSessionService:
             .where(
                 ParticipantMemory.user_id == user_id,
                 ParticipantMemory.relevance_score >= MEMORIE_RELEVANTA_MINIMA,
+                # Numai din proiectul ședinței — plicul 185, Andrei, 30 sept: „pe proiect”.
+                # Arhiva scrie proiectul pe însemnare; închiderea nu-l scrie, deci se ia prin
+                # ședința din care vine.
+                or_(
+                    ParticipantMemory.project_id == project_id,
+                    ParticipantMemory.session_id.in_(sedintele_proiectului(project_id)),
+                ),
             )
             .order_by(ParticipantMemory.created_at.desc())
             .limit(MEMORIE_CATE_INSEMNARI)
@@ -980,6 +992,7 @@ class PracticeSessionService:
                 history_length=history_length,
                 profil=profile,
                 cod=cod,
+                project_id=program_settings.project_id,
             )
 
             doua_apeluri = (

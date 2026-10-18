@@ -21,9 +21,12 @@ from codrut.modules.practice.interlocutor import intrarile_de_punctaj
 from codrut.modules.practice.models import (
     CompetencyScore,
     InsightMoment,
+    PracticeProgramSettings,
+    PracticeSession,
     ProjectCompetency,
     SessionSample,
 )
+from codrut.modules.practice.pe_proiect import sedintele_proiectului, toate_sedintele
 from codrut.modules.practice.scoring import (
     ZONA_ROMANIEI,
     ScoreEntry,
@@ -51,6 +54,15 @@ def _cheie(nume: str) -> str:
     in plus — plicul 143. „rezolvarea  colaborativa" si „Rezolvarea colaborativă" sunt aceeasi."""
     return _strip_accents(normalize_competency_name(nume or ""))
 
+
+# Plicul 192 — Andrei, 14 oct („da” pe tabel): notele de la finalul ședinței dau puncte pe
+# competența programului cu care se potrivesc; „Concizie și Echilibru” nu. Totul e deja `_cheie`.
+NOTELE_DE_FINAL = {
+    "comunicare asertiva": "exprimarea asertiva a nevoilor si limitelor",
+    "feedback structurat sbi": "feedback constructiv",
+    "abilitati de coach si intrebari": "verificarea intelegerii si a alinierii",
+}
+
 class PracticeDashboardService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -69,8 +81,10 @@ class PracticeDashboardService:
         self,
         principal: SessionPrincipal,
         project_id: uuid.UUID | None = None,
+        fara_sedinta: uuid.UUID | None = None,
     ) -> dict[str, Any]:
         """Aggregate all participant metrics, competency evidence, moments, and samples for the dashboard."""  # noqa: E501
+        # `fara_sedinta` — plicul 177: Tabloul fără notele acelei ședințe („+N puncte”).
         # 1. Resolve participant profile
         #
         # Aceeasi forma ca la plicul 30, pe drumul participantului — plicul 73. Aici ramasese
@@ -128,13 +142,23 @@ class PracticeDashboardService:
         elif user_obj:
             total_xp = user_obj.xp or 0
 
-        # 3. Query all competency scores for this user
+        # 3. Notele omului — NUMAI din proiectul deschis (plicul 184; Andrei, 30 sept:
+        # „pe proiect”). Fără proiect deschis: numai notele care nu țin de niciun proiect.
+        # Filtrul stă aici, înaintea oricărei socoteli: puncte, serie, nota de azi, textul
+        # de gol și „+N” vin din același cuprins.
         stmt_scores = (
             select(CompetencyScore)
             .where(CompetencyScore.user_id.in_(user_ids))
+            .where(
+                CompetencyScore.project_id == project_id
+                if project_id is not None
+                else CompetencyScore.project_id.is_(None)
+            )
             .order_by(CompetencyScore.created_at.desc())
         )
         all_scores = list((await self.session.execute(stmt_scores)).scalars().all())
+        if fara_sedinta is not None:
+            all_scores = [s for s in all_scores if s.conversation_id != str(fara_sedinta)]
 
         # Plicul 93: aici era o rezerva „daca omul n-are note, ia ultimele 150 din toata baza",
         # pusa pentru previzualizarea locala. Cine n-are note e fiecare om la prima intrare, deci
@@ -191,6 +215,9 @@ class PracticeDashboardService:
                 if nume is None:
                     canonic = match_comp(s.competency_name)
                     nume = dupa_nume.get(_cheie(canonic)) if canonic else None
+                if nume is None:
+                    tinta = NOTELE_DE_FINAL.get(_cheie(s.competency_name or ""))
+                    nume = dupa_nume.get(tinta) if tinta else None
                 if nume is None or s.id not in intrari:
                     continue
                 scores_by_comp[nume].append(intrari[s.id])
@@ -221,6 +248,7 @@ class PracticeDashboardService:
                 "points": ev.points,
                 "points_today": ev.points_today,
                 "interlocutor_types": ev.interlocutor_types,
+                "best_score_today": ev.best_score_today,
             })
 
         # 7. Insight moments
@@ -236,10 +264,20 @@ class PracticeDashboardService:
         #    Pana la plicul 29 exista, ca sa se vada ceva pe datele de arhiva; cu date
         #    adevarate si mai multi participanti, ar fi insemnat ca unul citeste
         #    reflectiile altuia. Ecranul gol e raspunsul corect.
+        # Plicul 185 — momentele și mostrele numai din ședințele proiectului deschis (Andrei,
+        # 30 sept: „pe proiect”). Fără proiect deschis: numai cele care nu țin de nicio ședință
+        # (arhiva) — ca la 184.
+        if project_id is not None:
+            pe_proiect_m = InsightMoment.conversation_id.in_(sedintele_proiectului(project_id))
+            pe_proiect_s = SessionSample.conversation_id.in_(sedintele_proiectului(project_id))
+        else:
+            pe_proiect_m = not_(InsightMoment.conversation_id.in_(toate_sedintele()))
+            pe_proiect_s = not_(SessionSample.conversation_id.in_(toate_sedintele()))
         stmt_moments = (
             select(InsightMoment)
             .where(
                 InsightMoment.user_id.in_(user_ids),
+                pe_proiect_m,
                 not_(InsightMoment.summary.startswith(TRAINER_PREFIX)),
             )
             .order_by(InsightMoment.created_at.desc())
@@ -254,7 +292,7 @@ class PracticeDashboardService:
         # pe tabloul oricui. Pe proba erau zero; le poate scrie doar importul arhivei.
         stmt_samples = (
             select(SessionSample)
-            .where(SessionSample.user_id.in_(user_ids))
+            .where(SessionSample.user_id.in_(user_ids), pe_proiect_s)
             .order_by(SessionSample.created_at.desc())
             .limit(10)
         )
@@ -322,3 +360,34 @@ class PracticeDashboardService:
                     "description": NEINSCRIS_DESCRIERE,
                 }
         return rezultat
+
+    async def puncte_castigate_in_sedinta(
+        self,
+        principal: SessionPrincipal,
+        session_id: uuid.UUID,
+    ) -> list[dict[str, Any]]:
+        """Cât a crescut Tabloul datorită unei ședințe, pe competență — plicul 177 („+N puncte”).
+
+        Tabloul proiectului ședinței cu notele ei minus același Tablou fără ele: aceeași socoteală
+        care face Tabloul, deci „+N” e, prin construcție, exact creșterea pe care omul o vede acolo
+        (bonusul de tip nou și „a doua ședință a zilei” incluse). Intră numai competențele cu N > 0.
+        """
+        proiect = (await self.session.execute(
+            select(PracticeProgramSettings.project_id)
+            .join(
+                PracticeSession,
+                PracticeSession.program_settings_id == PracticeProgramSettings.id,
+            )
+            .where(PracticeSession.id == session_id)
+        )).scalar_one_or_none()
+        dupa = await self.get_participant_dashboard_data(principal, proiect)
+        inainte = await self.get_participant_dashboard_data(
+            principal, proiect, fara_sedinta=session_id
+        )
+        puncte_inainte = {c["name"]: c["points"] for c in inainte["competencies"]}
+        castig = []
+        for c in dupa["competencies"]:
+            n = c["points"] - puncte_inainte.get(c["name"], 0)
+            if n > 0:
+                castig.append({"competency": c["name"], "points": n})
+        return castig

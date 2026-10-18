@@ -33,16 +33,27 @@
   --color-brand-text: var(--brand-text);
   --color-danger-ink: var(--danger-ink);
   --color-burgundy: var(--burgundy);
-  --color-burgundy-50: #fdf6f6;
-  --color-burgundy-100: #fbe9e9;
-  --color-burgundy-200: #f5c9c9;
-  --color-burgundy-400: #b83333;
+  /* Treptele vișiniului — o singură sursă, `--burgundy` (plicul 175, paleta A). */
+  --color-burgundy-50: color-mix(in oklab, var(--burgundy) 4%, white);
+  --color-burgundy-100: color-mix(in oklab, var(--burgundy) 8%, white);
+  --color-burgundy-200: color-mix(in oklab, var(--burgundy) 18%, white);
+  --color-burgundy-400: color-mix(in oklab, var(--burgundy) 75%, white);
   --color-burgundy-500: var(--burgundy);
-  --color-burgundy-core: #890505;
-  --color-burgundy-600: #780404;
-  --color-burgundy-700: #650303;
-  --color-burgundy-800: #520303;
-  --color-burgundy-900: #3f0202;
+  --color-burgundy-core: #8A1530;
+  --color-burgundy-600: color-mix(in oklab, var(--burgundy) 88%, black);
+  --color-burgundy-700: color-mix(in oklab, var(--burgundy) 74%, black);
+  --color-burgundy-800: color-mix(in oklab, var(--burgundy) 60%, black);
+  --color-burgundy-900: color-mix(in oklab, var(--burgundy) 46%, black);
+  --color-burgundy-soft: var(--burgundy-soft);
+  /* Ocrul e numai grafică (inel, bare, iconițe), niciodată text: 2,73 pe fildeș. */
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-gold-ink: var(--gold-ink);
+  --color-nudge-ink: var(--nudge-ink);
+  --color-track: var(--track);
+  --color-success-soft: var(--success-soft);
+  /* Verdele brandului e numai umplere, sub text `--foreground`; niciodată text. */
+  --color-brand-green: var(--brand-green);
   --color-ochre: var(--ochre);
   --color-ochre-100: #fbf1d7;
   --color-ochre-500: var(--ochre);
@@ -55,7 +66,7 @@
   --color-warning-ink: var(--warning-ink);
   --color-info: var(--info);
   --color-info-ink: var(--info-ink);
-  --color-codrut-burgundy: #890505;
+  --color-codrut-burgundy: #8A1530;
   --color-codrut-green: #a3d376;
   --color-codrut-gray: #5e5e5e;
   --color-codrut-ink: #191716;
@@ -84,8 +95,8 @@
   --radius-4xl: calc(var(--radius) * 2.6);
   --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.04);
   --shadow-glass-hover: 0 12px 48px 0 rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
-  --shadow-premium: 0 4px 24px -4px rgba(137, 5, 5, 0.06), 0 12px 32px -8px rgba(0, 0, 0, 0.04);
-  --shadow-premium-hover: 0 8px 32px -4px rgba(137, 5, 5, 0.12), 0 16px 48px -12px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255,255,255,0.6) inset;
+  --shadow-premium: 0 4px 24px -4px rgba(138, 21, 48, 0.06), 0 12px 32px -8px rgba(0, 0, 0, 0.04);
+  --shadow-premium-hover: 0 8px 32px -4px rgba(138, 21, 48, 0.12), 0 16px 48px -12px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255,255,255,0.6) inset;
   --shadow-inner-light: inset 0 1px 0 0 rgba(255, 255, 255, 0.6);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-spring-soft: cubic-bezier(0.22, 1, 0.36, 1);
@@ -96,23 +107,32 @@
 
 :root {
   color-scheme: light;
-  --background: #F7F7F6;
-  --foreground: #1C1C1B;
+  /* Paleta A „Brand cald” — aleasă de Andrei (STARE, 1 oct, `[culori-aplicatie]`), plicul 175. */
+  --background: #FBF8F4;
+  --foreground: #191716;
   --surface: #FFFFFF;
-  --surface-muted: #EEEEEC;
+  --surface-muted: #F4EEE7;
   --surface-raised: #FFFFFF;
   --surface-elevated: var(--surface-raised);
-  --shell-sidebar: #F2F2F0;
-  --border: rgba(28, 28, 27, 0.10);
-  --control: #F1F1EF;
-  --control-border: rgba(28, 28, 27, 0.14);
-  --burgundy: #890505;
-  --burgundy-dark: #650303;
-  --brand-text: #890505;
+  --shell-sidebar: #F4EEE7;
+  --border: rgba(25, 23, 22, 0.10);
+  --control: #F3EDE6;
+  --control-border: rgba(25, 23, 22, 0.14);
+  --burgundy: #8A1530;
+  --burgundy-dark: color-mix(in oklab, var(--burgundy) 80%, black);
+  --burgundy-soft: color-mix(in oklab, var(--burgundy) 8%, white);
+  --brand-text: var(--burgundy);
   --ochre: #8A5714;
-  --brand-gray: #6C6C69;
+  --brand-gray: #6E6460;
+  --gold: #C28F2C;
+  --gold-soft: #F6EBD6;
+  --gold-ink: #7A5714;
+  --nudge-ink: #5C4211;
+  --track: #EFE6DC;
+  --brand-green: #A3D376;
   --success: #237A4B;
   --success-ink: #237A4B;
+  --success-soft: #E6F1DE;
   --warning: #8A5714;
   --warning-ink: #8A5714;
   --info: #25699A;
@@ -128,14 +148,14 @@
   --secondary: var(--surface-muted);
   --secondary-foreground: var(--foreground);
   --muted: var(--surface-muted);
-  --muted-foreground: #6C6C69;
+  --muted-foreground: #6E6460;
   --accent: color-mix(in srgb, var(--burgundy) 10%, var(--surface-muted));
   --accent-foreground: var(--brand-text);
   --destructive: var(--danger);
   --destructive-foreground: #FFFFFF;
   --input: var(--control-border);
-  --ring: rgba(137, 5, 5, 0.45);
-  --focus-ring: rgba(137, 5, 5, 0.45);
+  --ring: rgba(138, 21, 48, 0.55);
+  --focus-ring: rgba(138, 21, 48, 0.55);
   --radius: 1rem;
   --chart-1: var(--burgundy);
   --chart-2: var(--ochre);
@@ -150,30 +170,40 @@
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--focus-ring);
-  --shadow-brand: 0 12px 24px -16px rgba(137, 5, 5, 0.32);
+  --shadow-brand: 0 12px 24px -16px rgba(138, 21, 48, 0.32);
   background: var(--background);
   color: var(--foreground);
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --background: #060606;
-  --foreground: #F1F0EC;
-  --surface: #0F0F0E;
-  --surface-muted: #1B1B1A;
-  --surface-raised: #151414;
+  /* Paleta C „Seară” din aceeași mostră, cu brandul A pe butoane — alegerea arhitectului, nu a lui
+     Andrei (plicul 175, cheia `[culori-tema-intunecata]`). */
+  --background: #17141A;
+  --foreground: #F3EEF0;
+  --surface: #231E26;
+  --surface-muted: #2E2433;
+  --surface-raised: #282229;
   --surface-elevated: var(--surface-raised);
-  --shell-sidebar: #0F0F0E;
+  --shell-sidebar: #231E26;
   --border: rgba(255, 255, 255, 0.08);
-  --control: #141413;
+  --control: #1F1A22;
   --control-border: rgba(255, 255, 255, 0.09);
-  --burgundy: #890505;
-  --burgundy-dark: #C56A7D;
-  --brand-text: #C56A7D;
+  --burgundy: #8A1530;
+  --burgundy-dark: color-mix(in oklab, var(--brand-text) 85%, black);
+  --burgundy-soft: color-mix(in oklab, var(--burgundy) 25%, var(--surface-muted));
+  --brand-text: #E8728F;
   --ochre: #E2A54E;
-  --brand-gray: #A8A6A1;
+  --brand-gray: #A99EA8;
+  --gold: #E2B65A;
+  --gold-soft: #3A2A20;
+  --gold-ink: #E8C47A;
+  --nudge-ink: #E9DDE6;
+  --track: #352C39;
+  --brand-green: #A3D376;
   --success: #58C98A;
   --success-ink: #58C98A;
+  --success-soft: #203226;
   --warning: #E2A54E;
   --warning-ink: #E2A54E;
   --info: #6EB5E1;
@@ -189,14 +219,14 @@
   --secondary: var(--surface-muted);
   --secondary-foreground: var(--foreground);
   --muted: var(--surface-muted);
-  --muted-foreground: #A8A6A1;
+  --muted-foreground: #A99EA8;
   --accent: color-mix(in srgb, var(--brand-text) 18%, var(--surface-muted));
   --accent-foreground: var(--brand-text);
   --destructive: var(--danger);
-  --destructive-foreground: #060606;
+  --destructive-foreground: #17141A;
   --input: var(--control-border);
-  --ring: rgba(197, 106, 125, 0.55);
-  --focus-ring: rgba(197, 106, 125, 0.55);
+  --ring: rgba(232, 114, 143, 0.65);
+  --focus-ring: rgba(232, 114, 143, 0.65);
   --chart-1: var(--burgundy);
   --chart-2: var(--ochre);
   --chart-3: var(--success);
@@ -211,6 +241,16 @@
   --sidebar-border: var(--border);
   --sidebar-ring: var(--focus-ring);
   --shadow-brand: 0 12px 24px -16px rgba(0, 0, 0, 0.72);
+}
+
+/* Pe tema întunecată, vișiniul de buton nu se citește ca text pe fondul închis (2,0 : 1).
+   Textul scris cu `text-primary` / `text-burgundy` ia culoarea de text a brandului; fondurile
+   (`bg-primary`) rămân vișinii, cu text alb. După clasa de bază, ca `hover:` să câștige. Plicul 175. */
+@layer utilities {
+  :where([data-theme="dark"]) .text-primary,
+  :where([data-theme="dark"]) .text-burgundy {
+    color: var(--brand-text);
+  }
 }
 
 @layer base {
@@ -306,7 +346,7 @@ html {
 .hover-depth:hover {
   transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--burgundy) 24%, var(--border));
-  box-shadow: 0 16px 36px -28px rgba(137, 5, 5, 0.38);
+  box-shadow: 0 16px 36px -28px color-mix(in oklab, var(--burgundy) 38%, transparent);
 }
 
 [data-theme="dark"] .hover-depth:hover {
@@ -464,8 +504,8 @@ html {
 
 .card-tasks {
   background-color: var(--surface);
-  border-color: rgba(137, 5, 5, 0.40);
-  color: #890505;
+  border-color: color-mix(in oklab, var(--burgundy) 40%, transparent);
+  color: var(--brand-text);
 }
 [data-theme="dark"] .card-tasks {
   background-color: var(--surface);

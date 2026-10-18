@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -21,6 +22,7 @@ from codrut.modules.practice.room_service import (
     PracticeRoomService,
 )
 from codrut.modules.practice.schemas import (
+    PointsEarnedItem,
     PracticeConsentRequest,
     PracticeConsentResponse,
     PracticeDashboardResponse,
@@ -49,6 +51,7 @@ from codrut.modules.practice.schemas import (
 from codrut.modules.practice.service import PracticeSessionService
 from codrut.modules.practice.setup_service import PracticeSetupService
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -191,9 +194,18 @@ async def end_practice_session(
         note=payload.note,
     )
     await session.commit()
+    # Plicul 177: „+N puncte la …”. Închiderea nu are voie să pice din cauza anunțului.
+    try:
+        puncte = await PracticeDashboardService(session).puncte_castigate_in_sedinta(
+            principal, session_id
+        )
+    except Exception:
+        logger.warning("practice_puncte_la_inchidere_esuat sesiune=%s", session_id, exc_info=True)
+        puncte = []
     return PracticeSessionEndResponse(
         session=PracticeSessionResponse.model_validate(session_obj),
         summary=summary,
+        points_earned=[PointsEarnedItem(**p) for p in puncte],
     )
 
 
