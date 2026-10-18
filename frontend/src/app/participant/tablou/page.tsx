@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { AppShell } from "@/components/shell/app-shell";
 import { getParticipantSession } from "@/api/auth-server";
 import { getParticipantWorkspaceSummary } from "@/api/participants";
@@ -5,11 +7,14 @@ import { getServerApiRequestOptions } from "@/api/server-request";
 import { PracticeParticipantDashboard } from "../dashboard/PracticeParticipantDashboard";
 import { ParticipantContextSelector } from "../ParticipantContextSelector";
 import {
+  PARTICIPANT_WELCOME_PATH,
   participantActiveHref,
   participantActiveProjectType,
   participantDisplayName,
   participantScopeParams,
+  participantScopedHref,
   participantScopedNavItems,
+  participantShouldOpenWelcome,
   participantWorkspaceRequestOptions,
   type ParticipantRouteSearchParams,
 } from "../participant-context";
@@ -43,6 +48,14 @@ export default async function TablouParticipantPage({
     (summary ? participantActiveProjectType(summary) : null) ?? TRAINING_PROJECT_TYPE;
 
   const contexteCont = await participantAccountContexts(requestOptions.headers, routeParams, summary?.contexts);
+  // Plicul 190: omul cu 2+ proiecte, fără proiect ales, ajunge la bun venit — ca la „Acasă” (160 B).
+  // Fără gardă, cu Tabloul pe proiect (184), ar fi văzut 0 / „Încă nu ai exersat.”.
+  if (participantShouldOpenWelcome(routeParams, contexteCont)) {
+    const params = new URLSearchParams();
+    const profil = routeParams.profile;
+    if (typeof profil === "string" && profil) params.set("profile", profil);
+    redirect(participantScopedHref(PARTICIPANT_WELCOME_PATH, params));
+  }
   return (
     <AppShell
       audience="participant"

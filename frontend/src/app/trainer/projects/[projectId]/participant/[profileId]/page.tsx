@@ -4,6 +4,7 @@ import { ArrowLeftIcon, BookOpenIcon } from "lucide-react";
 import { getPracticePerson } from "@/api/practice";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { Card } from "@/components/ui/card";
+import { CULOARE_NIVEL, culoareNivel } from "@/lib/culori-nivel";
 import { TrainerNotesPanel } from "./TrainerNotesPanel";
 
 /**
@@ -110,13 +111,13 @@ export default async function ProjectParticipantPage({
                   IN: <strong className="text-foreground">{t.testIn !== null ? `${t.testIn}%` : "—"}</strong>
                 </span>
                 <span className="w-24 text-right text-xs text-muted-foreground">
-                  OUT: <strong style={{ color: t.testOut !== null ? "#15803d" : undefined }}>
+                  OUT: <strong style={{ color: t.testOut !== null ? "var(--success-ink)" : undefined }}>
                     {t.testOut !== null ? `${t.testOut}%` : "—"}
                   </strong>
                 </span>
                 <span
                   className="w-14 text-right text-xs font-bold"
-                  style={{ color: t.delta === null ? undefined : t.delta >= 0 ? "#639922" : "#E24B4A" }}
+                  style={{ color: t.delta === null ? undefined : t.delta >= 0 ? "var(--success-ink)" : "var(--danger-ink)" }}
                 >
                   {t.delta === null ? "—" : t.delta >= 0 ? `+${t.delta}` : `${t.delta}`}
                 </span>
@@ -157,12 +158,11 @@ export default async function ProjectParticipantPage({
                       {e.sessionsCount} {e.sessionsCount === 1 ? "sesiune" : "sesiuni"}
                     </span>
                     <span
-                      className="inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white"
-                      style={{ background: e.color }}
+                      className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${culoareNivel(e.level).fond} ${culoareNivel(e.level).text}`}
                     >
                       {e.level}
                     </span>
-                    <span className="text-lg font-bold" style={{ color: e.color }}>
+                    <span className="text-lg font-bold" style={{ color: culoareNivel(e.level).cerneala }}>
                       {Math.round(e.averageScore)}%
                     </span>
                   </div>
@@ -170,7 +170,7 @@ export default async function ProjectParticipantPage({
                 <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
                   <div
                     className="h-full rounded-full"
-                    style={{ width: `${Math.round(e.averageScore)}%`, backgroundColor: e.color }}
+                    style={{ width: `${Math.round(e.averageScore)}%`, backgroundColor: culoareNivel(e.level).punct }}
                   />
                 </div>
                 {e.whyNotHigher && e.scoresCount > 0 ? (
@@ -182,10 +182,10 @@ export default async function ProjectParticipantPage({
         )}
         {/* legenda nivelurilor — culorile sunt limbaj, nu decor */}
         <div className="mt-6 flex flex-wrap gap-4 border-t pt-5 text-[11px] text-muted-foreground">
-          <Legenda culoare="#E24B4A" text="Conștientizare (0–25%)" />
-          <Legenda culoare="#BA7517" text="Aplicare (25–50%)" />
-          <Legenda culoare="#1A4A7A" text="Consolidare (50–75%)" />
-          <Legenda culoare="#639922" text="Integrare (75–100%)" />
+          <Legenda culoare={CULOARE_NIVEL["CONȘTIENTIZARE"].punct} text="Conștientizare (0–25%)" />
+          <Legenda culoare={CULOARE_NIVEL.APLICARE.punct} text="Aplicare (25–50%)" />
+          <Legenda culoare={CULOARE_NIVEL.CONSOLIDARE.punct} text="Consolidare (50–75%)" />
+          <Legenda culoare={CULOARE_NIVEL.INTEGRARE.punct} text="Integrare (75–100%)" />
         </div>
       </Card>
 
@@ -231,7 +231,7 @@ export default async function ProjectParticipantPage({
                 <li key={e.name} className="flex items-center gap-3 text-sm">
                   <span className="w-5 text-center text-xs font-bold text-muted-foreground">{i + 1}</span>
                   <span className="flex-1 text-foreground">{e.name}</span>
-                  <span className="font-bold" style={{ color: e.color }}>
+                  <span className="font-bold" style={{ color: culoareNivel(e.level).cerneala }}>
                     {Math.round(e.averageScore)}%
                   </span>
                 </li>
@@ -357,7 +357,7 @@ function Cifra({
       </p>
       <p
         className="mt-1 text-3xl font-bold"
-        style={{ color: accent ? "#9B0021" : undefined }}
+        style={{ color: accent ? "var(--brand-text)" : undefined }}
       >
         {valoare === null ? "—" : brut ? valoare : `${valoare}%`}
       </p>

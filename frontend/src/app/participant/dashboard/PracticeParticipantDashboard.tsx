@@ -20,6 +20,9 @@ import {
   HelpCircleIcon,
 } from "lucide-react";
 import Link from "next/link";
+import { CULOARE_NIVEL, culoareNivel, type Nivel } from "@/lib/culori-nivel";
+import { NOTA_MINIMA, procentPanaLaPragulUrmator } from "@/lib/praguri-puncte";
+import { PRAG_AFISARE_IMPINGERE, textImpingere, textImpingereAzi } from "../texte-177";
 
 interface PracticeParticipantDashboardProps {
   projectId?: string | null;
@@ -110,7 +113,7 @@ export function PracticeParticipantDashboard({ projectId }: PracticeParticipantD
               <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Puncte azi
               </CardTitle>
-              <SparklesIcon className="size-4 text-amber-500" />
+              <SparklesIcon className="size-4 text-gold" />
             </div>
           </CardHeader>
           <CardContent>
@@ -129,12 +132,12 @@ export function PracticeParticipantDashboard({ projectId }: PracticeParticipantD
               <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Serie de zile
               </CardTitle>
-              <FlameIcon className="size-4 text-orange-500" />
+              <FlameIcon className="size-4 text-gold" />
             </div>
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-orange-500">{data.streakDays}</span>
+              <span className="text-2xl font-bold text-foreground">{data.streakDays}</span>
               <span className="text-xs font-semibold text-foreground">
                 {data.streakDays === 1 ? "zi activă" : "zile consecutive"}
               </span>
@@ -191,18 +194,11 @@ export function PracticeParticipantDashboard({ projectId }: PracticeParticipantD
           <CardContent className="flex flex-col items-center justify-center pt-2">
             <RadarChartSVG competencies={data.competencies} />
             <div className="flex flex-wrap items-center justify-center gap-3 mt-4 text-[11px] text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <span className="size-2 rounded-full bg-[#639922]" /> Integrare
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="size-2 rounded-full bg-[#1A4A7A]" /> Consolidare
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="size-2 rounded-full bg-[#BA7517]" /> Aplicare
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="size-2 rounded-full bg-[#E24B4A]" /> Conștientizare
-              </span>
+              {LEGENDA.map(([nivel, eticheta]) => (
+                <span key={nivel} className="flex items-center gap-1">
+                  <span className="size-2 rounded-full" style={{ backgroundColor: CULOARE_NIVEL[nivel].punct }} /> {eticheta}
+                </span>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -292,20 +288,20 @@ export function PracticeParticipantDashboard({ projectId }: PracticeParticipantD
                   >
                     {weakText && (
                       <div className="space-y-0.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-rose-500">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-destructive">
                           Așa a fost:
                         </span>
-                        <p className="text-muted-foreground italic pl-2 border-l-2 border-rose-400">
+                        <p className="text-muted-foreground italic pl-2 border-l-2 border-destructive">
                           „{weakText}”
                         </p>
                       </div>
                     )}
                     {impText && (
                       <div className="space-y-0.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-success-ink">
                           Așa ar fi sunat mai bine:
                         </span>
-                        <p className="text-foreground font-medium pl-2 border-l-2 border-emerald-500">
+                        <p className="text-foreground font-medium pl-2 border-l-2 border-success-ink">
                           „{impText}”
                         </p>
                       </div>
@@ -321,7 +317,16 @@ export function PracticeParticipantDashboard({ projectId }: PracticeParticipantD
   );
 }
 
+// Legenda radarului, în ordinea de azi; culorile vin din paleta A (plicul 175).
+const LEGENDA: Array<[Nivel, string]> = [
+  ["INTEGRARE", "Integrare"],
+  ["CONSOLIDARE", "Consolidare"],
+  ["APLICARE", "Aplicare"],
+  ["CONȘTIENTIZARE", "Conștientizare"],
+];
+
 function CompetencyCard({ item }: { item: CompetencyDashboardItem }) {
+  const culoare = culoareNivel(item.level);
   return (
     <div className="p-4 rounded-lg border bg-surface shadow-2xs space-y-3">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -332,13 +337,23 @@ function CompetencyCard({ item }: { item: CompetencyDashboardItem }) {
 
         <div>
           <span
-            className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold text-white shadow-xs"
-            style={{ backgroundColor: item.color }}
+            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold shadow-xs ${culoare.fond} ${culoare.text}`}
           >
             {item.level}
           </span>
         </div>
       </div>
+
+      {/* Bara spre pragul următor — plicul 175; textul rămâne „N puncte” și „De ce nu e mai sus?” */}
+      <div className="h-2 w-full overflow-hidden rounded-full bg-track" aria-hidden="true">
+        <div
+          data-bara-puncte={item.name}
+          className="h-full rounded-full bg-[linear-gradient(90deg,var(--gold),var(--burgundy))]"
+          style={{ width: `${procentPanaLaPragulUrmator(item.points, item.level)}%` }}
+        />
+      </div>
+
+      <MesajulNoteiDeAzi item={item} />
 
       {/* Metrics Row */}
       <div className="flex flex-wrap items-center gap-2 text-[11px] pt-1">
@@ -368,6 +383,27 @@ function CompetencyCard({ item }: { item: CompetencyDashboardItem }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Mesajul (a) — plicul 177; numai când nota de azi e între 50 și 59. Plicul 193 (`[mesaje-deja-puncte]`):
+ * fără niciun punct, „până la primele puncte”; cu puncte din alte zile, „până la puncte azi”.
+ */
+function MesajulNoteiDeAzi({ item }: { item: CompetencyDashboardItem }) {
+  const nota = item.bestScoreToday;
+  if (typeof nota !== "number" || nota < PRAG_AFISARE_IMPINGERE || nota >= NOTA_MINIMA) {
+    return null;
+  }
+  const text = item.points > 0 ? textImpingereAzi(item.name, nota) : textImpingere(item.name, nota);
+  const bucata = `nota ${nota}`;
+  const i = text.indexOf(bucata);
+  return (
+    <p role="status" className="rounded-[14px] bg-gold-soft px-[13px] py-[11px] text-[0.8rem] text-nudge-ink">
+      {text.slice(0, i)}
+      <strong>{bucata}</strong>
+      {text.slice(i + bucata.length)}
+    </p>
   );
 }
 
@@ -448,9 +484,9 @@ function RadarChartSVG({ competencies }: { competencies: CompetencyDashboardItem
       {/* Data Polygon */}
       <polygon
         points={polygonPoints}
-        fill="#1A4A7A"
-        fillOpacity="0.35"
-        stroke="#1A4A7A"
+        fill="var(--burgundy)"
+        fillOpacity="0.15"
+        stroke="var(--burgundy)"
         strokeWidth="2.5"
       />
 
@@ -465,8 +501,8 @@ function RadarChartSVG({ competencies }: { competencies: CompetencyDashboardItem
               cx={x}
               cy={y}
               r="4.5"
-              fill={c.color || "#1A4A7A"}
-              stroke="#ffffff"
+              fill={culoareNivel(c.level).punct}
+              stroke="var(--surface)"
               strokeWidth="1.5"
             />
             <text

@@ -10,6 +10,7 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+from sqlalchemy import select
 
 from codrut.core.database import SessionLocal
 from codrut.modules.companies.models import (
@@ -91,7 +92,11 @@ async def test_fiecare_om_fara_note_afla_situatia_lui() -> None:
 
         t_neinscris = await tablou.get_participant_dashboard_data(principal=_principal(neinscris))
         t_inscris = await tablou.get_participant_dashboard_data(principal=_principal(inscris))
-        t_cu_note = await tablou.get_participant_dashboard_data(principal=_principal(cu_note))
+        # plicul 184: Tabloul e pe proiect — omul cu note îl deschide pe proiectul notei lui
+        proiect_nota = (await session.execute(select(CompetencyScore.project_id).where(
+            CompetencyScore.user_id == cu_note.id))).scalars().first()
+        t_cu_note = await tablou.get_participant_dashboard_data(
+            principal=_principal(cu_note), project_id=proiect_nota)
 
         gol = t_neinscris.get("empty_state") or {}
         assert gol.get("kind") == "neinscris"
