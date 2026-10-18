@@ -22,7 +22,7 @@ import {
 import Link from "next/link";
 import { CULOARE_NIVEL, culoareNivel, type Nivel } from "@/lib/culori-nivel";
 import { NOTA_MINIMA, procentPanaLaPragulUrmator } from "@/lib/praguri-puncte";
-import { PRAG_AFISARE_IMPINGERE, textImpingere } from "../texte-177";
+import { PRAG_AFISARE_IMPINGERE, textImpingere, textImpingereAzi } from "../texte-177";
 
 interface PracticeParticipantDashboardProps {
   projectId?: string | null;
@@ -387,15 +387,15 @@ function CompetencyCard({ item }: { item: CompetencyDashboardItem }) {
 }
 
 /**
- * Mesajul (a) — plicul 177, text propus (Andrei îl vede pe probă). Numai când nota de azi e între 50 și
- * 59 și competența n-are încă niciun punct: „până la primele puncte” ar minți la cine are deja puncte.
+ * Mesajul (a) — plicul 177; numai când nota de azi e între 50 și 59. Plicul 193 (`[mesaje-deja-puncte]`):
+ * fără niciun punct, „până la primele puncte”; cu puncte din alte zile, „până la puncte azi”.
  */
 function MesajulNoteiDeAzi({ item }: { item: CompetencyDashboardItem }) {
   const nota = item.bestScoreToday;
-  if (nota === null || nota < PRAG_AFISARE_IMPINGERE || nota >= NOTA_MINIMA || item.points > 0) {
+  if (typeof nota !== "number" || nota < PRAG_AFISARE_IMPINGERE || nota >= NOTA_MINIMA) {
     return null;
   }
-  const text = textImpingere(item.name, nota);
+  const text = item.points > 0 ? textImpingereAzi(item.name, nota) : textImpingere(item.name, nota);
   const bucata = `nota ${nota}`;
   const i = text.indexOf(bucata);
   return (

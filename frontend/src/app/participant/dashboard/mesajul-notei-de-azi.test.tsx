@@ -1,8 +1,8 @@
 /**
- * Mesajul (a) pe Tablou — plicul 177, text propus (Andrei îl vede pe probă, `[culori-texte-noi]`).
+ * Mesajul (a) pe Tablou — plicul 177; regula de azi din plicul 193 (Andrei, `[mesaje-deja-puncte]` = da).
  *
- * Apare numai când nota de azi la competență e între 50 și 59 ȘI competența n-are încă niciun punct
- * (corecția 1 a controlorului: „până la primele puncte” ar minți la cine are deja puncte din alte zile).
+ * Apare numai când nota de azi la competență e între 50 și 59. Cine n-are încă niciun punct vede
+ * „…până la primele puncte”; cine are deja puncte din alte zile vede „…până la puncte azi”.
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -63,7 +63,7 @@ async function deschide(t: unknown, asteptat: string) {
 describe("Tabloul — mesajul notei de azi (plicul 177, a)", () => {
   afterEach(cleanup);
 
-  it("nota 55 azi, fără puncte → textul exact; 59 → „încă 1”; în rest nimic", async () => {
+  it("nota 55 azi → textul exact; 59 → „încă 1”; cu puncte din alte zile → „puncte azi”; în rest nimic", async () => {
     await deschide(tablou([
       competenta("Ascultare activă", 55),
       competenta("Feedback", 59),
@@ -77,6 +77,7 @@ describe("Tabloul — mesajul notei de azi (plicul 177, a)", () => {
     expect(mesaje).toEqual([
       "Ascultare activă: nota 55 azi — încă 5 până la primele puncte",
       "Feedback: nota 59 azi — încă 1 până la primele puncte",
+      "Claritate: nota 55 azi — încă 5 până la puncte azi",
     ]);
     const unul = screen.getAllByRole("status")[0];
     expect(unul.className).toContain("bg-gold-soft");
@@ -91,5 +92,21 @@ describe("Tabloul — mesajul notei de azi (plicul 177, a)", () => {
     );
     expect(screen.queryByRole("status")).toBeNull();
     expect(document.body.textContent).not.toContain("până la primele puncte");
+    expect(document.body.textContent).not.toContain("până la puncte azi");
+  });
+
+  it("cu puncte din alte zile, marginile rămân: 49 și 60 nimic; fără nota de azi nimic — plicul 193", async () => {
+    const faraNota = competenta("Empatie", null, 120) as Partial<ReturnType<typeof competenta>>;
+    delete faraNota.bestScoreToday;
+    await deschide(
+      tablou([
+        competenta("Claritate", 49, 120),
+        competenta("Feedback", 60, 120),
+        faraNota as ReturnType<typeof competenta>,
+      ]),
+      "Claritate",
+    );
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(document.body.textContent).not.toContain("până la puncte azi");
   });
 });
