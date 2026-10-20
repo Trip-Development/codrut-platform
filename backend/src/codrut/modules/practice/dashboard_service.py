@@ -54,15 +54,6 @@ def _cheie(nume: str) -> str:
     in plus — plicul 143. „rezolvarea  colaborativa" si „Rezolvarea colaborativă" sunt aceeasi."""
     return _strip_accents(normalize_competency_name(nume or ""))
 
-
-# Plicul 192 — Andrei, 14 oct („da” pe tabel): notele de la finalul ședinței dau puncte pe
-# competența programului cu care se potrivesc; „Concizie și Echilibru” nu. Totul e deja `_cheie`.
-NOTELE_DE_FINAL = {
-    "comunicare asertiva": "exprimarea asertiva a nevoilor si limitelor",
-    "feedback structurat sbi": "feedback constructiv",
-    "abilitati de coach si intrebari": "verificarea intelegerii si a alinierii",
-}
-
 class PracticeDashboardService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -215,9 +206,6 @@ class PracticeDashboardService:
                 if nume is None:
                     canonic = match_comp(s.competency_name)
                     nume = dupa_nume.get(_cheie(canonic)) if canonic else None
-                if nume is None:
-                    tinta = NOTELE_DE_FINAL.get(_cheie(s.competency_name or ""))
-                    nume = dupa_nume.get(tinta) if tinta else None
                 if nume is None or s.id not in intrari:
                     continue
                 scores_by_comp[nume].append(intrari[s.id])

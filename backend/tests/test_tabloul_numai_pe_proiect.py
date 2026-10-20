@@ -29,7 +29,6 @@ from codrut.modules.practice.models import (
     SessionKind,
     SessionState,
 )
-from codrut.modules.practice.scoring import BONUS_TIP_NOU, puncte_pentru_nota
 from test_practice_session_flow import create_test_context
 
 LISTA = [
@@ -128,15 +127,11 @@ async def test_tabloul_pe_a_numai_notele_lui_a() -> None:
     async with SessionLocal() as s:
         ctx, p, _, _, _ = await _fixture(s)
         t = await _tablou(s, ctx, p["A"])
-        # plicul 192: nota de final SBI 70 dă puncte pe „Feedback constructiv” (+ bonusul tipului);
-        # Coach 40 și Comunicare 90 intră și ele la număr (sub 60 / sub nota ședinței), Concizie nu
-        sbi = puncte_pentru_nota(REZUMAT_A["Feedback Structurat (SBI)"]) + BONUS_TIP_NOU
-        assert t["points_total"] == 220 + sbi
+        assert t["points_total"] == 220
         assert _pe_nume(t) == {"Ascultare activă": 50,
                                "Exprimarea asertivă a nevoilor și limitelor": 65,
-                               "Feedback constructiv": sbi,
                                "Gestionarea reacțiilor celorlalți": 55, REZOLVAREA: 50}
-        assert sum(c["total_roleplays"] for c in t["competencies"]) == 4 + 3
+        assert sum(c["total_roleplays"] for c in t["competencies"]) == 4
         await s.rollback()
 
 
@@ -145,11 +140,9 @@ async def test_tabloul_pe_b_numai_notele_lui_b() -> None:
     async with SessionLocal() as s:
         ctx, p, _, _, _ = await _fixture(s)
         t = await _tablou(s, ctx, p["B"])
-        # plicul 192: notele de final ale lui B nu schimbă punctele (SBI 60 < 65 al ședinței;
-        # Coach 30 și Comunicare 50 sub 60), dar se numără: 6 + 3
         assert t["points_total"] == 40
         assert _pe_nume(t) == {"Feedback constructiv": 40}
-        assert sum(c["total_roleplays"] for c in t["competencies"]) == 6 + 3
+        assert sum(c["total_roleplays"] for c in t["competencies"]) == 6
         await s.rollback()
 
 
@@ -233,13 +226,7 @@ async def test_seria_de_zile_pe_proiect() -> None:
 
 
 @pytest.mark.asyncio
-async def test_notele_rezumatului_nu_apar_sub_numele_lor_pe_tablou() -> None:
-    """Numele vechi ale notelor de final nu apar pe Tablou, pe niciun proiect.
-
-    Până la plicul 192 testul se chema „notele rezumatului nu dau puncte nicăieri”. Din 14 oct
-    (Andrei: „da” pe tabel), trei dintre ele dau puncte pe competența programului cu care se
-    potrivesc — sub numele competenței, nu sub numele lor (`test_notele_de_final_dau_puncte.py`).
-    """
+async def test_notele_rezumatului_nu_dau_puncte_nicaieri() -> None:
     async with SessionLocal() as s:
         ctx, p, _, _, _ = await _fixture(s)
         for k, proiect in p.items():
