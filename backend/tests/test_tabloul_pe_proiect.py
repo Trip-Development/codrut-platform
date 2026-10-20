@@ -81,9 +81,8 @@ async def test_tabloul_arata_exact_competentele_proiectului_cu_notele_lor() -> N
             _nota(cont, proiect, "rezolvarea  colaborativa a conflictelor", 80),
             _nota(cont, proiect, "Verificarea înțelegerii și a alinierii", 60),
             _nota(cont, proiect, "Ascultare activă", 50),
-            # din aplicația veche — nu sunt ale proiectului, nu apar („Comunicare Asertivă” se
-            # potrivește din plicul 192 cu „Exprimarea asertivă…”; „Concizie și Echilibru” nu)
-            _nota(cont, proiect, "Concizie și Echilibru", 90),
+            # din aplicația veche — nu sunt ale proiectului, nu apar
+            _nota(cont, proiect, "Comunicare Asertivă", 90),
             _nota(cont, proiect, "Reformulare activă", 90),
         ])
         await session.flush()
