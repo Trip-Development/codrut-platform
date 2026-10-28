@@ -303,6 +303,8 @@ export type PracticeDashboardData = {
   xpDailyCap: number;
   xpTotal: number;
   streakDays: number;
+  /** Ședințele închise cu note, pe proiect, de la prima — plicul 201. */
+  sessionsCompleted: number;
   streakBonusPct: number;
   evidenceCeiling: number;
   /** Punctajul nou — plicul 165: fără plafon, fără bonus de serie. */
@@ -455,6 +457,7 @@ export async function getPracticeDashboard(
     xpDailyCap: data.xp_daily_cap || 100,
     xpTotal: data.xp_total,
     streakDays: data.streak_days,
+    sessionsCompleted: data.sessions_completed ?? 0,
     streakBonusPct: data.streak_bonus_pct,
     evidenceCeiling: data.evidence_ceiling,
     pointsToday: data.points_today ?? 0,

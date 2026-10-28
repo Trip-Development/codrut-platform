@@ -4648,6 +4648,11 @@ export interface components {
             points_total: number;
             /** Session Samples */
             session_samples: components["schemas"]["SessionSampleItem"][];
+            /**
+             * Sessions Completed
+             * @default 0
+             */
+            sessions_completed: number;
             /** Streak Bonus Pct */
             streak_bonus_pct: number;
             /** Streak Days */

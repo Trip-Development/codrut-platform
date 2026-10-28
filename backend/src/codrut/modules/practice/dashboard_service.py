@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import and_, not_, or_, select
+from sqlalchemy import and_, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.modules.companies.models import CompanyProject, ParticipantProfile
@@ -25,6 +25,7 @@ from codrut.modules.practice.models import (
     PracticeSession,
     ProjectCompetency,
     SessionSample,
+    SessionState,
 )
 from codrut.modules.practice.pe_proiect import sedintele_proiectului, toate_sedintele
 from codrut.modules.practice.scoring import (
@@ -167,6 +168,12 @@ class PracticeDashboardService:
         )
         bonus_pct = streak_bonus_pct(effective_streak)
 
+        # Plicul 201 — „N simulări făcute”: ședințele ÎNCHISE ale omului cu note în cuprinsul
+        # Tabloului, de orice fel, de la prima ședință. Din `all_scores`, nu din `intrari`
+        # (acolo rămân numai role-play-urile). Notele evaluatorului și ale rezumatului au
+        # același `conversation_id`, deci o ședință se numără o singură dată.
+        sessions_completed = await self._simulari_facute(all_scores)
+
         # 5. Today's XP calculation (capped at 100)
         today_date = date.today()
         today_entries = [
@@ -293,6 +300,7 @@ class PracticeDashboardService:
             "xp_daily_cap": 100,
             "xp_total": total_xp or sum(e.score for e in all_scores),
             "streak_days": effective_streak,
+            "sessions_completed": sessions_completed,
             "streak_bonus_pct": bonus_pct,
             "evidence_ceiling": evidence_ceiling(30),
             # punctajul nou — plicul 165: sume peste competențele arătate, fără plafon
@@ -348,6 +356,22 @@ class PracticeDashboardService:
                     "description": NEINSCRIS_DESCRIERE,
                 }
         return rezultat
+
+    async def _simulari_facute(self, note: list[CompetencyScore]) -> int:
+        sedinte: set[uuid.UUID] = set()
+        for nota in note:
+            try:
+                sedinte.add(uuid.UUID(str(nota.conversation_id)))
+            except ValueError:
+                continue
+        if not sedinte:
+            return 0
+        numar = await self.session.execute(
+            select(func.count())
+            .select_from(PracticeSession)
+            .where(PracticeSession.id.in_(sedinte), PracticeSession.state == SessionState.closed)
+        )
+        return int(numar.scalar_one())
 
     async def puncte_castigate_in_sedinta(
         self,
