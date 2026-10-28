@@ -181,9 +181,7 @@ async def test_o_sedinta_adevarata_primeste_note_ca_azi() -> None:
         "Raportul a întârziat de trei ori luna asta; echipa a trimis cifre greșite clientului.",
         "Aș vrea să stabilim împreună un termen clar pentru următorul raport, joi la prânz.",
     )
-    # Plicul 200: în role-play nota pe emoții nu se mai salvează (rubrica: numai la coaching).
-    fara_emotii = [c for c in COMPETENTE if c != "Gestionarea propriilor reacții emoționale"]
-    assert await _sedinta_si_note(replici) == len(fara_emotii)
+    assert await _sedinta_si_note(replici) == len(COMPETENTE)
 
 
 # ----------------------------------------------------------------- C · fără adresare pe cod

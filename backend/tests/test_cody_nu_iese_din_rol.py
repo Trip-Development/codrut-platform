@@ -1,8 +1,8 @@
-"""Plicul 200 — Cody nu mai iese din rol; „reacțiile emoționale” nu se mai notează în role-play.
+"""Plicul 200 — Cody nu mai iese din rol.
 
-Proba din 19 oct: un narator l-a întrebat pe om ce simte, „— Cody” a apărut lipit de replica
-personajului, iar „Gestionarea propriilor reacții emoționale” a primit notă într-un role-play,
-deși rubrica spune că se evaluează doar dacă există dialog de coaching.
+Proba din 19 oct: un narator l-a întrebat pe om ce simte, iar „— Cody” a apărut lipit de replica
+personajului.
+Plicul 203: emoțiile se notează din nou în role-play (Andrei, 28 oct).
 """
 
 import uuid
@@ -71,8 +71,8 @@ def test_evaluarea_primeste_fraza() -> None:
     assert FRAZA_EVALUARE in EVALUARE_PROMPT
 
 
-async def test_in_role_play_emotiile_nu_se_salveaza() -> None:
-    assert await _salvate("roleplay") == ["Feedback constructiv"]
+async def test_in_role_play_emotiile_se_salveaza() -> None:
+    assert len(await _salvate("roleplay")) == 4
 
 
 async def test_in_coaching_emotiile_se_salveaza_ca_azi() -> None:
