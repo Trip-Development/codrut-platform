@@ -8001,6 +8001,11 @@
             "title": "Session Samples",
             "type": "array"
           },
+          "sessions_completed": {
+            "default": 0,
+            "title": "Sessions Completed",
+            "type": "integer"
+          },
           "streak_bonus_pct": {
             "title": "Streak Bonus Pct",
             "type": "integer"
