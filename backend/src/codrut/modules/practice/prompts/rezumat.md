@@ -1,7 +1,7 @@
 Pe baza conversației de mai jos cu {name} (modul: {opt_text}), scrie exact în formatul următor:
 
 ##Concluzie
-Un paragraf de 3-4 propoziții — ce s-a întâmplat, ce a învățat omul. **Dacă a fost modul Role-play sau Verificare Cunoștințe, trece OBLIGATORIU și PUNCTAJUL/SCORUL FINAL obținut.** Îi vorbești direct, la persoana a II-a, fără apelativ: „{name}” e doar codul lui în aplicație, o etichetă, NU un nume — INTERZIS să i te adresezi pe cod sau pe nume.
+Un paragraf de 3-4 propoziții — ce s-a întâmplat, ce a învățat omul. **Dacă a fost Role-play sau Verificare cunoștințe, treci punctajul final EXACT cum ți-l dă aplicația: {punctaj}. Nu calcula alt punctaj. Dacă scrie „—”, nu pomeni niciun punctaj.** Îi vorbești direct, la persoana a II-a, fără apelativ: „{name}” e doar codul lui în aplicație, o etichetă, NU un nume — INTERZIS să i te adresezi pe cod sau pe nume.
 
 ##Recomandări
 • Prima recomandare concretă

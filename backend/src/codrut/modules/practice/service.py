@@ -1329,12 +1329,21 @@ class PracticeSessionService:
                 speaker = cod if t.role == TurnRole.participant else "Cody"
                 history_lines.append(f"{speaker}: {t.text}")
             history_str = "\n\n".join(history_lines)
-            from codrut.modules.practice.prompts import get_summary_prompt
+            from codrut.modules.practice.prompts import get_summary_prompt, punctajul_final
 
+            # Plicul 199: punctajul final îl socotește codul, rezumatul doar îl trece.
+            punctaj = punctajul_final(
+                session_obj.kind.value,
+                [
+                    (t.role == TurnRole.participant, este_feedback(t.text), t.text)
+                    for t in turns
+                ],
+            )
             summary_content = get_summary_prompt(
                 name=cod,
                 opt_text=session_obj.kind.value,
                 history=history_str,
+                punctaj=punctaj,
             )
             req = GenerationRequest(
                 messages=(GenerationMessage(role="user", text=summary_content),),
