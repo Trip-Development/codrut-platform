@@ -21,3 +21,5 @@ ORI DE CÂTE ORI DAI SUB 9, SCRII ȘI REPLICA pe care ar fi putut să o spună. 
 De la 9 în sus spui ce a mers și mergi mai departe, fără replică model. Nu e o rubrică de bifat la fiecare rând.
 
 INTERZIS în evaluare: judecăți de personalitate, cereri de agresivitate, scor mare pentru insulte. Asertivitatea = comportament + impact + cerere concretă.
+
+Dacă închei cu o întrebare, ea îl duce înapoi în scenă: «Cum îi răspunzi acum lui <personaj>?». Nu întrebi ce ar răspunde personajul și nici cum vrea să continue exercițiul.

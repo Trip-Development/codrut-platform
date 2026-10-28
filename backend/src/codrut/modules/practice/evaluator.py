@@ -38,6 +38,10 @@ from codrut.modules.practice.budget import (
     reserve,
     settle,
 )
+from codrut.modules.practice.competency_aliases import (
+    _strip_accents,
+    normalize_competency_name,
+)
 from codrut.modules.practice.models import (
     CompetencyScore,
     InsightMoment,
@@ -140,6 +144,13 @@ def _extract_json(text: str) -> dict | None:
         except json.JSONDecodeError:
             return None
     return None
+
+
+def _cheie_competenta(nume: str) -> str:
+    return _strip_accents(normalize_competency_name(nume))
+
+
+_EMOTII = _cheie_competenta("Gestionarea propriilor reacții emoționale")
 
 
 class PracticeEvaluator:
@@ -297,6 +308,9 @@ class PracticeEvaluator:
             nivel = scor.get("level")
             nume = scor.get("competency")
             if valoare is None or nivel is None or not nume:
+                continue
+            # Plicul 200 — rubrica din evaluator.md: emoțiile se notează numai la coaching.
+            if source_type == "roleplay" and _cheie_competenta(str(nume)) == _EMOTII:
                 continue
             self.session.add(CompetencyScore(
                 user_id=user_id,
