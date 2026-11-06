@@ -102,6 +102,10 @@ async def _lumea(s):
                                          kind=SessionKind.roleplay)
     s_b, _ = await service.start_session(principal=ctx["principal"], project_id=b.id,
                                          kind=SessionKind.roleplay)
+    # plicul 208: ședințe din trecut, cu o replică a omului — goale, s-ar refolosi
+    for sedinta in (s_a, s_b):
+        await service.add_participant_turn(principal=ctx["principal"], session_id=sedinta.id,
+                                           text="Replica omului.")
     return {"ctx": ctx, "cont": cont, "A": a, "B": b, "C": c, "D": d, "sA": str(s_a.id),
             "sB": str(s_b.id), "service": service, "provider": provider, "redis": redis}
 
