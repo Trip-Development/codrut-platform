@@ -311,9 +311,54 @@ class PracticeSessionService:
         # 4. Daily sessions limit
         now = datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        are_replica_omului = (
+            select(PracticeTurn.id)
+            .where(
+                PracticeTurn.session_id == PracticeSession.id,
+                PracticeTurn.role == TurnRole.participant,
+            )
+            .exists()
+        )
+
+        # Plicul 208 (P55, 6 nov): conversația începută azi în care omul n-a scris nimic se
+        # refolosește — sesiunea deschisă trăiește numai în starea paginii, deci după reîncărcare
+        # „Începe” ar crea alta.
+        stmt_goala = (
+            select(PracticeSession)
+            .where(
+                PracticeSession.participant_profile_id == profile.id,
+                PracticeSession.program_settings_id == program_settings.id,
+                PracticeSession.kind == kind,
+                PracticeSession.scenario_id.is_not_distinct_from(scenario_id),
+                PracticeSession.pack_id == program_settings.active_pack_id,
+                PracticeSession.state == SessionState.open,
+                PracticeSession.started_at >= today_start,
+                ~are_replica_omului,
+            )
+            .order_by(PracticeSession.started_at.desc())
+            .limit(1)
+        )
+        goala = (await self.session.execute(stmt_goala)).scalars().first()
+        if goala is not None:
+            stmt_prima = (
+                select(PracticeTurn)
+                .where(
+                    PracticeTurn.session_id == goala.id,
+                    PracticeTurn.role != TurnRole.participant,
+                )
+                .order_by(PracticeTurn.ordinal.asc())
+                .limit(1)
+            )
+            prima = (await self.session.execute(stmt_prima)).scalars().first()
+            if prima is None:
+                prima = await self._prima_replica(goala, profile, program_settings)
+            return goala, prima
+
+        # Plicul 208: la limită se numără numai conversațiile în care omul a scris ceva.
         stmt_count = select(func.count(PracticeSession.id)).where(
             PracticeSession.participant_profile_id == profile.id,
             PracticeSession.started_at >= today_start,
+            are_replica_omului,
         )
         sessions_today_count = (await self.session.execute(stmt_count)).scalar_one() or 0
         # Contul de test nu e oprit de limita pe zi (plicul 173, hotararea lui Andrei din
