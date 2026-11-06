@@ -8,8 +8,10 @@ import {
   startPracticeSession,
   submitPracticeTurn,
   endPracticeSession,
+  getConversatiaNeincheiata,
   type PracticeConsent,
   type PracticeSession,
+  type PracticeSessionDetail,
   type PracticeTurn,
   type SessionKind,
 } from "@/api/practice";
@@ -22,6 +24,7 @@ import { MicIcon, MicOffIcon, Loader2Icon } from "lucide-react";
 import { useVoiceToText } from "@/hooks/useVoiceToText";
 import { textPuncteCastigate } from "../texte-177";
 import { LoadingStatus } from "@/components/shell/route-loading";
+import { formatRomanianDateTime } from "@/utils/date-format";
 
 // Replica omului intra in fir IMEDIAT ce apasa trimite — plicul 83, cerinta lui Andrei.
 //
@@ -218,6 +221,23 @@ export function PracticeWorkspace({
     };
   }, [projectId]);
   const acordLipsa = acord !== null && !acord.acordat;
+  // Conversația neîncheiată cu care revine omul — plicul 209. O eroare la citire nu blochează
+  // nimic: ecranul rămâne ca înainte.
+  const [neincheiata, setNeincheiata] = useState<PracticeSessionDetail | null>(null);
+  useEffect(() => {
+    if (!projectId) return;
+    let anulat = false;
+    getConversatiaNeincheiata(projectId)
+      .then((c) => {
+        if (!anulat) setNeincheiata(c);
+      })
+      .catch(() => {
+        if (!anulat) setNeincheiata(null);
+      });
+    return () => {
+      anulat = true;
+    };
+  }, [projectId]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   // Ca „Vreau alta tema" sa poata pune cursorul la capatul textului pregatit.
@@ -404,6 +424,34 @@ export function PracticeWorkspace({
             <Button size="sm" onClick={handleInapoiInSesiune}>
               Întoarce-te la sesiune
             </Button>
+          </div>
+        ) : null}
+
+        {session === null && neincheiata ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                Ai o conversație neîncheiată.
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {`Ai început-o pe ${formatRomanianDateTime(neincheiata.session.startedAt)}.`}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  setSession(neincheiata.session);
+                  setTurns(neincheiata.turns);
+                  setNeincheiata(null);
+                }}
+              >
+                Continuă
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setNeincheiata(null)}>
+                Începe alta
+              </Button>
+            </div>
           </div>
         ) : null}
 

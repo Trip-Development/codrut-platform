@@ -280,6 +280,27 @@ async def get_participant_practice_dashboard(
 # adevarat e la pornirea sedintei (`acord_lipsa`), nu pe ecran.
 
 
+@router.get(
+    "/projects/{project_id}/conversatia-neincheiata",
+    response_model=PracticeSessionDetailResponse | None,
+)
+async def get_conversatia_neincheiata(
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeSessionDetailResponse | None:
+    """Conversația neîncheiată a omului pe proiect, sau `null` — plicul 209. Numai citire."""
+    service = PracticeSessionService(session=session)
+    gasita = await service.conversatia_neincheiata(principal=principal, project_id=project_id)
+    if gasita is None:
+        return None
+    session_obj, turns = gasita
+    return PracticeSessionDetailResponse(
+        session=await _raspuns_de_pornire(session, session_obj, None),
+        turns=[PracticeTurnResponse.model_validate(t) for t in turns],
+    )
+
+
 @router.get("/projects/{project_id}/acord", response_model=PracticeConsentResponse)
 async def get_practice_consent(
     project_id: UUID,
