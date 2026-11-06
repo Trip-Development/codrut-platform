@@ -23,7 +23,7 @@ from codrut.core.errors import DomainError
 from codrut.modules.companies.models import CompanyProject, ParticipantProfile, ProjectMembership
 from codrut.modules.identity.models import User, UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
-from codrut.modules.practice.acord import cere_acordul
+from codrut.modules.practice.acord import cere_acordul, profilul_in_proiect
 from codrut.modules.practice.alias import ascunde_numele, codul_omului
 from codrut.modules.practice.budget import (
     BudgetExceeded,
@@ -595,6 +595,55 @@ class PracticeSessionService:
         )
         turns = list((await self.session.execute(stmt_turns)).scalars().all())
         return session_obj, turns
+
+    async def conversatia_neincheiata(
+        self,
+        principal: SessionPrincipal,
+        project_id: uuid.UUID,
+    ) -> tuple[PracticeSession, list[PracticeTurn]] | None:
+        """Cea mai recentă conversație neîncheiată a omului pe proiect — plicul 209.
+
+        Numai citire: deschisă, pornită în ultimele 7 zile, cu cel puțin o replică scrisă de om.
+        Cine n-are profil în compania proiectului (trainerul, altă companie) primește `None`.
+        """
+        try:
+            profile = await profilul_in_proiect(self.session, principal, project_id)
+        except DomainError as err:
+            if err.code != "participant_not_found":
+                raise
+            return None
+
+        stmt_settings = select(PracticeProgramSettings).where(
+            PracticeProgramSettings.project_id == project_id
+        )
+        program_settings = (await self.session.execute(stmt_settings)).scalar_one_or_none()
+        if program_settings is None:
+            return None
+
+        are_replica_omului = (
+            select(PracticeTurn.id)
+            .where(
+                PracticeTurn.session_id == PracticeSession.id,
+                PracticeTurn.role == TurnRole.participant,
+            )
+            .exists()
+        )
+        stmt_sesiune = (
+            select(PracticeSession)
+            .where(
+                PracticeSession.participant_profile_id == profile.id,
+                PracticeSession.program_settings_id == program_settings.id,
+                PracticeSession.state == SessionState.open,
+                PracticeSession.started_at >= datetime.now(UTC) - timedelta(days=7),
+                are_replica_omului,
+            )
+            .order_by(PracticeSession.started_at.desc())
+            .limit(1)
+        )
+        gasita = (await self.session.execute(stmt_sesiune)).scalars().first()
+        if gasita is None:
+            return None
+        return await self.get_session_history(principal=principal, session_id=gasita.id)
 
     async def _prima_replica(
         self,

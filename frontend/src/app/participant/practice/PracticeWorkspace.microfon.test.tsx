@@ -20,6 +20,7 @@ const api = vi.hoisted(() => ({
   submitPracticeTurn: vi.fn(),
   endPracticeSession: vi.fn(),
   transcribeAudio: vi.fn(),
+  getConversatiaNeincheiata: vi.fn(),
 }));
 
 const { PracticeError } = vi.hoisted(() => ({
@@ -143,6 +144,7 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   for (const f of Object.values(api)) f.mockReset();
   api.getPracticeConsent.mockResolvedValue({ acordat: true });
+  api.getConversatiaNeincheiata.mockResolvedValue(null);
   api.transcribeAudio.mockResolvedValue({ text: VORBIT, estimated_usd: 0 });
   api.submitPracticeTurn.mockImplementation(async (_id: string, text: string) => raspunsCu(text));
   pregatesteBrowserul();
