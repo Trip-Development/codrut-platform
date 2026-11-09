@@ -139,9 +139,15 @@ export function PracticeParticipantDashboard({ projectId }: PracticeParticipantD
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-bold text-foreground">{data.streakDays}</span>
               <span className="text-xs font-semibold text-foreground">
-                {data.streakDays === 1 ? "zi activă" : "zile consecutive"}
+                {data.streakDays === 1 ? "zi cu activitate" : "zile la rând cu activitate"}
               </span>
             </div>
+            {/* plicul 201: ședințele închise cu note, de la prima */}
+            <p className="mt-1 text-xs text-muted-foreground">
+              {data.sessionsCompleted === 1
+                ? "1 simulare făcută"
+                : `${data.sessionsCompleted} simulări făcute`}
+            </p>
           </CardContent>
         </Card>
 

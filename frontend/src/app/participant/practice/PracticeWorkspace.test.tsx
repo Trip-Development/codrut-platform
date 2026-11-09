@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { formatRomanianDateTime } from "@/utils/date-format";
 import { PracticeWorkspace } from "./PracticeWorkspace";
 
 // Plicul 83: pastram optiunile primite de hook, ca testul sa poata simula o trimitere prin voce.
@@ -33,6 +34,7 @@ const api = vi.hoisted(() => ({
   startPracticeSession: vi.fn(),
   submitPracticeTurn: vi.fn(),
   endPracticeSession: vi.fn(),
+  getConversatiaNeincheiata: vi.fn(),
 }));
 
 const { PracticeError } = vi.hoisted(() => ({
@@ -80,6 +82,9 @@ beforeEach(() => {
   api.givePracticeConsent.mockReset();
   api.getPracticeConsent.mockResolvedValue({ ...ACORD, acordat: true });
   api.givePracticeConsent.mockResolvedValue({ ...ACORD, acordat: true });
+  // implicit omul n-are nicio conversație neîncheiată (plicul 209)
+  api.getConversatiaNeincheiata.mockReset();
+  api.getConversatiaNeincheiata.mockResolvedValue(null);
 });
 
 afterEach(cleanup);
@@ -689,5 +694,71 @@ describe("PracticeWorkspace — punctele câștigate la închidere (plicul 177, 
     await screen.findByText("+15 puncte la Ascultare activă");
     fireEvent.click(screen.getAllByRole("button", { name: /Înapoi la alegerea modului/ })[0]);
     expect(screen.queryByText("+15 puncte la Ascultare activă")).toBeNull();
+  });
+});
+
+// Plicul 209 — Andrei, 6 nov: omul care revine alege Continuă sau Începe alta.
+describe("PracticeWorkspace — conversația neîncheiată", () => {
+  const INCEPUTA = "2026-11-06T10:15:00Z";
+  const NEINCHEIATA = {
+    session: { ...SESIUNE_DESCHISA, turnCount: 3, startedAt: INCEPUTA },
+    turns: [
+      {
+        id: "t1", sessionId: "sesiune-1", ordinal: 1, role: "actor" as const,
+        text: "Prima replică a lui Cody.",
+        createdAt: INCEPUTA, expiresAt: "2026-12-06T10:15:00Z",
+      },
+      {
+        id: "t2", sessionId: "sesiune-1", ordinal: 2, role: "participant" as const,
+        text: "Replica scrisă de om mai devreme.",
+        createdAt: INCEPUTA, expiresAt: "2026-12-06T10:15:00Z",
+      },
+    ],
+  };
+
+  it("F1: arată bannerul, iar Continuă aduce replicile pe ecran", async () => {
+    api.getConversatiaNeincheiata.mockResolvedValue(NEINCHEIATA);
+    render(<PracticeWorkspace projectId="proiect-1" />);
+
+    expect(await screen.findByText("Ai o conversație neîncheiată.")).toBeTruthy();
+    expect(api.getConversatiaNeincheiata).toHaveBeenCalledWith("proiect-1");
+    expect(screen.getByText(`Ai început-o pe ${formatRomanianDateTime(INCEPUTA)}.`)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Începe alta" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continuă" }));
+
+    expect(await screen.findByText("Replica scrisă de om mai devreme.")).toBeTruthy();
+    expect(screen.getByText("Prima replică a lui Cody.")).toBeTruthy();
+    expect(screen.queryByText("Ai o conversație neîncheiată.")).toBeNull();
+    expect(api.startPracticeSession).not.toHaveBeenCalled();
+  });
+
+  it("F2: Începe alta ascunde bannerul și lasă alegerea modului, fără niciun apel", async () => {
+    api.getConversatiaNeincheiata.mockResolvedValue(NEINCHEIATA);
+    render(<PracticeWorkspace projectId="proiect-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Începe alta" }));
+
+    expect(screen.queryByText("Ai o conversație neîncheiată.")).toBeNull();
+    expect(screen.getByText("Alege modul de antrenament")).toBeTruthy();
+    expect(api.startPracticeSession).not.toHaveBeenCalled();
+    expect(api.endPracticeSession).not.toHaveBeenCalled();
+  });
+
+  it("F3: fără conversație sau cu eroare la citire, ecranul rămâne ca azi", async () => {
+    const { unmount } = render(<PracticeWorkspace projectId="proiect-1" />);
+    await waitFor(() => expect(api.getConversatiaNeincheiata).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+    expect(screen.queryByText("Ai o conversație neîncheiată.")).toBeNull();
+    expect(screen.getByText("Alege modul de antrenament")).toBeTruthy();
+    unmount();
+
+    api.getConversatiaNeincheiata.mockRejectedValue(new Error("citirea a picat"));
+    render(<PracticeWorkspace projectId="proiect-1" />);
+    await waitFor(() => expect(api.getConversatiaNeincheiata).toHaveBeenCalledTimes(2));
+    await act(async () => {});
+    expect(screen.queryByText("Ai o conversație neîncheiată.")).toBeNull();
+    expect(screen.getByText("Alege modul de antrenament")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Începe conversația" })).toBeTruthy();
   });
 });

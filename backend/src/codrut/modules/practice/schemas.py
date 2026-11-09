@@ -164,6 +164,8 @@ class PracticeDashboardResponse(BaseModel):
     xp_daily_cap: int = 100
     xp_total: int
     streak_days: int
+    # plicul 201: ședințele închise cu note, pe proiectul deschis, de la prima ședință
+    sessions_completed: int = 0
     streak_bonus_pct: int
     evidence_ceiling: int
     # punctajul nou — plicul 165 (xp_* și evidence_ceiling rămân, dar nu se mai afișează)

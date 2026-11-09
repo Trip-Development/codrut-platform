@@ -37,6 +37,7 @@ const tablou = (competencies: ReturnType<typeof competenta>[], emptyState: unkno
   xpDailyCap: 100,
   xpTotal: 0,
   streakDays: 1,
+  sessionsCompleted: 2,
   streakBonusPct: 0,
   evidenceCeiling: 500,
   pointsToday: 0,

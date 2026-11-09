@@ -197,6 +197,10 @@ async def test_contul_de_test_trece_peste_limita_pe_zi() -> None:
                 principal=principal, project_id=ctx["project"].id, kind=SessionKind.roleplay
             )
             assert sedinta is not None
+            # plicul 208: fără replică, sesiunea goală s-ar refolosi
+            await service.add_participant_turn(
+                principal=principal, session_id=sedinta.id, text="Replica omului."
+            )
 
         pornite = (await session.execute(
             select(func.count(PracticeSession.id)).where(
@@ -219,9 +223,13 @@ async def test_un_cont_obisnuit_ramane_cu_limita_pe_zi() -> None:
         service = PracticeSessionService(session=session, redis=redis, settings=settings)
 
         for _ in range(2):
-            await service.start_session(
+            sedinta, _ = await service.start_session(
                 principal=ctx["principal"], project_id=ctx["project"].id,
                 kind=SessionKind.roleplay,
+            )
+            # plicul 208: la limită se numără numai conversațiile în care omul a scris
+            await service.add_participant_turn(
+                principal=ctx["principal"], session_id=sedinta.id, text="Replica omului."
             )
         with pytest.raises(DomainError) as exc:
             await service.start_session(
@@ -433,10 +441,13 @@ async def test_cap_coada_peste_limita_pe_zi_pana_la_note() -> None:
             generation_provider=FurnizorCuNote(settings), settings=settings,
         )
 
-        # cele doua sedinte de azi, cat tine limita
+        # cele doua sedinte de azi, cat tine limita (plicul 208: fiecare cu o replica a omului)
         for _ in range(2):
-            await service.start_session(
+            de_azi, _ = await service.start_session(
                 principal=principal, project_id=ctx["project"].id, kind=SessionKind.roleplay
+            )
+            await service.add_participant_turn(
+                principal=principal, session_id=de_azi.id, text="Replica omului."
             )
 
         punga_inainte = await _punga_cheltuita(session, ctx["program_settings"].id)
@@ -493,6 +504,10 @@ async def test_la_25_dolari_atinsi_replica_omului_e_refuzata() -> None:
         # o sedinta veche a contului de test, cu frana deja atinsa
         veche, _ = await service.start_session(
             principal=principal, project_id=ctx["project"].id, kind=SessionKind.roleplay
+        )
+        # plicul 208: fără replică, sesiunea goală s-ar refolosi la pornirea de mai jos
+        await service.add_participant_turn(
+            principal=principal, session_id=veche.id, text="Replica omului."
         )
         session.add(PracticeBudgetReservation(
             program_settings_id=ctx["program_settings"].id,
