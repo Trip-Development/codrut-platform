@@ -122,6 +122,9 @@ class Settings(BaseSettings):
     # Gol inseamna „fara rezerva", nu „modelul vechi".
     vertex_transcribe_fallback: str = ""
     vertex_timeout_seconds: int = Field(default=60, ge=5, le=300)
+    # plicul 210 (P58): cât așteaptă omul nota de la replică, după actor; raportul de la
+    # închidere rămâne pe limita de mai sus.
+    vertex_timeout_evaluator_replica_seconds: int = Field(default=15, ge=5, le=300)
     vertex_max_output_tokens: int = Field(default=1024, ge=64, le=8192)
     # Evaluatorul are nevoie de mai mult decat actorul: pe langa concluzie si
     # recomandari trebuie sa incapa si blocul JSON cu scorurile, iar la Gemini 2.5
