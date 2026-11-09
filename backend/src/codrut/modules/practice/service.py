@@ -473,7 +473,17 @@ class PracticeSessionService:
         """
         for incercare in (1, 2):
             try:
-                return await self.generation_provider.generate(cerere)
+                return await asyncio.wait_for(
+                    self.generation_provider.generate(cerere),
+                    timeout=self.settings.vertex_timeout_evaluator_replica_seconds,
+                )
+            except TimeoutError:
+                # Plicul 210 (P58): la depășire omul nu mai așteaptă și a doua încercare.
+                logger.warning(
+                    "practice_evaluator_esuat sesiune=%s incercarea=%s motiv=timp",
+                    session_id, incercare,
+                )
+                return None
             except Exception:
                 logger.warning(
                     "practice_evaluator_esuat sesiune=%s incercarea=%s",
@@ -1224,16 +1234,18 @@ class PracticeSessionService:
             # Plicul 112: se rezerva pentru AMANDOUA apelurile, cu preturile din mediu — lectia
             # plicului 101, unde preturile ramase ale modelului vechi faceau paza sa numere de
             # 2,4 ori mai putin decat adevarul.
+            estimare_evaluator_usd = Decimal("0")
             if cerere_evaluator is not None:
                 cuvinte_eval = sum(len(m.text.split()) for m in cerere_evaluator.messages)
                 if cerere_evaluator.system_instruction:
                     cuvinte_eval += len(cerere_evaluator.system_instruction.split())
-                estimated_usd += estimate_pessimistic_cost(
+                estimare_evaluator_usd = estimate_pessimistic_cost(
                     prompt_tokens=max(1, cuvinte_eval),
                     max_output_tokens=self.settings.vertex_max_output_tokens_evaluator,
                     thinking_budget=self.settings.thinking_budget_evaluator,
                     settings=self.settings,
                 )
+                estimated_usd += estimare_evaluator_usd
 
             cap_usd = await plafonul_programului(self.session, program_settings)
 
@@ -1276,6 +1288,9 @@ class PracticeSessionService:
             cost_real = result.estimated_usd
             if rezultat_evaluator is not None:
                 cost_real += rezultat_evaluator.estimated_usd
+            elif cerere_evaluator is not None:
+                # Plicul 210: apelul anulat la noi tot se facturează la Google (lecția 101).
+                cost_real += estimare_evaluator_usd
             await settle(self.session, reservation_id, actual_usd=cost_real)
 
             # Ordinea o pune aplicatia acum, nu modelul: personajul intai, evaluarea dupa.

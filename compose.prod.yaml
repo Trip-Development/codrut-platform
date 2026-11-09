@@ -102,6 +102,7 @@ services:
       CODRUT_VERTEX_EVALUATOR_MODEL: ${CODRUT_VERTEX_EVALUATOR_MODEL:-gemini-3.8-flash}
       CODRUT_PRACTICE_TWO_CALLS: ${CODRUT_PRACTICE_TWO_CALLS:-true}
       CODRUT_VERTEX_TIMEOUT_SECONDS: ${CODRUT_VERTEX_TIMEOUT_SECONDS:-120}
+      CODRUT_VERTEX_TIMEOUT_EVALUATOR_REPLICA_SECONDS: ${CODRUT_VERTEX_TIMEOUT_EVALUATOR_REPLICA_SECONDS:-15}
       # Setarea e citita FARA prefix (config.py, `AliasChoices("BIBLIOTECA_PATH", ...)`).
       BIBLIOTECA_PATH: /app/BIBLIOTECA
     # Cheia Google si materialul lui Cody, citire-numai. `create_host_path: false`: daca fisierul
