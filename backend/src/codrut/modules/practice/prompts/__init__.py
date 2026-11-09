@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import os
+import re
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any
 
@@ -805,8 +807,65 @@ def get_prompts_pe_meserii(
     return prompt_actor, prompt_evaluator
 
 
-def get_summary_prompt(name: str, opt_text: str, history: str) -> str:
-    return REZUMAT_TEMPLATE.format(name=name, opt_text=opt_text, history=history)
+# Plicul 199 — Andrei, 27 sept: „punctele le calculează codul, niciun AI care calculează”.
+# Rezumatul trecea „punctajul final” cum îl socotea modelul (o dată ultima notă, o dată media).
+_NOTA_DIN_JOC = re.compile(r"\[\s*🏆\s*Scor\s*:\s*\**\s*(\d+(?:[.,]\d+)?)\s*\**\s*/\s*10\s*\]")
+
+
+def _cu_virgula(valoare: Decimal) -> str:
+    return format(valoare.normalize(), "f").replace(".", ",")
+
+
+def punctajul_final(kind: str, ture: list[tuple[bool, bool, str]]) -> str:
+    """Punctajul final al ședinței, socotit din ture: (de_la_om, este_feedback, text).
+
+    Role-play: media notelor „[🏆 Scor: X/10]” din replicile lui Cody; nota dată după un
+    „/feedback” al omului înlocuiește ultima notă. Quiz: câte „✓” din răspunsurile marcate.
+    Altfel, sau când nu se poate număra sigur: „—”.
+    """
+    if kind == SessionKind.roleplay.value:
+        note: list[Decimal] = []
+        dupa_feedback = False
+        for de_la_om, este_feedback, text in ture:
+            if de_la_om:
+                dupa_feedback = este_feedback
+                continue
+            gasite = _NOTA_DIN_JOC.findall(text or "")
+            if gasite:
+                nota = Decimal(gasite[-1].replace(",", "."))
+                if dupa_feedback and note:
+                    note[-1] = nota
+                else:
+                    note.append(nota)
+            dupa_feedback = False
+        if not note:
+            return "—"
+        media = (sum(note) / len(note)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+        lista = ", ".join(_cu_virgula(n) for n in note)
+        return f"{format(media, 'f').replace('.', ',')}/10 (media notelor din joc: {lista})"
+    if kind == SessionKind.knowledge.value:
+        corecte = gresite = 0
+        for de_la_om, _este_feedback, text in ture:
+            if de_la_om:
+                continue
+            text = text or ""
+            if "✅" in text or "❌" in text:
+                return "—"
+            are_bifa, are_x = "✓" in text, "✗" in text
+            if are_bifa and are_x:
+                return "—"
+            corecte += are_bifa
+            gresite += are_x
+        if corecte + gresite == 0:
+            return "—"
+        return f"{corecte} din {corecte + gresite} răspunsuri corecte"
+    return "—"
+
+
+def get_summary_prompt(name: str, opt_text: str, history: str, punctaj: str = "—") -> str:
+    return REZUMAT_TEMPLATE.format(
+        name=name, opt_text=opt_text, history=history, punctaj=punctaj
+    )
 
 
 # Compatibilitate

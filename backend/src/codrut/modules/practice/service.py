@@ -23,7 +23,7 @@ from codrut.core.errors import DomainError
 from codrut.modules.companies.models import CompanyProject, ParticipantProfile, ProjectMembership
 from codrut.modules.identity.models import User, UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
-from codrut.modules.practice.acord import cere_acordul
+from codrut.modules.practice.acord import cere_acordul, profilul_in_proiect
 from codrut.modules.practice.alias import ascunde_numele, codul_omului
 from codrut.modules.practice.budget import (
     BudgetExceeded,
@@ -311,9 +311,54 @@ class PracticeSessionService:
         # 4. Daily sessions limit
         now = datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        are_replica_omului = (
+            select(PracticeTurn.id)
+            .where(
+                PracticeTurn.session_id == PracticeSession.id,
+                PracticeTurn.role == TurnRole.participant,
+            )
+            .exists()
+        )
+
+        # Plicul 208 (P55, 6 nov): conversația începută azi în care omul n-a scris nimic se
+        # refolosește — sesiunea deschisă trăiește numai în starea paginii, deci după reîncărcare
+        # „Începe” ar crea alta.
+        stmt_goala = (
+            select(PracticeSession)
+            .where(
+                PracticeSession.participant_profile_id == profile.id,
+                PracticeSession.program_settings_id == program_settings.id,
+                PracticeSession.kind == kind,
+                PracticeSession.scenario_id.is_not_distinct_from(scenario_id),
+                PracticeSession.pack_id == program_settings.active_pack_id,
+                PracticeSession.state == SessionState.open,
+                PracticeSession.started_at >= today_start,
+                ~are_replica_omului,
+            )
+            .order_by(PracticeSession.started_at.desc())
+            .limit(1)
+        )
+        goala = (await self.session.execute(stmt_goala)).scalars().first()
+        if goala is not None:
+            stmt_prima = (
+                select(PracticeTurn)
+                .where(
+                    PracticeTurn.session_id == goala.id,
+                    PracticeTurn.role != TurnRole.participant,
+                )
+                .order_by(PracticeTurn.ordinal.asc())
+                .limit(1)
+            )
+            prima = (await self.session.execute(stmt_prima)).scalars().first()
+            if prima is None:
+                prima = await self._prima_replica(goala, profile, program_settings)
+            return goala, prima
+
+        # Plicul 208: la limită se numără numai conversațiile în care omul a scris ceva.
         stmt_count = select(func.count(PracticeSession.id)).where(
             PracticeSession.participant_profile_id == profile.id,
             PracticeSession.started_at >= today_start,
+            are_replica_omului,
         )
         sessions_today_count = (await self.session.execute(stmt_count)).scalar_one() or 0
         # Contul de test nu e oprit de limita pe zi (plicul 173, hotararea lui Andrei din
@@ -550,6 +595,55 @@ class PracticeSessionService:
         )
         turns = list((await self.session.execute(stmt_turns)).scalars().all())
         return session_obj, turns
+
+    async def conversatia_neincheiata(
+        self,
+        principal: SessionPrincipal,
+        project_id: uuid.UUID,
+    ) -> tuple[PracticeSession, list[PracticeTurn]] | None:
+        """Cea mai recentă conversație neîncheiată a omului pe proiect — plicul 209.
+
+        Numai citire: deschisă, pornită în ultimele 7 zile, cu cel puțin o replică scrisă de om.
+        Cine n-are profil în compania proiectului (trainerul, altă companie) primește `None`.
+        """
+        try:
+            profile = await profilul_in_proiect(self.session, principal, project_id)
+        except DomainError as err:
+            if err.code != "participant_not_found":
+                raise
+            return None
+
+        stmt_settings = select(PracticeProgramSettings).where(
+            PracticeProgramSettings.project_id == project_id
+        )
+        program_settings = (await self.session.execute(stmt_settings)).scalar_one_or_none()
+        if program_settings is None:
+            return None
+
+        are_replica_omului = (
+            select(PracticeTurn.id)
+            .where(
+                PracticeTurn.session_id == PracticeSession.id,
+                PracticeTurn.role == TurnRole.participant,
+            )
+            .exists()
+        )
+        stmt_sesiune = (
+            select(PracticeSession)
+            .where(
+                PracticeSession.participant_profile_id == profile.id,
+                PracticeSession.program_settings_id == program_settings.id,
+                PracticeSession.state == SessionState.open,
+                PracticeSession.started_at >= datetime.now(UTC) - timedelta(days=7),
+                are_replica_omului,
+            )
+            .order_by(PracticeSession.started_at.desc())
+            .limit(1)
+        )
+        gasita = (await self.session.execute(stmt_sesiune)).scalars().first()
+        if gasita is None:
+            return None
+        return await self.get_session_history(principal=principal, session_id=gasita.id)
 
     async def _prima_replica(
         self,
@@ -1329,12 +1423,21 @@ class PracticeSessionService:
                 speaker = cod if t.role == TurnRole.participant else "Cody"
                 history_lines.append(f"{speaker}: {t.text}")
             history_str = "\n\n".join(history_lines)
-            from codrut.modules.practice.prompts import get_summary_prompt
+            from codrut.modules.practice.prompts import get_summary_prompt, punctajul_final
 
+            # Plicul 199: punctajul final îl socotește codul, rezumatul doar îl trece.
+            punctaj = punctajul_final(
+                session_obj.kind.value,
+                [
+                    (t.role == TurnRole.participant, este_feedback(t.text), t.text)
+                    for t in turns
+                ],
+            )
             summary_content = get_summary_prompt(
                 name=cod,
                 opt_text=session_obj.kind.value,
                 history=history_str,
+                punctaj=punctaj,
             )
             req = GenerationRequest(
                 messages=(GenerationMessage(role="user", text=summary_content),),

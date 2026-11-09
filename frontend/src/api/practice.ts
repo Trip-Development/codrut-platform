@@ -201,15 +201,31 @@ export async function submitPracticeTurn(
   };
 }
 
-export async function getPracticeSessionHistory(
-  sessionId: string,
-): Promise<PracticeSessionDetail> {
-  const res = await apiFetch(`${getApiBaseUrl()}/practice/sessions/${sessionId}`);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Nu am putut încărca istoricul sesiunii");
-  }
-  const data = await res.json();
+function mapSessionDetail(data: {
+  session: {
+    id: string;
+    participant_profile_id: string;
+    program_settings_id: string;
+    scenario_id?: string | null;
+    kind: SessionKind;
+    state: SessionState;
+    turn_count: number;
+    started_at: string;
+    ended_at?: string | null;
+    created_at: string;
+    updated_at: string;
+    cody_alias?: string | null;
+  };
+  turns?: {
+    id: string;
+    session_id: string;
+    ordinal: number;
+    role: TurnRole;
+    text: string;
+    created_at: string;
+    expires_at: string;
+  }[];
+}): PracticeSessionDetail {
   return {
     session: {
       id: data.session.id,
@@ -223,16 +239,9 @@ export async function getPracticeSessionHistory(
       endedAt: data.session.ended_at,
       createdAt: data.session.created_at,
       updatedAt: data.session.updated_at,
+      codyAlias: data.session.cody_alias ?? null,
     },
-    turns: (data.turns || []).map((t: {
-      id: string;
-      session_id: string;
-      ordinal: number;
-      role: TurnRole;
-      text: string;
-      created_at: string;
-      expires_at: string;
-    }) => ({
+    turns: (data.turns || []).map((t) => ({
       id: t.id,
       sessionId: t.session_id,
       ordinal: t.ordinal,
@@ -242,6 +251,33 @@ export async function getPracticeSessionHistory(
       expiresAt: t.expires_at,
     })),
   };
+}
+
+export async function getPracticeSessionHistory(
+  sessionId: string,
+): Promise<PracticeSessionDetail> {
+  const res = await apiFetch(`${getApiBaseUrl()}/practice/sessions/${sessionId}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Nu am putut încărca istoricul sesiunii");
+  }
+  return mapSessionDetail(await res.json());
+}
+
+/** Conversația neîncheiată a omului pe proiect, sau `null` dacă n-are — plicul 209. */
+export async function getConversatiaNeincheiata(
+  projectId: string,
+): Promise<PracticeSessionDetail | null> {
+  const res = await apiFetch(
+    `${getApiBaseUrl()}/practice/projects/${projectId}/conversatia-neincheiata`,
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw citesteEroarea(err, "Nu am putut citi conversația neîncheiată");
+  }
+  const data = await res.json();
+  if (data === null) return null;
+  return mapSessionDetail(data);
 }
 
 export type PracticeStareSummary = {
@@ -303,6 +339,8 @@ export type PracticeDashboardData = {
   xpDailyCap: number;
   xpTotal: number;
   streakDays: number;
+  /** Ședințele închise cu note, pe proiect, de la prima — plicul 201. */
+  sessionsCompleted: number;
   streakBonusPct: number;
   evidenceCeiling: number;
   /** Punctajul nou — plicul 165: fără plafon, fără bonus de serie. */
@@ -455,6 +493,7 @@ export async function getPracticeDashboard(
     xpDailyCap: data.xp_daily_cap || 100,
     xpTotal: data.xp_total,
     streakDays: data.streak_days,
+    sessionsCompleted: data.sessions_completed ?? 0,
     streakBonusPct: data.streak_bonus_pct,
     evidenceCeiling: data.evidence_ceiling,
     pointsToday: data.points_today ?? 0,

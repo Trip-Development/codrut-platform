@@ -388,6 +388,10 @@ async def test_refusal_daily_session_limit() -> None:
             kind=SessionKind.roleplay,
         )
         assert s1 is not None
+        # plicul 208: la limită se numără numai conversațiile în care omul a scris
+        await service.add_participant_turn(
+            principal=ctx["principal"], session_id=s1.id, text="Replica omului."
+        )
 
         # Start session 2 -> OK
         s2, _ = await service.start_session(
@@ -396,6 +400,9 @@ async def test_refusal_daily_session_limit() -> None:
             kind=SessionKind.roleplay,
         )
         assert s2 is not None
+        await service.add_participant_turn(
+            principal=ctx["principal"], session_id=s2.id, text="Replica omului."
+        )
 
         # Start session 3 -> Limit 2 reached -> practice_daily_limit
         with pytest.raises(DomainError) as exc_info:

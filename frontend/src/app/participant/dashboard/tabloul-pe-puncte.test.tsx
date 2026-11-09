@@ -21,6 +21,7 @@ vi.mock("@/api/practice", async (original) => ({
     xpDailyCap: 100,
     xpTotal: 999,
     streakDays: 4,
+    sessionsCompleted: 2,
     streakBonusPct: 5,
     evidenceCeiling: 500,
     pointsToday: 55,
