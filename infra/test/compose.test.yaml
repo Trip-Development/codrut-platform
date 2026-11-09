@@ -143,6 +143,7 @@ services:
       # Cat asteapta aplicatia o replica — plicul 96. Implicit ca in cod (60); pe proba
       # .env il ridica la 120: cea mai lenta replica buna masurata a venit la 80,5 s.
       CODRUT_VERTEX_TIMEOUT_SECONDS: ${CODRUT_VERTEX_TIMEOUT_SECONDS:-60}
+      CODRUT_VERTEX_TIMEOUT_EVALUATOR_REPLICA_SECONDS: ${CODRUT_VERTEX_TIMEOUT_EVALUATOR_REPLICA_SECONDS:-15}
       # Preturile modelului, in dolari pe milion de unitati — plicul 101. Implicit ca in cod
       # (gemini-3.8-flash). Se schimba odata cu modelul.
       CODRUT_PRICE_INPUT_PER_MILLION_USD: ${CODRUT_PRICE_INPUT_PER_MILLION_USD:-0.75}
@@ -240,6 +241,7 @@ services:
       # Cat asteapta aplicatia o replica — plicul 96. Implicit ca in cod (60); pe proba
       # .env il ridica la 120: cea mai lenta replica buna masurata a venit la 80,5 s.
       CODRUT_VERTEX_TIMEOUT_SECONDS: ${CODRUT_VERTEX_TIMEOUT_SECONDS:-60}
+      CODRUT_VERTEX_TIMEOUT_EVALUATOR_REPLICA_SECONDS: ${CODRUT_VERTEX_TIMEOUT_EVALUATOR_REPLICA_SECONDS:-15}
       # Preturile modelului, in dolari pe milion de unitati — plicul 101. Implicit ca in cod
       # (gemini-3.8-flash). Se schimba odata cu modelul.
       CODRUT_PRICE_INPUT_PER_MILLION_USD: ${CODRUT_PRICE_INPUT_PER_MILLION_USD:-0.75}
