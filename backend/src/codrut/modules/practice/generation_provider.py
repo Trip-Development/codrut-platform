@@ -284,26 +284,26 @@ class VertexGenerationProvider:
         response = None
         inceput = time.monotonic()
         scop = request.purpose.value
-        for incercare in range(len(PAUZE) + 1):
-            try:
-                response = await client.post(url, json=payload, headers=headers)
-            except Exception as exc:
-                if owns_client:
-                    await client.aclose()
-                _urma_apelului("vertex_network_error", type(exc).__name__, incercare + 1,
-                               inceput, model, scop)
-                raise GenerationError(
-                    f"Vertex AI network request failed: {type(exc).__name__}",
-                    code="vertex_network_error",
-                ) from exc
+        try:
+            for incercare in range(len(PAUZE) + 1):
+                try:
+                    response = await client.post(url, json=payload, headers=headers)
+                except Exception as exc:
+                    _urma_apelului("vertex_network_error", type(exc).__name__, incercare + 1,
+                                   inceput, model, scop)
+                    raise GenerationError(
+                        f"Vertex AI network request failed: {type(exc).__name__}",
+                        code="vertex_network_error",
+                    ) from exc
 
-            if response.status_code not in (429, 503):
-                break
-            if incercare < len(PAUZE):
-                await asyncio.sleep(PAUZE[incercare])
-
-        if owns_client:
-            await client.aclose()
+                if response.status_code not in (429, 503):
+                    break
+                if incercare < len(PAUZE):
+                    await asyncio.sleep(PAUZE[incercare])
+        finally:
+            # Plicul 210: clientul se închide și când apelul e anulat de limita profesorului.
+            if owns_client:
+                await client.aclose()
 
         if response.status_code in (429, 503):
             _urma_apelului("vertex_rate_limited", response.status_code, len(PAUZE) + 1,
