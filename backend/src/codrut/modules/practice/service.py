@@ -1262,10 +1262,10 @@ class PracticeSessionService:
 
             # 9. Invoke model generation provider
             logger.info(
-                "practice_generare sesiune=%s mesaje=%s ultima_replica_om=%r",
+                "practice_generare sesiune=%s mesaje=%s lungime_replica_om=%d",
                 session_id,
                 len(messages),
-                messages[-1].text[:80] if messages else "",
+                len(messages[-1].text) if messages else 0,
             )
             try:
                 if cerere_evaluator is None:
