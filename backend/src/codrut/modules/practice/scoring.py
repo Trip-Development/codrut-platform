@@ -193,6 +193,29 @@ ZILE_INTEGRARE = 56
 _NU_ROLEPLAY = ("cunostinte", "quiz", "knowledge", "test_in", "test_out", "test-in", "test-out")
 
 
+def nivel_din_scor(scor: int) -> int:
+    """Nivelul unei note pe competență (0–100) → 1, 2 sau 3 — plicul 218.
+
+    Singura regulă, aceeași cu cea dată profesorului în `prompts/evaluator.md:12`:
+    1 (0-35), 2 (36-69), 3 (70-100). Un scor în afara 0–100 e o greșeală a apelantului
+    (`ValueError`): se plafonează ÎNAINTE de chemare.
+    """
+    if not 0 <= scor <= 100:
+        raise ValueError(f"scor in afara 0-100: {scor}")
+    if scor <= 35:
+        return 1
+    return 2 if scor <= 69 else 3
+
+
+def e_nota_de_role_play(source_type: str | None) -> bool:
+    """Nota vine dintr-un role-play, după `source_type` (quiz și testele IN/OUT nu) — plicul 218.
+
+    Aceeași listă ca la puncte (`compute_competency_evidence`). Notele ședințelor de alt fel
+    (coaching) le scoate separat `interlocutor.intrarile_de_punctaj`, după ședință.
+    """
+    return (source_type or "").lower() not in _NU_ROLEPLAY
+
+
 def ziua_in_romania(moment: datetime) -> date:
     """Ziua calendaristică a unei note, în ora României (o notă fără fus e socotită UTC)."""
     if moment.tzinfo is None:

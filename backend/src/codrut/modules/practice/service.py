@@ -65,6 +65,7 @@ from codrut.modules.practice.quotas import (
     ensure_turn_length,
     is_session_turn_limit_reached,
 )
+from codrut.modules.practice.scoring import nivel_din_scor
 
 logger = logging.getLogger(__name__)
 
@@ -1533,15 +1534,13 @@ class PracticeSessionService:
                         for k, v in scores_dict.items():
                             if isinstance(v, (int, float)):
                                 c_name = score_name_map.get(k, k)
-                                normalized_score = int(round(float(v) * 10))
-                                level = (
-                                    1 if normalized_score < 50
-                                    else (2 if normalized_score < 80 else 3)
-                                )
+                                normalized_score = min(100, max(0, int(round(float(v) * 10))))
+                                # plicul 218: aceeași regulă ca la evaluator (evaluator.md:12)
+                                level = nivel_din_scor(normalized_score)
                                 cs = CompetencyScore(
                                     user_id=profile.user_id or principal.user_id,
                                     project_id=proiect_id,
-                                    score=min(100, max(0, normalized_score)),
+                                    score=normalized_score,
                                     level=level,
                                     justification=(
                                         f"Scor evaluat automat în modul "

@@ -2,7 +2,7 @@
 
 Valorile așteptate sunt calculate în comentarii, din regulile scrise (`scoring.py`, plicul 165;
 `evolution_service.py`, plicul 166 D; `evaluator.md:12`), NU copiate din ce întoarce codul.
-Testele `xfail(strict=True)` afirmă purtarea dorită și pică azi: sunt defectele găsite.
+Defectele 04 și 05 au fost reparate în plicul 218: testele lor afirmă purtarea dorită, fără `xfail`.
 """
 
 import asyncio
@@ -13,7 +13,6 @@ from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock
 
-import pytest
 from redis.asyncio import Redis
 from sqlalchemy import select
 
@@ -174,18 +173,13 @@ async def _quiz_si_roleplay() -> dict:
             "saptamani": date_["weekly_average"]}
 
 
-async def test_azi_quizul_intra_in_media_dar_nu_in_puncte() -> None:
+async def test_quizul_nu_intra_in_puncte() -> None:
     r = await _quiz_si_roleplay()
     assert r["comp"]["points"] == 10  # numai role-play-ul: 60 − 50
     assert r["comp"]["level"] == "CONȘTIENTIZARE"
-    assert r["comp"]["current_average"] == 80.0  # (60 + 100) / 2
-    assert [p["average"] for p in r["saptamani"]] == [80.0]
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="BANCA-DEFECT-04: media competenței și media pe săptămâni ale "
-                          "echipei amestecă nota de quiz cu notele de role-play "
-                          "(evolution_service.py:158 și :167); punctele și nivelul n-o fac.")
+# BANCA-DEFECT-04, reparat în plicul 218
 async def test_media_competentei_e_numai_din_role_play() -> None:
     r = await _quiz_si_roleplay()
     assert r["comp"]["current_average"] == 60.0
@@ -245,23 +239,10 @@ async def _notele_rezumatului() -> dict[str, tuple[int, int]]:
     return rezultat
 
 
-async def test_azi_rezumatul_pune_nivelul_cu_pragurile_50_si_80() -> None:
-    # 4 → 40, 7.5 → 75, 8.25 → `int(round(82.5))` = 82 (rotunjire la par), 3.6 → 36.
-    # Pragurile rezumatului: sub 50 → 1, sub 80 → 2, altfel 3.
-    assert await _notele_rezumatului() == {
-        "Abilități de Coach și Întrebări": (40, 1),
-        "Comunicare Asertivă": (75, 2),
-        "Feedback Structurat (SBI)": (82, 3),
-        "Concizie și Echilibru": (36, 1),
-    }
-
-
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="BANCA-DEFECT-05: rezumatul de la închidere pune nivelul cu pragurile "
-                          "50/80 (service.py:1537-1539), iar evaluatorul cu 36/70 "
-                          "(evaluator.md:12): 40, 75 și 36 primesc alt nivel decât la evaluator.")
+# BANCA-DEFECT-05, reparat în plicul 218
 async def test_rezumatul_pune_nivelul_ca_evaluatorul() -> None:
-    # evaluator.md:12 — 1 (0-35), 2 (36-69), 3 (70-100)
+    # 4 → 40, 7.5 → 75, 8.25 → `int(round(82.5))` = 82 (rotunjire la par, rămasă ca înainte),
+    # 3.6 → 36. evaluator.md:12 — 1 (0-35), 2 (36-69), 3 (70-100)
     assert await _notele_rezumatului() == {
         "Abilități de Coach și Întrebări": (40, 2),
         "Comunicare Asertivă": (75, 3),
