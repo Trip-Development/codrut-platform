@@ -3,8 +3,8 @@
 Fără bază și fără furnizor: `_persist(date=…)` se cheamă direct, cu o sesiune falsă care ține ce
 i se dă. Fiecare caz stă lângă două note bune, un `insight` și o recomandare pentru trainer.
 
-Testele marcate `xfail(strict=True)` afirmă purtarea DORITĂ și pică azi — sunt defectele găsite.
-Lângă fiecare, un test verde fixează purtarea de azi. Nimic nu se repară în plicul ăsta.
+Plicul 218 a reparat defectele 01–03: testele lor afirmă acum purtarea dorită, fără `xfail`, iar
+testele „azi” care fixau purtarea veche s-au șters. Cazurile „DE HOTĂRÂT” rămân neschimbate.
 """
 
 import uuid
@@ -65,18 +65,8 @@ def _ciudat(**campuri) -> dict:
             **campuri}
 
 
-# --- scor cu zecimale și scor ca fracție: ValueError la `int()` (evaluator.py:305) -----------
+# --- scor cu zecimale și scor ca fracție (BANCA-DEFECT-01, reparat în plicul 218) -------------
 
-@pytest.mark.parametrize("scor", ["85.5", "8/10"])
-async def test_azi_scorul_ca_text_opreste_salvarea_intregului_raspuns(scor) -> None:
-    with pytest.raises(ValueError):
-        await _salveaza(_ciudat(score=scor, level=3))
-
-
-@pytest.mark.xfail(strict=True, raises=ValueError,
-                   reason="BANCA-DEFECT-01: un scor scris ca text („85.5”, „8/10”) oprește "
-                          "salvarea întregului răspuns: se pierd notele bune de după el, "
-                          "insight-ul și recomandarea pentru trainer.")
 @pytest.mark.parametrize("scor", ["85.5", "8/10"])
 async def test_un_scor_ciudat_nu_pierde_restul_raspunsului(scor) -> None:
     s = await _salveaza(_ciudat(score=scor, level=3))
@@ -89,9 +79,10 @@ async def test_un_scor_ciudat_nu_pierde_restul_raspunsului(scor) -> None:
 # --- scor pe scara 0–10 ----------------------------------------------------------------------
 
 async def test_azi_un_scor_pe_scara_de_10_se_salveaza_ca_atare() -> None:
-    # DE HOTĂRÂT: aplicația nu are de unde ști că 8 înseamnă 8/10; azi se salvează 8 din 100
+    # DE HOTĂRÂT: aplicația nu are de unde ști că 8 înseamnă 8/10; azi se salvează 8 din 100.
+    # Plicul 218: nivelul vine din scor (8 → 0–35 → 1), nu de la profesor (3).
     note = _note(await _salveaza(_ciudat(score=8, level=3)))
-    assert note["Comunicare asertivă"] == (8, 3)
+    assert note["Comunicare asertivă"] == (8, 1)
 
 
 # --- competență cerută de nimeni ---------------------------------------------------------------
@@ -114,14 +105,7 @@ async def test_azi_un_nume_fara_diacritice_se_salveaza_cum_a_venit() -> None:
 
 # --- nivelul nu se potrivește cu scorul (pragurile din evaluator.md:12) ------------------------
 
-async def test_azi_nivelul_vine_de_la_profesor_chiar_daca_contrazice_scorul() -> None:
-    note = _note(await _salveaza(_ciudat(score=85, level=1)))
-    assert note["Comunicare asertivă"] == (85, 1)
-
-
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="BANCA-DEFECT-02: nivelul se ia de la profesor chiar când contrazice "
-                          "scorul; după evaluator.md:12, 85 înseamnă nivelul 3, nu 1.")
+# BANCA-DEFECT-02, reparat în plicul 218
 async def test_nivelul_urmeaza_pragurile_din_evaluator_md() -> None:
     note = _note(await _salveaza(_ciudat(score=85, level=1)))
     assert note["Comunicare asertivă"] == (85, 3)
@@ -129,15 +113,7 @@ async def test_nivelul_urmeaza_pragurile_din_evaluator_md() -> None:
 
 # --- nivel lipsă cu scor valid -----------------------------------------------------------------
 
-async def test_azi_o_nota_fara_nivel_se_sare_tacut() -> None:
-    note = _note(await _salveaza(_ciudat(score=64, level=None)))
-    assert "Comunicare asertivă" not in note
-    assert len(note) == 2
-
-
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="BANCA-DEFECT-03: o notă cu scor valid și nivel lipsă se pierde "
-                          "tăcut (evaluator.py:299); nivelul se poate socoti din scor.")
+# BANCA-DEFECT-03, reparat în plicul 218
 async def test_o_nota_fara_nivel_se_salveaza_cu_nivelul_din_scor() -> None:
     note = _note(await _salveaza(_ciudat(score=64, level=None)))
     assert note.get("Comunicare asertivă") == (64, 2)
