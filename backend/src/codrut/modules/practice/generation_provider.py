@@ -475,7 +475,9 @@ class VertexGenerationProvider:
         _urma_apelului("transcription_failed", ultimul_http, len(candidate_models), inceput,
                        ",".join(candidate_models) or "-", "transcriere")
         raise GenerationError(
-            f"Transcription failed across models: {last_exc}",
+            # numai tipul erorii, nu textul ei — plicul 220
+            f"Transcription failed across models: "
+            f"{type(last_exc).__name__ if last_exc else '-'}",
             code="transcription_failed",
         )
 

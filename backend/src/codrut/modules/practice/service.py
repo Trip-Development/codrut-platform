@@ -1657,7 +1657,9 @@ class PracticeSessionService:
                 )
             except Exception as eval_err:
                 logging.getLogger(__name__).warning(
-                    f"Structural evaluation failed in end_session: {eval_err}"
+                    # numai tipul erorii — plicul 220
+                    "Structural evaluation failed in end_session: "
+                    f"{type(eval_err).__name__}"
                 )
 
         if session_obj.state != SessionState.closed:

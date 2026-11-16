@@ -263,10 +263,14 @@ class PracticeEvaluator:
         try:
             rezultat = await self.generation_provider.generate(cerere)
         except Exception as err:
-            logger.warning("[EVALUATOR] chemarea a esuat: %s", err)
+            # numai tipul erorii: textul ei poate purta ce a scris omul — plicul 220
+            logger.warning(
+                "[EVALUATOR] chemarea a esuat: %s %s",
+                type(err).__name__, getattr(err, "code", ""),
+            )
             if rezervare_id is not None:
                 await release(self.session, rezervare_id)
-            return {"error": str(err)}
+            return {"error": type(err).__name__}
 
         if rezervare_id is not None:
             await settle(self.session, rezervare_id, actual_usd=rezultat.estimated_usd)
