@@ -2155,9 +2155,11 @@ class CompanyService:
             await self.repository.session.commit()
         except Exception as exc:
             await self.repository.session.rollback()
-            logger.exception(
-                "Failed to write participant view audit log.",
-                extra={"trainer": trainer_email, "participant_id": str(participant_id)},
+            # fara emailul trainerului si fara urma exceptiei in jurnal — plicul 220
+            logger.error(
+                "Failed to write participant view audit log. category=%s",
+                type(exc).__name__,
+                extra={"participant_id": str(participant_id)},
             )
             raise DomainError(
                 "Failed to record access audit log.",
