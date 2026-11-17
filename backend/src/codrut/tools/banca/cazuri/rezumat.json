@@ -1,0 +1,37 @@
+{
+  "descriere": "Banca 222 — rezumatul de la închidere: 4 ședințe scrise. Punctajul final îl socotește codul (`punctajul_final`); rezumatul trebuie să-l treacă exact și să dea JSON valid.",
+  "sedinte": [
+    {"id": "R01", "fel": "roleplay", "tema": "Comunicare asertivă", "ture": [
+      ["om", "Da, hai."],
+      ["cody", "Ești în biroul tău, iar colegul intră nervos. [🏆 Scor: -/10]"],
+      ["om", "Văd că ești supărat. Spune-mi ce s-a întâmplat."],
+      ["cody", "Bun început, ai numit emoția. [🏆 Scor: 7/10]"],
+      ["om", "Înțeleg. Ce ai nevoie de la mine ca să termini până joi?"],
+      ["cody", "Întrebare deschisă, foarte bine. [🏆 Scor: 8/10]"]]},
+    {"id": "R02", "fel": "roleplay", "tema": "Feedback constructiv", "ture": [
+      ["om", "Da, hai."],
+      ["cody", "Colega îți predă raportul. [🏆 Scor: -/10]"],
+      ["om", "E cam slab raportul."],
+      ["cody", "Prea general, fără exemplu. [🏆 Scor: 4/10]"],
+      ["om", "/feedback cum puteam spune mai bine?"],
+      ["cody", "Numește situația și efectul. [🏆 Scor: 5/10]"],
+      ["om", "La concluzii lipsesc recomandările concrete; aș vrea trei, nu una."],
+      ["cody", "Specific și clar. [🏆 Scor: 8/10]"]]},
+    {"id": "R03", "fel": "knowledge", "tema": "Influențare", "ture": [
+      ["om", "Da, hai."],
+      ["cody", "Prima întrebare: ce înseamnă o întrebare deschisă? A, B sau C?"],
+      ["om", "B"],
+      ["cody", "✓ Corect. A doua întrebare: când dai feedback, ce numești întâi?"],
+      ["om", "A"],
+      ["cody", "✗ Nu chiar; întâi situația. A treia: ce urmează după comportament?"],
+      ["om", "C"],
+      ["cody", "✓ Corect, efectul. Gata quizul."]]},
+    {"id": "R04", "fel": "coaching", "tema": "Gestionarea conflictului", "ture": [
+      ["om", "Am o situație cu un coleg care întârzie cu partea lui."],
+      ["cody", "Ce s-a întâmplat ultima dată?"],
+      ["om", "A predat cu două zile mai târziu și am stat eu peste program."],
+      ["cody", "Ce ai vrea să se schimbe?"],
+      ["om", "Aș vrea să-mi spună din timp dacă nu reușește."],
+      ["cody", "Cum i-ai putea cere asta mâine?"]]}
+  ]
+}
