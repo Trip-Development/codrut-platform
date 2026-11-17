@@ -1,0 +1,14 @@
+{
+  "descriere": "Banca 222 — CHEIA: rezultatul așteptat pe fiecare caz. Separată de cazuri dinadins: nu pleacă niciodată spre model. Copia de citit: SPEC-CODY/BANCA/CHEIA.md.",
+  "actor": {"asteptat": "toate criteriile trec pe fiecare conversație"},
+  "profesor_replica": {
+    "P01-a": "bun", "P01-b": "slab", "P02-a": "bun", "P02-b": "slab",
+    "P03-a": "bun", "P03-b": "slab", "P04-a": "bun", "P04-b": "slab",
+    "P05-a": "bun", "P05-b": "slab", "P06-a": "bun", "P06-b": "slab",
+    "P07-a": "bun", "P07-b": "slab", "P08-a": "bun", "P08-b": "slab",
+    "P09-a": "bun", "P09-b": "slab", "P10-a": "bun", "P10-b": "slab",
+    "P11-a": "bun", "P11-b": "slab", "P12-a": "bun", "P12-b": "slab"
+  },
+  "inchidere": {"I01": 3, "I02": 3, "I03": 3, "I04": 1, "I05": 1, "I06": 1, "I07": 2, "I08": 2},
+  "rezumat": {"asteptat": "JSON valid cu cele 4 note 1-10 și punctajul final al codului trecut exact"}
+}
