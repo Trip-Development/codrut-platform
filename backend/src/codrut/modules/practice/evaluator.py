@@ -147,18 +147,19 @@ def _extract_json(text: str) -> dict | None:
 _SCOR_CA_TEXT = re.compile(r"\d+(\.\d+)?")
 
 
-def _scorul_citit(valoare) -> int | None:
-    """Scorul dat de profesor → întreg, sau `None` dacă nu e un număr — plicul 218.
+def _numarul_citit(valoare) -> Decimal | None:
+    """O notă dată de model → `Decimal`, sau `None` dacă nu e o notă — plicurile 218, 223.
 
-    `int`, `float` sau text numeric cu punct („85.5”); rotunjirea e jumătatea în sus
-    (hotărârea din plicul 123), nu `round()`, care rotunjește la par. `bool`, NaN, infinit,
-    „8/10”, „85,5”, textul negativ, golul → `None` (nota se sare).
+    Cititorul comun al evaluatorului și al rezumatului de la închidere. Primește `int`, `float`
+    sau text numeric cu punct („85.5”). Refuză (`None`, nota se sare): `bool`, NaN, infinit,
+    negativul (număr sau text), numărul prea mare ca să fie rotunjit (1e28, 10**30, 40 de cifre),
+    „8/10”, „85,5”, golul, orice altceva.
     """
     if isinstance(valoare, bool):
         return None
     if isinstance(valoare, int):
-        return valoare
-    if isinstance(valoare, float):
+        text = str(valoare)
+    elif isinstance(valoare, float):
         text = repr(valoare)
     elif isinstance(valoare, str) and _SCOR_CA_TEXT.fullmatch(valoare.strip()):
         text = valoare.strip()
@@ -166,9 +167,23 @@ def _scorul_citit(valoare) -> int | None:
         return None
     try:
         numar = Decimal(text)
+        if not numar.is_finite() or numar < 0:
+            return None
+        # uriaș = nu încape în precizia rotunjirii (plicul 223): sare, nu pierde tot răspunsul
+        numar.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
     except InvalidOperation:
         return None
-    if not numar.is_finite():
+    return numar
+
+
+def _scorul_citit(valoare) -> int | None:
+    """Scorul dat de profesor → întreg, sau `None` dacă nu e un număr — plicul 218.
+
+    `_numarul_citit` + rotunjirea jumătății în sus (hotărârea din plicul 123), nu `round()`,
+    care rotunjește la par.
+    """
+    numar = _numarul_citit(valoare)
+    if numar is None:
         return None
     return int(numar.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
