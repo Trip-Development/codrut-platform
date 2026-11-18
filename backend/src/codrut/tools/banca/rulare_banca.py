@@ -8,9 +8,11 @@ Nu salvează nimic în bază. Codul aplicației doar se importă.
 Implicit rulează cu un FURNIZOR FALS (răspunsuri scrise de noi, zero rețea). Modelul adevărat
 se cheamă numai cu `--pe-bune`, din containerul de probă:
 
-    python -m codrut.tools.banca.rulare_banca --jurnal /tmp/banca/2026-11-18.jsonl \
-        [--doar-actor | --banca] [--pe-bune] [--plafon-apeluri 160] [--peste-plafon] \
-        [--comitere SHA]
+    python -m codrut.tools.banca.rulare_banca --pe-bune --jurnal <MASURATORI>/2026-11-18.jsonl \
+        --comitere SHA --model-evaluator MODEL [--model MODEL] [--alt-model] \
+        [--doar-actor | --banca] [--plafon-apeluri 160] [--peste-plafon]
+
+Fără `--pe-bune` (furnizorul fals), jurnalul implicit e în `/tmp/banca-fals/` (plicul 224).
 
 Socoteala apelurilor (`SPEC-CODY/BANCA/REGULI-BANCA.md`): 72 actor + 39 profesor + 14 închidere
 + 4 rezumat = 129; `--doar-actor` = 24.
@@ -21,7 +23,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import re
 import sys
 import time
@@ -52,6 +53,7 @@ from codrut.modules.practice.prompts import (
 from codrut.modules.practice.scoring import nivel_din_scor
 from codrut.modules.practice.service import DESCHIDE_SESIUNEA, SCENA_CELUILALT, este_feedback
 from codrut.tools.banca.reguli_actor import (
+    afirma_ca_e_ai,
     iese_din_scenariu,
     romana_suspecta,
     se_balbaie,
@@ -69,6 +71,11 @@ from codrut.tools.probe_scenarii import COD_PARTICIPANT
 
 CAZURI = Path(__file__).parent / "cazuri"
 FISIERE_CAZURI = ("actor.json", "profesor_replica.json", "inchidere.json", "rezumat.json")
+# rulările false nu scriu în SPEC-CODY/MASURATORI (plicul 224); numai unealtă, fără date
+DOSAR_FALS = Path("/tmp/banca-fals")  # noqa: S108
+# căderile de rețea/timp care se reiau o dată (plicul 224 §1.5, corecția 8); răspunsul gol nu
+ERORI_DE_RETEA = frozenset({"vertex_network_error", "vertex_rate_limited", "vertex_http_error"})
+RETINUT = "[REȚINUT: nume]"
 
 # Înghețate înainte de orice rulare (plicul 222, §1 și §7). Schimbarea lor cere „da”-ul lui
 # Andrei; copia de citit e `SPEC-CODY/BANCA/PRAGURI.md`.
@@ -89,12 +96,6 @@ PORTI_PROFESOR = ("3", "6", "9", "10")
 APELURI_PE_CONVERSATIE = 6  # salut + pornire + 4 replici
 DOAR_ACTOR = 4
 
-# Cazul „ești AI?” (§7): pică numai dacă personajul AFIRMĂ că e AI.
-AFIRMA_AI = re.compile(
-    r"\b(sunt|e(ste)?)\s+(un\s+)?(AI|bot|robot|model de limbaj"
-    r"|inteligen[țţt][ăa] artificial[ăa])\b",
-    re.IGNORECASE,
-)
 _JSON_REZUMAT = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 _PUNCTAJ_IN_PROMPT = re.compile(r"EXACT cum ți-l dă aplicația: (.*?)\. Nu calcula")
 _NOTA_PE_10 = re.compile(r"\d+(?:[.,]\d+)?\s*/\s*10")
@@ -166,6 +167,8 @@ class FurnizorFals:
         self._benzi = {t["id"]: cheia["inchidere"][t["id"]]
                        for t in cazuri["inchidere"]["transcrieri"]}
         self._marcaje = {t["id"]: t["ture"][1][1] for t in cazuri["inchidere"]["transcrieri"]}
+        # plicul 224: competențele fără context vin neevaluate (I07: prima, I08: amândouă)
+        self._neevaluate = {"I07": 1, "I08": 2}
         self._n = 0
 
     async def generate(self, cerere: GenerationRequest) -> GenerationResult:
@@ -215,12 +218,15 @@ class FurnizorFals:
             return "nu e JSON {"
         m = re.search(r"următoarele competențe: (.*?)\.\n", ultimul)
         competente = [c.strip() for c in (m.group(1) if m else "").split(",") if c.strip()]
-        banda = next((b for i, b in self._benzi.items() if self._marcaje[i] in ultimul), 2)
+        idt = next((i for i in self._benzi if self._marcaje[i] in ultimul), None)
+        banda = self._benzi.get(idt, 2)
         scor = {1: 25, 2: 55, 3: 85}[banda]
+        neev = self._neevaluate.get(idt, 0)
         return json.dumps({
-            "scores": [{"competency": c, "score": scor, "level": nivel_din_scor(scor),
-                        "justification": "Scris de furnizorul fals.", "evaluated": True}
-                       for c in competente],
+            "scores": [{"competency": c, "score": 0 if k < neev else scor,
+                        "level": 0 if k < neev else nivel_din_scor(scor),
+                        "justification": "Scris de furnizorul fals.", "evaluated": k >= neev}
+                       for k, c in enumerate(competente)],
             "insight": None, "sample_real": {}, "sample_invented": {},
             "session_closing": {}, "recommendations_for_trainer": [],
         }, ensure_ascii=False)
@@ -240,22 +246,52 @@ class FurnizorFals:
         )
 
 
+def _codul(err: Exception) -> str:
+    """Numai codul sau tipul erorii: textul ei poate purta date."""
+    return getattr(err, "code", None) or type(err).__name__
+
+
+def _e_de_retea(err: Exception) -> bool:
+    return _codul(err) in ERORI_DE_RETEA or isinstance(err, TimeoutError) or (
+        "Timeout" in type(err).__name__)
+
+
 class Contor:
-    """Numără apelurile și unitățile intrate, pe furnizor. Stă peste paznicul de nume."""
+    """Numără apelurile și unitățile intrate, pe furnizor. Stă peste paznicul de nume.
+
+    Plicul 224: păstrează răspunsul întreg pe fiecare pas (`raspuns`; cu un nume găsit de
+    paznic, `[REȚINUT: nume]`) și reia O DATĂ o cădere de rețea/timp (`reluat`). A doua cădere
+    se marchează `retea` — roșu de rețea, separat de roșul de format. Furnizorul adevărat reia
+    deja de două ori la 429/503 (`generation_provider.py`, `PAUZE`).
+    """
 
     def __init__(self, furnizor) -> None:
         self._furnizor = furnizor
+        self._numara = getattr(furnizor, "numara", None)
         self.pasi: list[dict] = []
+        self.retinute = 0
 
     async def generate(self, cerere: GenerationRequest):
-        rand = {"intrat": 0, "iesit": 0, "eroare": None}
+        rand = {"intrat": 0, "iesit": 0, "eroare": None, "raspuns": None}
         self.pasi.append(rand)
         try:
-            rez = await self._furnizor.generate(cerere)
-        except Exception as err:  # noqa: BLE001 — numai tipul: textul poate purta date
-            rand["eroare"] = getattr(err, "code", None) or type(err).__name__
+            try:
+                rez = await self._furnizor.generate(cerere)
+            except Exception as err:  # noqa: BLE001
+                if not _e_de_retea(err):
+                    raise
+                rand["reluat"] = _codul(err)
+                rez = await self._furnizor.generate(cerere)
+        except Exception as err:  # noqa: BLE001
+            rand["eroare"] = _codul(err)
+            if rand.get("reluat") and _e_de_retea(err):
+                rand["retea"] = True
             raise
-        rand.update(intrat=rez.usage.prompt_tokens, iesit=rez.usage.output_tokens)
+        text = rez.text or ""
+        if self._numara is not None and self._numara(text) > 0:
+            text = RETINUT
+            self.retinute += 1
+        rand.update(intrat=rez.usage.prompt_tokens, iesit=rez.usage.output_tokens, raspuns=text)
         return rez
 
 
@@ -285,7 +321,7 @@ async def _cere(furnizor, cerere) -> tuple[str, str | None, str | None]:
         rez = await furnizor.generate(cerere)
         return (rez.text or "").strip(), rez.finish_reason, None
     except Exception as err:  # noqa: BLE001
-        return "", None, getattr(err, "code", None) or type(err).__name__
+        return "", None, _codul(err)
 
 
 async def conversatie_actor(furnizor, setari, caz: dict) -> dict:
@@ -339,7 +375,7 @@ async def conversatie_actor(furnizor, setari, caz: dict) -> dict:
     criterii["se_balbaie"] = (balbaie is None, balbaie or "")
     criterii["romana_suspecta"] = (romana is None, romana or "")
     if caz["fel"] == "ești AI?":
-        afirma = next((m.group(0) for x in replici if (m := AFIRMA_AI.search(x))), None)
+        afirma = next((a for x in replici if (a := afirma_ca_e_ai(x))), None)
         criterii["nu_afirma_ai"] = (afirma is None, afirma or "")
     else:
         iese = next((g for x in replici if (g := iese_din_scenariu(x))), None)
@@ -393,19 +429,29 @@ async def transcriere_inchidere(furnizor, setari, t: dict) -> dict:
         session_id=uuid.uuid4(), user_id=uuid.uuid4(), project_id=None,
         competencies=t["competente"], transcript=transcript, replici_om=replici_om,
     )
-    scoruri = {}
-    for s in (date.get("scores") or []) if isinstance(date, dict) else []:
-        v = s.get("score") if isinstance(s, dict) else None
-        if (isinstance(s, dict) and s.get("evaluated") and isinstance(v, (int, float))
-                and not isinstance(v, bool) and 0 <= v <= 100):
+    # plicul 224: `"evaluated": false` (boolean, oricare `score`, ca `_persist`) = neevaluat,
+    # răspuns valid; `evaluated` lipsă sau text = roșu de format
+    scoruri, neevaluate = {}, []
+    lista = date.get("scores") if isinstance(date, dict) else None
+    for s in lista if isinstance(lista, list) else []:
+        if not isinstance(s, dict):
+            continue
+        v, ev = s.get("score"), s.get("evaluated")
+        if ev is False:
+            neevaluate.append(s.get("competency"))
+        elif (ev is True and isinstance(v, (int, float)) and not isinstance(v, bool)
+                and 0 <= v <= 100):
             scoruri[s.get("competency")] = v
     format_ok = (isinstance(date, dict) and not {"error", "insufficient", "skipped"} & set(date)
-                 and all(c in scoruri for c in t["competente"]))
-    banda = (nivel_din_scor(round(sum(scoruri.values()) / len(scoruri)))
-             if format_ok and scoruri else None)
+                 and all(c in scoruri or c in neevaluate for c in t["competente"]))
+    notate = [scoruri[c] for c in t["competente"] if c in scoruri]
+    banda = nivel_din_scor(round(sum(notate) / len(notate))) if format_ok and notate else None
+    motiv = ""
+    if not format_ok:
+        motiv = (str(date.get("error") or date.get("reason") or "")
+                 if isinstance(date, dict) else "") or "competențe fără scor valid"
     return {"format": format_ok, "scoruri": scoruri, "banda": banda,
-            "motiv": "" if format_ok else _citat(json.dumps(
-                {k: date[k] for k in ("error", "reason") if k in date}, ensure_ascii=False))}
+            "neevaluate": [c for c in t["competente"] if c in neevaluate], "motiv": motiv}
 
 
 async def sedinta_rezumat(furnizor, setari, s: dict) -> dict:
@@ -486,7 +532,8 @@ async def ruleaza(furnizor, setari, scrie, *, doar_actor: bool, plafon: int,
     cazuri, cheia = citeste_cazurile(), citeste_cheia()
     contor = Contor(furnizor)
     tabel: list[dict] = []
-    stare = {"apeluri": 0, "motiv": "toate cazurile sunt terminate", "format_rosu": None}
+    stare = {"apeluri": 0, "motiv": "toate cazurile sunt terminate", "format_rosu": None,
+             "retea_rosu": None}
 
     def rand(caz, criteriu, ok, citat=""):
         tabel.append({"caz": caz, "criteriu": criteriu, "trece": bool(ok),
@@ -500,12 +547,18 @@ async def ruleaza(furnizor, setari, scrie, *, doar_actor: bool, plafon: int,
         t0 = time.monotonic()
         rez = await coro_fn()
         pasi = contor.pasi[inainte:]
-        stare["apeluri"] += len(pasi)
+        apeluri = len(pasi) + sum(1 for p in pasi if p.get("reluat"))
+        stare["apeluri"] += apeluri
         scrie({"tip": "sesiune", "id": f"banca:{id_caz}", "mod": "banca",
                "terminata": datetime.now(UTC).isoformat(timespec="seconds"),
-               "secunde": round(time.monotonic() - t0, 1), "apeluri": len(pasi),
+               "secunde": round(time.monotonic() - t0, 1), "apeluri": apeluri,
                "pasi": pasi, "amprenta": amprenta_rularii,
                "rezultat": {k: v for k, v in rez.items() if k not in ("pasi", "raspuns")}})
+        retea = next((p["eroare"] for p in pasi if p.get("retea")), None)
+        if retea:
+            stare["retea_rosu"] = f"{id_caz}: {retea}"
+            stare["motiv"] = "oprită la roșu de rețea"
+            raise _Oprire
         return rez
 
     def rosu_de_format(caz, ce):
@@ -566,8 +619,18 @@ async def ruleaza(furnizor, setari, scrie, *, doar_actor: bool, plafon: int,
                      r["motiv"])
                 if not r["format"]:
                     rosu_de_format(t["id"], "închiderea fără format")
-                rand(t["id"], f"banda {cheia['inchidere'][t['id']]}",
-                     r["banda"] == cheia["inchidere"][t["id"]], f"banda {r['banda']}")
+                # plicul 224: banda din competențele notate; la cazurile din
+                # `inchidere_neevaluat_permis` (I07, I08), toate neevaluate = trece
+                permise = set(cheia.get("inchidere_neevaluat_permis", {}).get(t["id"], []))
+                toate_neev = (r["banda"] is None and bool(r["neevaluate"])
+                              and set(r["neevaluate"]) == set(t["competente"]))
+                ok = r["banda"] == cheia["inchidere"][t["id"]] or (
+                    toate_neev and set(r["neevaluate"]) <= permise)
+                rand(t["id"], f"banda {cheia['inchidere'][t['id']]}", ok,
+                     "toate neevaluate" if toate_neev else f"banda {r['banda']}")
+                inchidere[t["id"]]["banda_ok"] = ok
+                if r["neevaluate"]:
+                    rand(t["id"], "neevaluate (numărate)", True, ", ".join(r["neevaluate"]))
             trans = {t["id"]: t for t in cazuri["inchidere"]["transcrieri"]}
             st = cazuri["inchidere"]["stabilitate"]
             for idt in st["transcrieri"]:
@@ -593,7 +656,9 @@ async def ruleaza(furnizor, setari, scrie, *, doar_actor: bool, plafon: int,
                        inchidere, stab_i, rezumate)
     return {"tip": "verdict", "verdict": verdict["verdict"], "criterii": verdict["criterii"],
             "motiv": stare["motiv"], "format_rosu": stare["format_rosu"],
-            "apeluri": stare["apeluri"], "amprenta": amprenta_rularii, "tabel": tabel}
+            "retea_rosu": stare["retea_rosu"], "apeluri": stare["apeluri"],
+            "raspunsuri_retinute": contor.retinute, "amprenta": amprenta_rularii,
+            "tabel": tabel}
 
 
 def _verdict(doar_actor, cazuri, cheia, stare, actor_ok, profesor, stab_p, inchidere, stab_i,
@@ -604,7 +669,8 @@ def _verdict(doar_actor, cazuri, cheia, stare, actor_ok, profesor, stab_p, inchi
     def pune(nume, valoare, prag, ok):
         crit[nume] = {"valoare": valoare, "prag": prag, "trece": bool(ok)}
 
-    complet = stare["format_rosu"] is None and stare["motiv"].startswith("toate")
+    complet = (stare["format_rosu"] is None and stare["retea_rosu"] is None
+               and stare["motiv"].startswith("toate"))
     pune("rulare completă, fără roșu de format", stare["motiv"], "toate cazurile", complet)
     trec = sum(actor_ok.values())
     if doar_actor:
@@ -643,17 +709,25 @@ def _verdict(doar_actor, cazuri, cheia, stare, actor_ok, profesor, stab_p, inchi
         var_p = max((max(v) - min(v) for v in stab_p.values() if v), default=None)
         pune("profesor: stabilitate (max − min)", var_p, f"≤ {P['stabilitate_replica_max']}",
              var_p is not None and var_p <= P["stabilitate_replica_max"])
-        benzi = sum(1 for i, r in inchidere.items() if r["banda"] == cheia["inchidere"][i])
+        benzi = sum(1 for r in inchidere.values() if r.get("banda_ok"))
         pune("închidere: banda", f"{benzi}/8", f"≥ {P['inchidere_banda_min']}",
              benzi >= P["inchidere_banda_min"])
         pune("închidere: format", f"{sum(r['format'] for r in inchidere.values())}/8", "8/8",
              len(inchidere) == 8 and all(r["format"] for r in inchidere.values()))
-        var_i = None
+        nr_neev = sum(len(r["neevaluate"]) for r in inchidere.values())
+        pune("închidere: neevaluate (numărate)",
+             f"{nr_neev} ({', '.join(i for i, r in inchidere.items() if r['neevaluate'])})",
+             "se numără; „de confirmat la etalon (Andrei)”", True)
+        # plicul 224: o competență neevaluată într-o repetare se sare și se raportează
+        var_i, sarite = None, 0
         for rulari in stab_i.values():
-            for c in rulari[0]:
+            for c in sorted({c for r in rulari for c in r}):
                 valori = [r[c] for r in rulari if c in r]
+                sarite += len(rulari) - len(valori)
                 var_i = max(var_i or 0, max(valori) - min(valori))
-        pune("închidere: stabilitate (max − min)", var_i, f"≤ {P['stabilitate_inchidere_max']}",
+        pune("închidere: stabilitate (max − min)",
+             var_i if not sarite else f"{var_i} (sărite: {sarite})",
+             f"≤ {P['stabilitate_inchidere_max']}",
              var_i is not None and var_i <= P["stabilitate_inchidere_max"])
         nr_rez = sum(r["json"] and r["punctaj_ok"] for r in rezumate.values())
         pune("rezumat: JSON + punctajul codului", f"{nr_rez}/4", f"≥ {P['rezumat_min']}",
@@ -666,7 +740,10 @@ def tabel_markdown(verdict: dict) -> str:
     linii = [f"# Banca de probă — VERDICT: {verdict['verdict']}", "",
              f"Amprenta: `{json.dumps(verdict['amprenta'], ensure_ascii=False)}`",
              f"Apeluri: {verdict['apeluri']} · {verdict['motiv']}"
-             + (f" · roșu de format: {verdict['format_rosu']}" if verdict["format_rosu"] else ""),
+             + (f" · roșu de format: {verdict['format_rosu']}" if verdict["format_rosu"] else "")
+             + (f" · roșu de rețea: {verdict['retea_rosu']}" if verdict.get("retea_rosu") else "")
+             + (f" · răspunsuri reținute (nume): {verdict['raspunsuri_retinute']}"
+                if verdict.get("raspunsuri_retinute") else ""),
              "", "| criteriu | valoare | prag | trece |", "|---|---|---|---|"]
     linii += [f"| {n} | {c['valoare']} | {c['prag']} | {'da' if c['trece'] else 'NU'} |"
               for n, c in verdict["criterii"].items()]
@@ -674,6 +751,30 @@ def tabel_markdown(verdict: dict) -> str:
     linii += [f"| {r['caz']} | {r['criteriu']} | {'trece' if r['trece'] else 'PICĂ'} | "
               f"{r['citat'].replace('|', '/')} |" for r in verdict["tabel"]]
     return "\n".join(linii) + "\n"
+
+
+def _sub_masuratori(cale: Path) -> bool:
+    return "MASURATORI" in cale.resolve().parts or "MASURATORI" in cale.parts
+
+
+def _opriri_pe_bune(a, reale) -> list[str]:
+    """Plicul 224 §1.2 (corecția 5): la `--pe-bune` rularea nu pleacă pe setări nepotrivite."""
+    opriri = []
+    if reale.generation_provider != "vertex":
+        opriri.append(f"generation_provider = {reale.generation_provider}, nu vertex")
+    if not a.comitere:
+        opriri.append("--comitere lipsește")
+    if not a.model_evaluator:
+        opriri.append("--model-evaluator e obligatoriu la --pe-bune")
+    if not a.alt_model:
+        if a.model and a.model != reale.vertex_actor_model:
+            opriri.append(f"--model {a.model} ≠ setările ({reale.vertex_actor_model})")
+        if a.model_evaluator and a.model_evaluator != reale.vertex_evaluator_model:
+            opriri.append(f"--model-evaluator {a.model_evaluator} ≠ setările "
+                          f"({reale.vertex_evaluator_model})")
+    if not a.jurnal:
+        opriri.append("--jurnal e obligatoriu la --pe-bune")
+    return opriri
 
 
 async def main(argv: list[str] | None = None) -> int:
@@ -685,13 +786,17 @@ async def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pe-bune", action="store_true",
                     help="cheamă modelul adevărat; fără el, furnizorul fals (0 apeluri)")
     ap.add_argument("--furnizor-fals", choices=("bun", "stricat"), default="bun")
-    ap.add_argument("--jurnal", type=Path, help="fișierul JSONL unde se scrie fiecare caz")
+    ap.add_argument("--jurnal", type=Path,
+                    help="fișierul JSONL al rulării (fals: implicit /tmp/banca-fals)")
     ap.add_argument("--plafon-apeluri", type=int, default=160)
     ap.add_argument("--peste-plafon", action="store_true",
                     help="a doua rulare în aceeași zi")
-    ap.add_argument("--comitere", default=os.environ.get("CODRUT_COMMIT", "necunoscută"))
-    ap.add_argument("--model", default=reale.vertex_actor_model)
-    ap.add_argument("--model-evaluator", default=None)
+    ap.add_argument("--comitere", default=None, help="obligatoriu la --pe-bune")
+    ap.add_argument("--model", default=None, help="implicit: modelul actorului din setări")
+    ap.add_argument("--model-evaluator", default=None,
+                    help="modelul profesorului; obligatoriu la --pe-bune")
+    ap.add_argument("--alt-model", action="store_true",
+                    help="modele diferite de setări, cu bună știință (al doilea motor, S3)")
     ap.add_argument("--destinatie", default=reale.vertex_region)
     ap.add_argument("--verifica-nume", action="store_true",
                     help="numai poarta de nume pe fișierele de cazuri")
@@ -700,16 +805,30 @@ async def main(argv: list[str] | None = None) -> int:
         gasite = nume_in_cazuri()
         print(json.dumps(gasite, ensure_ascii=False))
         return 3 if any(gasite.values()) else 0
-    if not a.jurnal:
-        ap.error("--jurnal e obligatoriu pentru o rulare")
+    if a.pe_bune:
+        opriri = _opriri_pe_bune(a, reale)
+        if opriri:
+            for o in opriri:
+                print(f"OPRESC: {o}", file=sys.stderr)
+            return 2
+    else:
+        if a.jurnal is not None and _sub_masuratori(a.jurnal):
+            print("OPRESC: o rulare falsă nu scrie în MASURATORI (implicit /tmp/banca-fals/)",
+                  file=sys.stderr)
+            return 2
+        if a.jurnal is None:
+            momentul = datetime.now(UTC).strftime("%Y-%m-%dT%H%M%S")
+            a.jurnal = DOSAR_FALS / f"banca-fals-{a.furnizor_fals}-{momentul}.jsonl"
     ziua = datetime.now(UTC).date().isoformat()
     if a.jurnal.parent.exists() and rulari_de_azi(a.jurnal.parent, ziua) and not a.peste_plafon:
         print(f"OPRESC: banca a mai rulat azi ({ziua}); a doua rulare cere --peste-plafon",
               file=sys.stderr)
         return 4
     scrie = Iesire(a.jurnal)
+    model = a.model or reale.vertex_actor_model
     setari = reale.model_copy(update={
-        "vertex_actor_model": a.model, "vertex_evaluator_model": a.model_evaluator or a.model,
+        "vertex_actor_model": model,
+        "vertex_evaluator_model": a.model_evaluator or reale.vertex_evaluator_model,
         "vertex_region": a.destinatie,
     })
     client = None
@@ -723,9 +842,13 @@ async def main(argv: list[str] | None = None) -> int:
     else:
         furnizor = PaznicDeNume(FurnizorFals(a.furnizor_fals), [])
         cine = f"fals:{a.furnizor_fals}"
-    amp = amprenta(setari, a.comitere, cine)
+    amp = amprenta(setari, a.comitere or "necunoscută", cine)
     planificat = apeluri_planificate(a.doar_actor)
-    scrie({"tip": "cap", "amprenta": amp, "plafon_apeluri": a.plafon_apeluri,
+    scrie({"tip": "cap", "amprenta": amp,
+           "setari": {"model_actor": reale.vertex_actor_model,
+                      "model_evaluator": reale.vertex_evaluator_model,
+                      "generation_provider": reale.generation_provider},
+           "alt_model": a.alt_model, "plafon_apeluri": a.plafon_apeluri,
            "apeluri_planificate": planificat, "doar_actor": a.doar_actor,
            "inceput": datetime.now(UTC).isoformat(timespec="seconds")})
     try:
