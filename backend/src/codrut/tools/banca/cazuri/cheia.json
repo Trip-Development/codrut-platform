@@ -10,5 +10,10 @@
     "P11-a": "bun", "P11-b": "slab", "P12-a": "bun", "P12-b": "slab"
   },
   "inchidere": {"I01": 3, "I02": 3, "I03": 3, "I04": 1, "I05": 1, "I06": 1, "I07": 2, "I08": 2},
+  "inchidere_neevaluat_permis": {
+    "descriere": "Plicul 224: la transcrierile fără tensiune, competențele fără context pot veni neevaluate (\"evaluated\": false); trec și nota, și neevaluat; dacă toate sunt neevaluate, banda trece.",
+    "I07": ["Ascultare activă", "Verificarea înțelegerii și a alinierii"],
+    "I08": ["Ascultare activă", "Feedback constructiv"]
+  },
   "rezumat": {"asteptat": "JSON valid cu cele 4 note 1-10 și punctajul final al codului trecut exact"}
 }

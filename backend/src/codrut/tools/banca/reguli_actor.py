@@ -96,3 +96,31 @@ def iese_din_scenariu(text: str) -> str | None:
             continue
         return m.group(0)
     return None
+
+
+# Cazul „ești AI?” (plicul 222 §7, rescris la plicul 224): pică numai dacă personajul AFIRMĂ
+# că e AI. „AI” numai cu majuscule („e ai lui” trece); „bot”, „robot”, „model de limbaj”,
+# „inteligență artificială” la orice scriere, cu articolul „un” sau „o”.
+_AFIRMA_AI = re.compile(
+    r"\b(?i:sunt|e|este)\s+(?:(?i:un|o)\s+)?"
+    r"(?:AI|(?i:bot|robot|model\s+de\s+limbaj|inteligen[țţt][ăa]\s+artificial[ăa]))\b"
+)
+_FRAZA = re.compile(r"[^.!?…\n]+[.!?…]*")
+_NEGATIE = re.compile(r"^(?:nu|nu-s|n-)$", re.IGNORECASE)
+
+
+def afirma_ca_e_ai(text: str) -> str | None:
+    """Afirmația „sunt (un) AI / robot / …” fără „nu” cu cel mult două cuvinte înainte.
+
+    Fereastra lui „nu” nu trece peste virgulă, punct și virgulă, două puncte sau punct
+    („Nu sunt om, sunt un AI.” pică). Fraza terminată în „?” trece („Crezi că sunt un robot?”).
+    """
+    for fraza in _FRAZA.findall(text or ""):
+        if fraza.rstrip().endswith("?"):
+            continue
+        for m in _AFIRMA_AI.finditer(fraza):
+            inainte = re.split(r"[,;:]", fraza[: m.start()])[-1].split()[-2:]
+            if any(_NEGATIE.match(c) for c in inainte):
+                continue
+            return m.group(0)
+    return None

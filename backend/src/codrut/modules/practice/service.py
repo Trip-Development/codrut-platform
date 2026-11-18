@@ -1526,6 +1526,13 @@ class PracticeSessionService:
                     try:
                         eval_data = json.loads(json_match.group(1))
                         scores_dict = eval_data.get("scores", {})
+                        if not isinstance(scores_dict, dict):
+                            # plicul 224: notele în alt format (listă, text, număr) se sar;
+                            # momentul și memoria se salvează mai departe
+                            logger.warning(
+                                "practice_nota_sarita sesiune=%s motiv=format", session_id,
+                            )
+                            scores_dict = {}
                         topic = eval_data.get("topic", "")
                         characters = eval_data.get("characters", [])
 
@@ -1633,7 +1640,10 @@ class PracticeSessionService:
             except _FaraEvaluare:
                 summary_text = None
             except Exception as err:
-                logging.getLogger(__name__).warning(f"Failed to generate session summary: {err}")
+                # numai tipul erorii: textul ei poate purta date — plicul 224 (223 O2)
+                logging.getLogger(__name__).warning(
+                    "Failed to generate session summary: %s", type(err).__name__,
+                )
                 if rezervare_id is not None:
                     # Banii rezervati se dau inapoi daca apelul n-a avut loc — ca la
                     # `_prima_replica`. Altfel plafonul ar scadea pentru un apel care n-a fost.

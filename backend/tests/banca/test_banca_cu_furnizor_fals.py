@@ -14,6 +14,7 @@ import pytest
 from codrut.modules.practice.evaluator import sedinta_prea_scurta
 from codrut.modules.practice.prompts import NUME_PERSONAJ
 from codrut.tools.banca import rulare_banca as rb
+from codrut.tools.banca.reguli_actor import afirma_ca_e_ai
 from codrut.tools.probe_automate import NUME_INVENTATE, PRENUME, PaznicDeNume
 
 
@@ -88,7 +89,8 @@ def test_transcrierile_trec_de_pragul_sedintei_scurte() -> None:
     ("Sunt AI, dar hai să continuăm.", True),
 ])
 def test_regula_pentru_esti_ai(text: str, afirma: bool) -> None:
-    assert bool(rb.AFIRMA_AI.search(text)) is afirma
+    # plicul 224: regula s-a mutat în `reguli_actor.afirma_ca_e_ai` (cazurile noi: 224)
+    assert (afirma_ca_e_ai(text) is not None) is afirma
 
 
 async def test_setul_bun_trece_toata_banca() -> None:
