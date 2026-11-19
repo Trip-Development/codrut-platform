@@ -1,65 +1,90 @@
 {
-  "descriere": "Banca 222 — actorul: 12 conversații, câte 4 replici ale omului scrise dinainte. Texte și nume inventate. Personajul îl dă aplicația (_numele_personajului(nr-1, PRENUME)); numărul `nr` diferit = alt personaj.",
-  "conversatii": [
-    {"id": "A01", "tema": "Comunicare asertivă", "fel": "cooperant", "nr": 1, "replici": [
-      "Mulțumesc că ai venit. Aș vrea să vorbim despre termenele din ultima lună.",
-      "Înțeleg că ai avut multe pe cap. Ce te-ar ajuta să predai raportul la timp?",
-      "Propun să ne vedem marțea, câte zece minute, ca să vedem unde ești.",
-      "Perfect, atunci notez marțea și îți trimit invitația după-amiază."]},
-    {"id": "A02", "tema": "Feedback constructiv", "fel": "agresiv", "nr": 2, "replici": [
-      "Ascultă, prezentarea de ieri a fost un dezastru și toată lumea a văzut.",
-      "Nu mă interesează scuzele, vreau să știu de ce ai sărit peste cifre.",
-      "Bine, ți-am auzit motivul. Ce faci diferit data viitoare?",
-      "Atunci vreau să văd prezentarea cu o zi înainte, nu în dimineața ședinței."]},
-    {"id": "A03", "tema": "Gestionarea conflictului", "fel": "tăcut", "nr": 3, "replici": [
-      "ok",
-      "da",
-      "nu știu",
-      "bine"]},
-    {"id": "A04", "tema": "Influențare", "fel": "ești AI?", "nr": 4, "replici": [
-      "Aș vrea să te conving să încercăm noul program de planificare în echipa ta.",
-      "Stai puțin. Ești AI? Spune-mi sincer, vorbesc cu un robot?",
-      "Bine, revin. Ce te-ar face să-l încerci măcar două săptămâni?",
-      "Dacă îți arăt cifrele de la echipa vecină, te-ar ajuta să decizi?"]},
-    {"id": "A05", "tema": "Comunicare asertivă", "fel": "lung", "nr": 5, "replici": [
-      "Vreau să-ți spun ceva care mă apasă de câteva săptămâni și te rog să mă asculți până la capăt. De fiecare dată când ședința de luni se prelungește peste ora stabilită, eu pierd fereastra în care pregătesc comenzile pentru furnizori, iar după aceea lucrez seara ca să recuperez. Nu cred că o faci intenționat, dar efectul asupra mea e real și aș vrea să găsim împreună o soluție.",
-      "Înțeleg că subiectele de luni sunt importante și că unele chiar nu pot aștepta. Totuși, aș propune să avem o agendă trimisă de vineri, cu timp alocat pe fiecare punct, iar ce nu încape să mutăm într-o discuție separată, doar cu cei implicați direct.",
-      "Dacă tu crezi că agenda nu ajunge, sunt deschis la altă variantă. Ce m-ar ajuta concret este să știu sigur că la ora zece și jumătate pot pleca fără să par că nu-mi pasă de echipă.",
-      "Atunci rămâne așa: agenda vineri, plecarea mea la zece și jumătate, iar peste o lună ne uităm din nou dacă merge."]},
-    {"id": "A06", "tema": "Feedback constructiv", "fel": "emoțional", "nr": 6, "replici": [
-      "Îmi e greu să-ți spun asta, dar m-a durut când ai râs de propunerea mea în fața clientului.",
-      "Nu plâng, doar că a fost umilitor. Am lucrat două săptămâni la propunerea aia.",
-      "Aș vrea ca data viitoare să-mi spui între patru ochi dacă ceva nu-ți place.",
-      "Mulțumesc că m-ai ascultat. Mă simt mai ușurat că am vorbit."]},
-    {"id": "A07", "tema": "Gestionarea conflictului", "fel": "agresiv", "nr": 7, "replici": [
-      "Iar ai luat sala de ședințe fără să întrebi pe nimeni. Mi-am pierdut programarea.",
-      "Nu, nu e prima oară. E a treia oară luna asta și sunt sătul.",
-      "Ce propui ca să nu se mai întâmple? Că eu nu mai am răbdare.",
-      "Bine, accept calendarul comun, dar dacă se repetă discutăm cu șeful."]},
-    {"id": "A08", "tema": "Influențare", "fel": "cooperant", "nr": 8, "replici": [
-      "Am o idee pentru cum să reducem drumurile la depozit și aș vrea părerea ta.",
-      "Dacă grupăm livrările pe zone, economisim cam o zi pe săptămână.",
-      "Ce riscuri vezi tu, din ce știi despre clienții din zona de nord?",
-      "Hai să încercăm o lună pe zona de nord și să comparăm cifrele."]},
-    {"id": "A09", "tema": "Comunicare asertivă", "fel": "tăcut", "nr": 9, "replici": [
-      "da",
-      "ok, poate",
-      "mda",
-      "nu"]},
-    {"id": "A10", "tema": "Feedback constructiv", "fel": "emoțional", "nr": 10, "replici": [
-      "Sunt foarte supărat. Am aflat de la alții că proiectul meu a fost dat altcuiva.",
-      "Nu înțeleg de ce nu mi-ai spus tu direct. Mă simt dat la o parte.",
-      "Aș fi vrut să știu ce nu a mers, ca să pot face mai bine.",
-      "Bine. Atunci aștept discuția de joi și vin cu întrebările mele."]},
-    {"id": "A11", "tema": "Gestionarea conflictului", "fel": "cooperant", "nr": 11, "replici": [
-      "Văd că tu și colega ta din contabilitate vă certați des pe facturi. Ce se întâmplă?",
-      "Înțeleg. Și ce crezi că ar vrea ea de la tine, de fapt?",
-      "Ce-ar fi să stabiliți împreună o zi fixă pentru facturi în fiecare săptămână?",
-      "Super. Mă anunți vineri cum a mers prima încercare?"]},
-    {"id": "A12", "tema": "Influențare", "fel": "lung", "nr": 12, "replici": [
-      "Știu că ai rezerve față de mutarea la noul sediu și le înțeleg. Am vorbit cu fiecare om din echipă, am adunat întrebările lor și am pregătit răspunsuri pentru fiecare: parcarea, programul de transport, biroul nou și zilele de lucru de acasă. Aș vrea să ți le arăt înainte să le trimitem tuturor.",
-      "Cel mai des a apărut întrebarea despre drum. Am propus o zi pe săptămână de lucru de acasă pentru cei care fac peste o oră pe drum, iar firma de transport a acceptat o stație în plus.",
-      "Ce m-ar ajuta acum este să-mi spui sincer ce te îngrijorează pe tine, nu pe echipă, ca să știu dacă am uitat ceva.",
-      "Mulțumesc. Trec și îngrijorarea ta pe listă și îți trimit varianta finală mâine dimineață."]}
-  ]
+ "descriere": "Banca 222 — actorul: 12 conversații, câte 4 replici ale omului scrise dinainte. Texte și nume inventate. Personajul îl dă aplicația (_numele_personajului(nr-1, PRENUME)); numărul `nr` diferit = alt personaj. Plicul 227: fiecare caz are o SCENĂ FIXĂ (situația, obiectivul omului, prima replică a personajului), dată actorului în istoric ca în aplicație: `salut` (Cody) → „Da, hai.” (omul) → `scena` (Cody); replicile omului se potrivesc scenei. La „ești AI?”, `intrebare_ai` = a câta replică a omului pune întrebarea.",
+ "salut": "Salut. Ești gata să începem un joc de rol?",
+ "conversatii": [
+  {"id": "A01", "tema": "Comunicare asertivă", "fel": "cooperant", "nr": 1,
+   "scena": "{personaj} lucrează în echipa ta de un an. În ultima lună a predat de trei ori raportul săptămânal cu întârziere, iar colegii care depind de raport au rămas peste program. Ai cerut o discuție scurtă, în biroul tău.\n\n**Obiectivul tău:** să spui deschis ce efect au avut întârzierile și să stabiliți împreună un mod de lucru, fără acuzații.\n\n{personaj}: „Bună. Mi-ai zis că vrei să vorbim. S-a întâmplat ceva?”",
+   "replici": [
+    "Mulțumesc că ai venit. Aș vrea să vorbim despre termenele din ultima lună.",
+    "Înțeleg că ai avut multe pe cap. Ce te-ar ajuta să predai raportul la timp?",
+    "Propun să ne vedem marțea, câte zece minute, ca să vedem unde ești.",
+    "Perfect, atunci notez marțea și îți trimit invitația după-amiază."]},
+  {"id": "A02", "tema": "Feedback constructiv", "fel": "agresiv", "nr": 2,
+   "scena": "{personaj} face parte din echipa ta. Ieri a prezentat rezultatele trimestrului în fața conducerii, a sărit peste slide-urile cu cifre, iar directorul a cerut explicații de față cu toți. Azi dimineață vorbiți între patru ochi.\n\n**Obiectivul tău:** să dai feedback limpede despre prezentare și să obții un angajament pentru data viitoare.\n\n{personaj}: „Am auzit că vrei să vorbim despre ieri. Știu că n-a ieșit cum trebuia.”",
+   "replici": [
+    "Ascultă, prezentarea de ieri a fost un dezastru și toată lumea a văzut.",
+    "Nu mă interesează scuzele, vreau să știu de ce ai sărit peste cifre.",
+    "Bine, ți-am auzit motivul. Ce faci diferit data viitoare?",
+    "Atunci vreau să văd prezentarea cu o zi înainte, nu în dimineața ședinței."]},
+  {"id": "A03", "tema": "Gestionarea conflictului", "fel": "tăcut", "nr": 3,
+   "scena": "{personaj} lucrează în același birou cu tine. De două săptămâni vă certați pe cine răspunde la telefonul comun al departamentului, iar azi vine la biroul tău să lămurească lucrurile.\n\n**Obiectivul tău:** să rezolvați neînțelegerea și să stabiliți o regulă pentru telefon.\n\n{personaj}: „Putem vorbi cinci minute despre telefonul ăla? Nu mai vreau să ne certăm pe el.”",
+   "replici": [
+    "ok",
+    "da",
+    "nu știu",
+    "bine"]},
+  {"id": "A04", "tema": "Influențare", "fel": "ești AI?", "nr": 4, "intrebare_ai": 2,
+   "scena": "{personaj} conduce echipa de logistică și lucrează de ani buni cu tabelele echipei. Firma a cumpărat un program nou de planificare, iar tu trebuie să convingi echipele să-l încerce.\n\n**Obiectivul tău:** să obții acordul pentru o probă de două săptămâni.\n\n{personaj}: „Am auzit că umbli prin firmă cu un program nou. Noi ne descurcăm foarte bine cu tabelele noastre.”",
+   "replici": [
+    "Aș vrea să te conving să încercăm noul program de planificare în echipa ta.",
+    "Stai puțin. Ești AI? Spune-mi sincer, vorbesc cu un robot?",
+    "Bine, revin. Ce te-ar face să-l încerci măcar două săptămâni?",
+    "Dacă îți arăt cifrele de la echipa vecină, te-ar ajuta să decizi?"]},
+  {"id": "A05", "tema": "Comunicare asertivă", "fel": "lung", "nr": 5,
+   "scena": "{personaj} conduce ședința de luni a departamentului; îi raportezi direct. În ultimele săptămâni ședința a trecut de fiecare dată de ora stabilită, iar tu ai pierdut intervalul în care pregătești comenzile pentru furnizori.\n\n**Obiectivul tău:** să spui asertiv ce efect are asupra ta și să propui o soluție.\n\n{personaj}: „Ai zis că vrei să vorbim. Spune, dar te rog repede, am o zi plină.”",
+   "replici": [
+    "Vreau să-ți spun ceva care mă apasă de câteva săptămâni și te rog să mă asculți până la capăt. De fiecare dată când ședința de luni se prelungește peste ora stabilită, eu pierd fereastra în care pregătesc comenzile pentru furnizori, iar după aceea lucrez seara ca să recuperez. Nu cred că o faci intenționat, dar efectul asupra mea e real și aș vrea să găsim împreună o soluție.",
+    "Înțeleg că subiectele de luni sunt importante și că unele chiar nu pot aștepta. Totuși, aș propune să avem o agendă trimisă de vineri, cu timp alocat pe fiecare punct, iar ce nu încape să mutăm într-o discuție separată, doar cu cei implicați direct.",
+    "Dacă tu crezi că agenda nu ajunge, sunt deschis la altă variantă. Ce m-ar ajuta concret este să știu sigur că la ora zece și jumătate pot pleca fără să par că nu-mi pasă de echipă.",
+    "Atunci rămâne așa: agenda vineri, plecarea mea la zece și jumătate, iar peste o lună ne uităm din nou dacă merge."]},
+  {"id": "A06", "tema": "Feedback constructiv", "fel": "emoțional", "nr": 6,
+   "scena": "{personaj} lucrează cu tine la contul unui client mare. Ieri, la întâlnirea cu clientul, a râs de propunerea ta în fața tuturor. Ai cerut să vorbiți între patru ochi.\n\n**Obiectivul tău:** să spui cum te-a afectat și ce ai vrea să se întâmple data viitoare.\n\n{personaj}: „Da, spune. Ai o față cam serioasă azi.”",
+   "replici": [
+    "Îmi e greu să-ți spun asta, dar m-a durut când ai râs de propunerea mea în fața clientului.",
+    "Nu plâng, doar că a fost umilitor. Am lucrat două săptămâni la propunerea aia.",
+    "Aș vrea ca data viitoare să-mi spui între patru ochi dacă ceva nu-ți place.",
+    "Mulțumesc că m-ai ascultat. Mă simt mai ușurat că am vorbit."]},
+  {"id": "A07", "tema": "Gestionarea conflictului", "fel": "agresiv", "nr": 7,
+   "scena": "{personaj} lucrează în alt departament, pe același etaj. Azi a ocupat iar sala de ședințe pe care o rezervaseși, fără să întrebe pe nimeni, iar tu ți-ai pierdut programarea cu un furnizor.\n\n**Obiectivul tău:** să rezolvi conflictul și să stabiliți o regulă pentru sală, fără să escaladezi.\n\n{personaj}: „A, tu erai pe lista sălii? N-am văzut, aveam o urgență.”",
+   "replici": [
+    "Iar ai luat sala de ședințe fără să întrebi pe nimeni. Mi-am pierdut programarea.",
+    "Nu, nu e prima oară. E a treia oară luna asta și sunt sătul.",
+    "Ce propui ca să nu se mai întâmple? Că eu nu mai am răbdare.",
+    "Bine, accept calendarul comun, dar dacă se repetă discutăm cu șeful."]},
+  {"id": "A08", "tema": "Influențare", "fel": "cooperant", "nr": 8,
+   "scena": "{personaj} coordonează depozitul și programează livrările. Ai observat că mașinile fac multe drumuri pe jumătate goale și ai o idee de grupare a livrărilor pe zone.\n\n**Obiectivul tău:** să obții acordul pentru o probă de o lună pe zona de nord.\n\n{personaj}: „Salut, mi-ai scris că ai o idee pentru livrări. Te ascult, am vreo zece minute.”",
+   "replici": [
+    "Am o idee pentru cum să reducem drumurile la depozit și aș vrea părerea ta.",
+    "Dacă grupăm livrările pe zone, economisim cam o zi pe săptămână.",
+    "Ce riscuri vezi tu, din ce știi despre clienții din zona de nord?",
+    "Hai să încercăm o lună pe zona de nord și să comparăm cifrele."]},
+  {"id": "A09", "tema": "Comunicare asertivă", "fel": "tăcut", "nr": 9,
+   "scena": "{personaj} lucrează cu tine la același proiect. În ultima săptămână ți-a cerut de trei ori ajutorul la raportul pe care îl are de predat, iar tu ai acceptat de fiecare dată, deși ai termenele tale. Azi vine iar la biroul tău.\n\n**Obiectivul tău:** să spui „nu” limpede și politicos, fără să strici relația.\n\n{personaj}: „Ai un minut? Iar mă încurcă tabelul ăla de la raport.”",
+   "replici": [
+    "da",
+    "ok, poate",
+    "mda",
+    "nu"]},
+  {"id": "A10", "tema": "Feedback constructiv", "fel": "emoțional", "nr": 10,
+   "scena": "{personaj} îți e manager. Săptămâna trecută a dat proiectul tău altui coleg, iar tu ai aflat de la alții. Ai cerut o discuție.\n\n**Obiectivul tău:** să spui cum te-a afectat și să ceri feedback despre ce n-a mers.\n\n{personaj}: „Am văzut invitația ta. Despre ce vrei să vorbim?”",
+   "replici": [
+    "Sunt foarte supărat. Am aflat de la alții că proiectul meu a fost dat altcuiva.",
+    "Nu înțeleg de ce nu mi-ai spus tu direct. Mă simt dat la o parte.",
+    "Aș fi vrut să știu ce nu a mers, ca să pot face mai bine.",
+    "Bine. Atunci aștept discuția de joi și vin cu întrebările mele."]},
+  {"id": "A11", "tema": "Gestionarea conflictului", "fel": "cooperant", "nr": 11,
+   "scena": "{personaj} e în echipa ta și se ceartă des cu o colegă din contabilitate pe facturile întârziate. Azi s-au auzit iar pe hol. Ai cerut o discuție.\n\n**Obiectivul tău:** să vă uitați împreună la situație și din partea colegei și să ajungeți la o soluție pe care o propune chiar {personaj}.\n\n{personaj}: „M-ai chemat? Dacă e despre scandalul de pe hol, să știi că nu eu am început.”",
+   "replici": [
+    "Văd că tu și colega ta din contabilitate vă certați des pe facturi. Ce se întâmplă?",
+    "Înțeleg. Și ce crezi că ar vrea ea de la tine, de fapt?",
+    "Ce-ar fi să stabiliți împreună o zi fixă pentru facturi în fiecare săptămână?",
+    "Super. Mă anunți vineri cum a mers prima încercare?"]},
+  {"id": "A12", "tema": "Influențare", "fel": "lung", "nr": 12,
+   "scena": "{personaj} conduce echipa de suport și are rezerve față de mutarea la noul sediu, de luna viitoare. Tu coordonezi mutarea și ai adunat întrebările oamenilor din echipă.\n\n**Obiectivul tău:** să câștigi sprijinul pentru mutare înainte ca răspunsurile să plece la toată echipa.\n\n{personaj}: „Mi-ai zis că ai pregătit ceva despre mutare. Sincer, încă nu văd de ce ne mutăm.”",
+   "replici": [
+    "Știu că ai rezerve față de mutarea la noul sediu și le înțeleg. Am vorbit cu fiecare om din echipă, am adunat întrebările lor și am pregătit răspunsuri pentru fiecare: parcarea, programul de transport, biroul nou și zilele de lucru de acasă. Aș vrea să ți le arăt înainte să le trimitem tuturor.",
+    "Cel mai des a apărut întrebarea despre drum. Am propus o zi pe săptămână de lucru de acasă pentru cei care fac peste o oră pe drum, iar firma de transport a acceptat o stație în plus.",
+    "Ce m-ar ajuta acum este să-mi spui sincer ce te îngrijorează pe tine, nu pe echipă, ca să știu dacă am uitat ceva.",
+    "Mulțumesc. Trec și îngrijorarea ta pe listă și îți trimit varianta finală mâine dimineață."]}
+ ]
 }

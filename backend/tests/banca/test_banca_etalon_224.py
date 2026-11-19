@@ -239,9 +239,9 @@ async def test_pe_bune_cu_alt_model_explicit_porneste_si_scrie_setarile(
 async def test_raspunsurile_intregi_se_pastreaza_pe_fiecare_pas() -> None:
     verdict, randuri = await _ruleaza(rb.FurnizorFals("bun"), doar_actor=True)
     pasi = [p for r in randuri if r["tip"] == "sesiune" for p in r["pasi"]]
-    assert len(pasi) == 24
+    assert len(pasi) == 16  # plicul 227: numai replicile de joc
     assert all(p["raspuns"] for p in pasi)
-    assert pasi[0]["raspuns"] == "Salut. Cum îți merge ziua până acum?"
+    assert pasi[0]["raspuns"] == rb.FurnizorFals._FRAZE[2] + " " + rb.FurnizorFals._FRAZE[3]
     assert verdict["raspunsuri_retinute"] == 0
 
 
@@ -299,7 +299,7 @@ async def test_rularea_falsa_nu_scrie_in_masuratori(tmp_path) -> None:
 
 
 class _CadeODataPeApel:
-    """Primele `de_cate_ori` chemări (salutul lui A01, cu reluarea lui) cad cu `cod`."""
+    """Primele `de_cate_ori` chemări (prima replică a lui A01, cu reluarea ei) cad cu `cod`."""
 
     def __init__(self, cod: str = "vertex_network_error", de_cate_ori: int = 1) -> None:
         self._fals = rb.FurnizorFals("bun")

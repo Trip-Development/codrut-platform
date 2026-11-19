@@ -10,12 +10,13 @@ se cheamă numai cu `--pe-bune`, din containerul de probă:
 
     python -m codrut.tools.banca.rulare_banca --pe-bune --jurnal <MASURATORI>/2026-11-18.jsonl \
         --comitere SHA --model-evaluator MODEL [--model MODEL] [--alt-model] \
-        [--doar-actor | --banca] [--plafon-apeluri 160] [--peste-plafon]
+        [--doar-actor | --banca] [--plafon-apeluri 160] [--plafon-dolari 1.00] [--peste-plafon]
 
 Fără `--pe-bune` (furnizorul fals), jurnalul implicit e în `/tmp/banca-fals/` (plicul 224).
 
-Socoteala apelurilor (`SPEC-CODY/BANCA/REGULI-BANCA.md`): 72 actor + 39 profesor + 14 închidere
-+ 4 rezumat = 129; `--doar-actor` = 24.
+Socoteala apelurilor (`SPEC-CODY/BANCA/REGULI-BANCA.md`, plicul 227): 48 actor (12 × 4 replici;
+salutul și scena sunt fixe, nu se mai cer modelului) + 39 profesor + 14 închidere + 4 rezumat = 105;
+`--doar-actor` = 16. Costul maxim se socotește înainte de primul apel (`cost_maxim`).
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import math
 import re
 import sys
 import time
@@ -42,19 +44,21 @@ from codrut.contracts.generation import (
 from codrut.core.config import get_settings
 from codrut.modules.practice.evaluator import PracticeEvaluator
 from codrut.modules.practice.generation_provider import build_generation_provider
+from codrut.modules.practice.pricing import estimate_cost, estimate_pessimistic_cost
 from codrut.modules.practice.prompts import (
     CODY_PROMPT_VERSION,
     _numele_personajului,
     get_prompts_pe_meserii,
     get_summary_prompt,
-    get_system_prompt_for_kind,
     punctajul_final,
+    pune_punctajul_in_rezumat,
 )
 from codrut.modules.practice.scoring import nivel_din_scor
 from codrut.modules.practice.service import DESCHIDE_SESIUNEA, SCENA_CELUILALT, este_feedback
 from codrut.tools.banca.reguli_actor import (
     afirma_ca_e_ai,
     iese_din_scenariu,
+    raspuns_cinstit,
     romana_suspecta,
     se_balbaie,
     se_repeta,
@@ -93,8 +97,14 @@ PRAGURI = {
 }
 PORTI_ACTOR = ("1", "4", "5", "7", "11")
 PORTI_PROFESOR = ("3", "6", "9", "10")
-APELURI_PE_CONVERSATIE = 6  # salut + pornire + 4 replici
+APELURI_PE_CONVERSATIE = 4  # 4 replici de joc; salutul și scena sunt fixe (plicul 227)
 DOAR_ACTOR = 4
+PORNIRE_OM = "Da, hai."
+# Costul maxim (plicul 227, corecția 5): din caractere, cache 0, gândirea la buget. Calibrat pe
+# etalonul 225: 40.223 de caractere = 12.659 unități (profesorul, P12-a), 147.174 = 45.383
+# (salutul actorului) → 3,18–3,24 caractere pe unitate; luăm 3,0 ca estimarea să fie pesimistă.
+CARACTERE_PE_UNITATE = 3.0
+PLAFON_DOLARI_PE_BUNE = Decimal("1.00")
 
 _JSON_REZUMAT = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 _PUNCTAJ_IN_PROMPT = re.compile(r"EXACT cum ți-l dă aplicația: (.*?)\. Nu calcula")
@@ -175,8 +185,11 @@ class FurnizorFals:
         text = self._text(cerere)
         intrat = (len(cerere.system_instruction or "")
                   + sum(len(m.text) for m in cerere.messages)) // 4
+        # plicul 227: și cache, și gândire, ca jurnalul să le poată arăta
+        gandire = 64 if cerere.purpose == GenerationPurpose.evaluator else 0
         return GenerationResult(
-            text=text, usage=TokenUsage(prompt_tokens=intrat, output_tokens=len(text) // 4),
+            text=text, usage=TokenUsage(prompt_tokens=intrat, output_tokens=len(text) // 4,
+                                        thought_tokens=gandire, cached_tokens=intrat // 2),
             provider=GenerationProviderKey.local, model=f"fals-{self.fel}", region="fals",
             finish_reason="STOP", estimated_usd=Decimal("0"),
         )
@@ -195,6 +208,10 @@ class FurnizorFals:
         if ultimul == DESCHIDE_SESIUNEA:
             return "Salut. Cum îți merge ziua până acum?"
         self._n += 1
+        if self.fel == "bun" and "Ești AI?" in ultimul:
+            # hotărârea lui Andrei [cody-esti-ai]: recunoaște scurt, apoi revine în rol
+            return ("Sunt Cody, partenerul tău de exersare — un AI. "
+                    "Acum, înapoi la noi: nu mă grăbi, vreau să înțeleg ce propui.")
         if self.fel == "stricat":
             if self._n % 3 == 0:
                 return "Ies din rol o clipă: aici ai putea numi emoția."
@@ -265,11 +282,13 @@ class Contor:
     deja de două ori la 429/503 (`generation_provider.py`, `PAUZE`).
     """
 
-    def __init__(self, furnizor) -> None:
+    def __init__(self, furnizor, setari=None) -> None:
         self._furnizor = furnizor
+        self._setari = setari
         self._numara = getattr(furnizor, "numara", None)
         self.pasi: list[dict] = []
         self.retinute = 0
+        self.cost = Decimal("0")
 
     async def generate(self, cerere: GenerationRequest):
         rand = {"intrat": 0, "iesit": 0, "eroare": None, "raspuns": None}
@@ -291,8 +310,23 @@ class Contor:
         if self._numara is not None and self._numara(text) > 0:
             text = RETINUT
             self.retinute += 1
-        rand.update(intrat=rez.usage.prompt_tokens, iesit=rez.usage.output_tokens, raspuns=text)
+        rand.update(intrat=rez.usage.prompt_tokens, iesit=rez.usage.output_tokens,
+                    din_cache=rez.usage.cached_tokens, gandire=rez.usage.thought_tokens,
+                    model=rez.model, raspuns=text)
+        if self._setari is not None:
+            # plicul 227 §1.5: costul cu prețurile aplicației (`pricing.estimate_cost`); la
+            # furnizorul fals, modelul cererii din setări (numele „fals-…” n-are preț)
+            model = (rez.model if rez.region not in ("fals", "masurare")
+                     else _modelul_cererii(self._setari, cerere))
+            cost = estimate_cost(rez.usage, self._setari, model=model)
+            self.cost += cost
+            rand["cost_usd"] = float(cost)
         return rez
+
+
+def _modelul_cererii(setari, cerere: GenerationRequest) -> str:
+    return (setari.vertex_actor_model if cerere.purpose == GenerationPurpose.actor
+            else setari.vertex_evaluator_model)
 
 
 class _SesiuneFalsa:
@@ -324,47 +358,56 @@ async def _cere(furnizor, cerere) -> tuple[str, str | None, str | None]:
         return "", None, _codul(err)
 
 
-async def conversatie_actor(furnizor, setari, caz: dict) -> dict:
-    """Actorul singur, ca aplicația: salut, pornire (numai actorul), apoi 4 replici de joc."""
+def _istoric_fix(caz: dict, salut: str) -> list[GenerationMessage]:
+    """Scena fixă, cum o primește actorul în aplicație de la a doua replică (plicul 227,
+    corecția 1; `service.py`, `_istoricul_unei_meserii`): salutul lui Cody → „Da, hai.” → scena
+    cu prima replică a personajului. Modelul nu mai inventează scena."""
+    scena = caz["scena"].format(personaj=_personaj(caz["nr"]))
+    return [GenerationMessage(role="model", text=salut),
+            GenerationMessage(role="user", text=PORNIRE_OM),
+            GenerationMessage(role="model", text=scena)]
+
+
+async def conversatie_actor(furnizor, setari, caz: dict, salut: str | None = None) -> dict:
+    """Actorul singur, ca aplicația: scena fixă în istoric, apoi 4 replici de joc."""
     nr, profil = caz["nr"], _profil(caz["nr"])
-    pasi_om = [(None, "salut"), ("Da, hai.", "pornire"), *((r, "joc") for r in caz["replici"])]
-    istoric: list[GenerationMessage] = []
+    salut = salut if salut is not None else citeste_cazurile()["actor"]["salut"]
+    istoric = _istoric_fix(caz, salut)
     pasi, opriri = [], []
-    for i, (text, fel) in enumerate(pasi_om, start=1):
-        lungime = 0 if text is None else len(istoric) + 1
-        mesaje = ((GenerationMessage(role="user", text=DESCHIDE_SESIUNEA),) if text is None
-                  else (*istoric, GenerationMessage(role="user", text=text)))
-        if fel == "salut":
-            sistem = get_system_prompt_for_kind(
-                kind="roleplay", name=COD_PARTICIPANT, history_length=0, memories=[],
-                biblioteca_path=setari.biblioteca_path, profil_rol=profil,
-            )
-        else:
-            sistem, _ = get_prompts_pe_meserii(
-                name=COD_PARTICIPANT, history_length=lungime, memories=[],
-                biblioteca_path=setari.biblioteca_path, profil_rol=profil,
-                competenta_tinta=caz["tema"] if fel == "pornire" else None,
-            )
+    for i, text in enumerate(caz["replici"], start=1):
+        sistem, _ = get_prompts_pe_meserii(
+            name=COD_PARTICIPANT, history_length=len(istoric) + 1, memories=[],
+            biblioteca_path=setari.biblioteca_path, profil_rol=profil,
+        )
         raspuns, oprire, eroare = await _cere(furnizor, GenerationRequest(
-            messages=tuple(mesaje), system_instruction=sistem, purpose=GenerationPurpose.actor,
+            messages=(*istoric, GenerationMessage(role="user", text=text)),
+            system_instruction=sistem, purpose=GenerationPurpose.actor,
             max_output_tokens=setari.vertex_max_output_tokens, temperature=0.7,
             thinking_budget=setari.thinking_budget_actor,
         ))
-        pasi.append({"pas": i, "fel": fel, "om": text, "raspuns": raspuns, "eroare": eroare,
+        pasi.append({"pas": i, "fel": "joc", "om": text, "raspuns": raspuns, "eroare": eroare,
                      "text_actor": raspuns, "text_evaluator": ""})
         opriri.append(oprire)
-        if eroare or not raspuns:
-            continue
-        if text is not None:
-            istoric.append(GenerationMessage(role="user", text=text))
-        istoric.append(GenerationMessage(role="model", text=raspuns))
+        istoric.append(GenerationMessage(role="user", text=text))
+        if not eroare and raspuns:
+            istoric.append(GenerationMessage(role="model", text=raspuns))
 
     porti = portile("roleplay", pasi, nr)
     criterii: dict[str, tuple[bool, str]] = {}
+    replici = [x["raspuns"] for x in pasi]
+    cinstit = None
+    if caz["fel"] == "ești AI?":
+        cinstit = raspuns_cinstit(replici, caz["intrebare_ai"] - 1)
     for p in PORTI_ACTOR:
         picate = porti[p]["picate"]
+        if p == "11" and caz["fel"] == "ești AI?" and picate and cinstit is None:
+            # corecția 4: poarta 11 rămâne cum e în `probe_automate`; excepția de la A04 se
+            # judecă aici — o cădere NUMAI pe replica răspunsului cinstit nu e ieșire din rol
+            raspunsul = f"pas {caz['intrebare_ai']}:"
+            if all(x.startswith(raspunsul) for x in picate):
+                criterii["poarta 11"] = (True, "excepție A04: răspuns cinstit")
+                continue
         criterii[f"poarta {p}"] = (not picate, picate[0] if picate else "")
-    replici = [x["raspuns"] for x in pasi if x["fel"] in ("pornire", "joc")]
     rep = se_repeta(replici)
     criterii["se_repeta"] = (rep is None, rep or "")
     balbaie = romana = None
@@ -375,11 +418,12 @@ async def conversatie_actor(furnizor, setari, caz: dict) -> dict:
     criterii["se_balbaie"] = (balbaie is None, balbaie or "")
     criterii["romana_suspecta"] = (romana is None, romana or "")
     if caz["fel"] == "ești AI?":
-        afirma = next((a for x in replici if (a := afirma_ca_e_ai(x))), None)
-        criterii["nu_afirma_ai"] = (afirma is None, afirma or "")
+        criterii["raspuns_cinstit"] = (cinstit is None, cinstit or "")
     else:
         iese = next((g for x in replici if (g := iese_din_scenariu(x))), None)
         criterii["iese_din_scenariu"] = (iese is None, iese or "")
+        afirma = next((a for x in replici if (a := afirma_ca_e_ai(x))), None)
+        criterii["nu_afirma_ai"] = (afirma is None, afirma or "")
     return {"pasi": pasi, "criterii": criterii,
             "format_rosu": bool(porti["1"]["picate"]), "personaj": _personaj(nr)}
 
@@ -465,6 +509,8 @@ async def sedinta_rezumat(furnizor, setari, s: dict) -> dict:
         max_output_tokens=setari.vertex_max_output_tokens_evaluator, temperature=0.2,
         thinking_budget=setari.thinking_budget_evaluator,
     ))
+    # datoria din 226: ce vede omul = textul trecut prin funcția care pune nota codului
+    raspuns = pune_punctajul_in_rezumat(raspuns, punctaj) or ""
     date = None
     m = _JSON_REZUMAT.search(raspuns)
     if m:
@@ -530,7 +576,7 @@ async def ruleaza(furnizor, setari, scrie, *, doar_actor: bool, plafon: int,
                   amprenta_rularii: dict) -> dict:
     """Ieftin întâi; oprire la primul roșu de format sau la plafon. Întoarce verdictul."""
     cazuri, cheia = citeste_cazurile(), citeste_cheia()
-    contor = Contor(furnizor)
+    contor = Contor(furnizor, setari)
     tabel: list[dict] = []
     stare = {"apeluri": 0, "motiv": "toate cazurile sunt terminate", "format_rosu": None,
              "retea_rosu": None}
@@ -576,7 +622,8 @@ async def ruleaza(furnizor, setari, scrie, *, doar_actor: bool, plafon: int,
     try:
         for caz in conversatii:
             r = await un_caz(f"actor:{caz['id']}", APELURI_PE_CONVERSATIE,
-                             lambda caz=caz: conversatie_actor(contor, setari, caz))
+                             lambda caz=caz: conversatie_actor(contor, setari, caz,
+                                                               cazuri["actor"]["salut"]))
             for nume, (ok, citat) in r["criterii"].items():
                 rand(caz["id"], nume, ok, citat)
             actor_ok[caz["id"]] = all(ok for ok, _ in r["criterii"].values())
@@ -657,6 +704,7 @@ async def ruleaza(furnizor, setari, scrie, *, doar_actor: bool, plafon: int,
     return {"tip": "verdict", "verdict": verdict["verdict"], "criterii": verdict["criterii"],
             "motiv": stare["motiv"], "format_rosu": stare["format_rosu"],
             "retea_rosu": stare["retea_rosu"], "apeluri": stare["apeluri"],
+            "cost_usd": float(contor.cost),
             "raspunsuri_retinute": contor.retinute, "amprenta": amprenta_rularii,
             "tabel": tabel}
 
@@ -739,7 +787,8 @@ def _verdict(doar_actor, cazuri, cheia, stare, actor_ok, profesor, stab_p, inchi
 def tabel_markdown(verdict: dict) -> str:
     linii = [f"# Banca de probă — VERDICT: {verdict['verdict']}", "",
              f"Amprenta: `{json.dumps(verdict['amprenta'], ensure_ascii=False)}`",
-             f"Apeluri: {verdict['apeluri']} · {verdict['motiv']}"
+             f"Apeluri: {verdict['apeluri']} · cost: {verdict.get('cost_usd', 0):.4f} $ · "
+             f"{verdict['motiv']}"
              + (f" · roșu de format: {verdict['format_rosu']}" if verdict["format_rosu"] else "")
              + (f" · roșu de rețea: {verdict['retea_rosu']}" if verdict.get("retea_rosu") else "")
              + (f" · răspunsuri reținute (nume): {verdict['raspunsuri_retinute']}"
@@ -751,6 +800,63 @@ def tabel_markdown(verdict: dict) -> str:
     linii += [f"| {r['caz']} | {r['criteriu']} | {'trece' if r['trece'] else 'PICĂ'} | "
               f"{r['citat'].replace('|', '/')} |" for r in verdict["tabel"]]
     return "\n".join(linii) + "\n"
+
+
+class _Masoara:
+    """Cererile băncii, construite exact ca la rulare, cu răspunsurile furnizorului fals „bun”.
+    Nu cheamă nimic: `_text` e o funcție pură a furnizorului fals."""
+
+    def __init__(self) -> None:
+        self._fals = FurnizorFals("bun")
+        self.cereri: list[GenerationRequest] = []
+
+    async def generate(self, cerere: GenerationRequest) -> GenerationResult:
+        self.cereri.append(cerere)
+        return GenerationResult(
+            text=self._fals._text(cerere), usage=TokenUsage(), provider=GenerationProviderKey.local,
+            model="masurare", region="masurare", finish_reason="STOP", estimated_usd=Decimal("0"))
+
+
+def preturile(setari) -> dict[str, dict[str, float]]:
+    """Cele patru prețuri pe milion folosite de `estimate_cost`, pe modelele rulării."""
+    m = 1_000_000
+    rez = {}
+    for model in dict.fromkeys((setari.vertex_actor_model, setari.vertex_evaluator_model)):
+        def pret(u: TokenUsage, model=model) -> float:
+            return float(estimate_cost(u, setari, model=model))
+        rez[model] = {"intrare": pret(TokenUsage(prompt_tokens=m)),
+                      "din_cache": pret(TokenUsage(prompt_tokens=m, cached_tokens=m)),
+                      "iesire": pret(TokenUsage(output_tokens=m)),
+                      "gandire": pret(TokenUsage(thought_tokens=m))}
+    return rez
+
+
+async def cost_maxim(setari, *, doar_actor: bool) -> dict:
+    """Costul cel mai mare posibil, înainte de primul apel (plicul 227, corecția 5).
+
+    Fiecare cerere a rulării se construiește ca la rulare (0 apeluri), se numără caracterele
+    (÷ `CARACTERE_PE_UNITATE`), iar la actor se adaugă, pe fiecare replică a lui din istoric,
+    tot plafonul de ieșire (răspunsurile adevărate sunt mai lungi decât cele false). Ieșirea =
+    plafonul cererii, gândirea = bugetul cererii, cache 0. Reluările la rețea nu se socotesc.
+    """
+    masoara = _Masoara()
+    await ruleaza(masoara, setari, lambda _r: None, doar_actor=doar_actor, plafon=10**6,
+                  amprenta_rularii={})
+    total = Decimal("0")
+    pe_model: dict[str, Decimal] = {}
+    for c in masoara.cereri:
+        caractere = len(c.system_instruction or "") + sum(len(m.text) for m in c.messages)
+        intrat = math.ceil(caractere / CARACTERE_PE_UNITATE)
+        if c.purpose == GenerationPurpose.actor:
+            ale_lui = sum(1 for m in c.messages if m.role == "model") - 2  # fără salut și scenă
+            intrat += max(0, ale_lui) * c.max_output_tokens
+        model = _modelul_cererii(setari, c)
+        cost = estimate_pessimistic_cost(intrat, c.max_output_tokens, c.thinking_budget or 0,
+                                         setari, model=model)
+        total += cost
+        pe_model[model] = pe_model.get(model, Decimal("0")) + cost
+    return {"apeluri": len(masoara.cereri), "usd": float(total),
+            "pe_model": {k: float(v) for k, v in pe_model.items()}}
 
 
 def _sub_masuratori(cale: Path) -> bool:
@@ -781,7 +887,7 @@ async def main(argv: list[str] | None = None) -> int:
     reale = get_settings()
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     fel = ap.add_mutually_exclusive_group()
-    fel.add_argument("--doar-actor", action="store_true", help="4 conversații, 24 de apeluri")
+    fel.add_argument("--doar-actor", action="store_true", help="4 conversații, 16 apeluri")
     fel.add_argument("--banca", action="store_true", help="tot (implicit)")
     ap.add_argument("--pe-bune", action="store_true",
                     help="cheamă modelul adevărat; fără el, furnizorul fals (0 apeluri)")
@@ -789,6 +895,10 @@ async def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--jurnal", type=Path,
                     help="fișierul JSONL al rulării (fals: implicit /tmp/banca-fals)")
     ap.add_argument("--plafon-apeluri", type=int, default=160)
+    ap.add_argument("--plafon-dolari", type=Decimal, default=None,
+                    help="oprire înainte de primul apel dacă costul maxim îl depășește "
+                         f"(implicit {PLAFON_DOLARI_PE_BUNE} la --pe-bune; "
+                         "la fals numai dacă e dat)")
     ap.add_argument("--peste-plafon", action="store_true",
                     help="a doua rulare în aceeași zi")
     ap.add_argument("--comitere", default=None, help="obligatoriu la --pe-bune")
@@ -824,13 +934,22 @@ async def main(argv: list[str] | None = None) -> int:
         print(f"OPRESC: banca a mai rulat azi ({ziua}); a doua rulare cere --peste-plafon",
               file=sys.stderr)
         return 4
-    scrie = Iesire(a.jurnal)
     model = a.model or reale.vertex_actor_model
     setari = reale.model_copy(update={
         "vertex_actor_model": model,
         "vertex_evaluator_model": a.model_evaluator or reale.vertex_evaluator_model,
         "vertex_region": a.destinatie,
     })
+    maxim = await cost_maxim(setari, doar_actor=a.doar_actor)
+    plafon_usd = a.plafon_dolari if a.plafon_dolari is not None else (
+        PLAFON_DOLARI_PE_BUNE if a.pe_bune else None)
+    print(f"COST MAXIM: {maxim['usd']:.4f} $ pentru {maxim['apeluri']} apeluri "
+          f"(plafon: {plafon_usd if plafon_usd is not None else '—'} $)", file=sys.stderr)
+    if plafon_usd is not None and Decimal(str(maxim["usd"])) > plafon_usd:
+        print(f"OPRESC: costul maxim {maxim['usd']:.4f} $ depășește plafonul de {plafon_usd} $ "
+              "(--plafon-dolari)", file=sys.stderr)
+        return 5
+    scrie = Iesire(a.jurnal)
     client = None
     if a.pe_bune:
         import httpx
@@ -850,6 +969,9 @@ async def main(argv: list[str] | None = None) -> int:
                       "generation_provider": reale.generation_provider},
            "alt_model": a.alt_model, "plafon_apeluri": a.plafon_apeluri,
            "apeluri_planificate": planificat, "doar_actor": a.doar_actor,
+           "preturi": preturile(setari), "cost_maxim_usd": maxim["usd"],
+           "cost_maxim_pe_model": maxim["pe_model"],
+           "plafon_dolari": float(plafon_usd) if plafon_usd is not None else None,
            "inceput": datetime.now(UTC).isoformat(timespec="seconds")})
     try:
         verdict = await ruleaza(furnizor, setari, scrie, doar_actor=a.doar_actor,
