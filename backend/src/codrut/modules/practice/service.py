@@ -1443,7 +1443,11 @@ class PracticeSessionService:
                 speaker = cod if t.role == TurnRole.participant else "Cody"
                 history_lines.append(f"{speaker}: {t.text}")
             history_str = "\n\n".join(history_lines)
-            from codrut.modules.practice.prompts import get_summary_prompt, punctajul_final
+            from codrut.modules.practice.prompts import (
+                get_summary_prompt,
+                punctajul_final,
+                pune_punctajul_in_rezumat,
+            )
 
             # Plicul 199: punctajul final îl socotește codul, rezumatul doar îl trece.
             punctaj = punctajul_final(
@@ -1516,7 +1520,8 @@ class PracticeSessionService:
                 if peste_plafon:
                     raise _FaraEvaluare()
                 res = await self.generation_provider.generate(req)
-                summary_text = res.text
+                # plicul 226, hotărârea din plicul 199: nota din Concluzie o pune codul
+                summary_text = pune_punctajul_in_rezumat(res.text, punctaj)
                 if rezervare_id is not None:
                     await settle(self.session, rezervare_id, actual_usd=res.estimated_usd)
 
