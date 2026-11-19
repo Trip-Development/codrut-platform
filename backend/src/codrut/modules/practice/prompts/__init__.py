@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 # sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
 # v3.11 — plicul 143 (codul ca eticheta, fara adresare), dupa 138 (codul in loc de nume) si 142
 # (fara functie). Sare peste v3.10, care a fost a candidatului 2 (vocea la Cody, scoasa la 137).
-CODY_PROMPT_VERSION = "v3.11"
+# v3.12 — plicul 228: paragraful „ești AI?” la finalul actor.md (hotărârea lui Andrei, 19 nov).
+CODY_PROMPT_VERSION = "v3.12"
 
 # Comanda care declanseaza pornirea, pusa ULTIMA in prompt — plicul 45.
 #
