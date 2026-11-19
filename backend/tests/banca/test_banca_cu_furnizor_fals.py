@@ -58,8 +58,9 @@ def test_cazurile_au_numerele_cerute() -> None:
     assert len(trans) == 8 and set(cheia["inchidere"]) == {t["id"] for t in trans}
     assert sorted(cheia["inchidere"].values()) == [1, 1, 1, 2, 2, 3, 3, 3]
     assert len(c["rezumat"]["sedinte"]) == 4
-    assert rb.apeluri_planificate(False) == 72 + 39 + 14 + 4 == 129
-    assert rb.apeluri_planificate(True) == 24
+    # plicul 227: salutul și scena sunt fixe, actorul face numai cele 4 replici de joc
+    assert rb.apeluri_planificate(False) == 48 + 39 + 14 + 4 == 105
+    assert rb.apeluri_planificate(True) == 16
 
 
 def test_cazurile_nu_poarta_nume_de_oameni() -> None:
@@ -96,11 +97,11 @@ def test_regula_pentru_esti_ai(text: str, afirma: bool) -> None:
 async def test_setul_bun_trece_toata_banca() -> None:
     verdict, randuri, furnizor = await _ruleaza("bun")
     assert verdict["verdict"] == "TRECE", verdict["criterii"]
-    assert verdict["apeluri"] == 129 and verdict["format_rosu"] is None
+    assert verdict["apeluri"] == 105 and verdict["format_rosu"] is None
     assert all(c["trece"] for c in verdict["criterii"].values())
     assert not _picate(verdict)
     sesiuni = [r for r in randuri if r["tip"] == "sesiune"]
-    assert sum(r["apeluri"] for r in sesiuni) == 129
+    assert sum(r["apeluri"] for r in sesiuni) == 105
     assert all(r["id"].startswith("banca:") and r["terminata"] and r["pasi"] for r in sesiuni)
     assert all(p["intrat"] > 0 for r in sesiuni for p in r["pasi"])
     assert furnizor.gasite == 0
@@ -134,9 +135,9 @@ async def test_plafonul_opreste_rularea() -> None:
     assert sum(r["apeluri"] for r in randuri if r["tip"] == "sesiune") == verdict["apeluri"]
 
 
-async def test_doar_actor_face_24_de_apeluri() -> None:
+async def test_doar_actor_face_16_apeluri() -> None:
     verdict, _, _ = await _ruleaza("bun", doar_actor=True)
-    assert verdict["verdict"] == "TRECE" and verdict["apeluri"] == 24
+    assert verdict["verdict"] == "TRECE" and verdict["apeluri"] == 16
 
 
 async def test_fara_pe_bune_furnizorul_real_nu_se_construieste(tmp_path, monkeypatch) -> None:
@@ -148,7 +149,7 @@ async def test_fara_pe_bune_furnizorul_real_nu_se_construieste(tmp_path, monkeyp
     assert await rb.main(["--doar-actor", "--jurnal", str(jurnal), "--comitere", "abc1234"]) == 0
     randuri = [json.loads(x) for x in jurnal.read_text(encoding="utf-8").splitlines()]
     cap, verdict = randuri[0], randuri[-1]
-    assert cap["tip"] == "cap" and cap["apeluri_planificate"] == 24
+    assert cap["tip"] == "cap" and cap["apeluri_planificate"] == 16
     amp = cap["amprenta"]
     assert amp["comitere"] == "abc1234" and amp["furnizor"] == "fals:bun"
     assert {"model_actor", "model_evaluator", "destinatie", "prompt_version"} <= set(amp)

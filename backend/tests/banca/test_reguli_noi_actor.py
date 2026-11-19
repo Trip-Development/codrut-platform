@@ -18,12 +18,18 @@ from codrut.tools.banca.reguli_actor import (
 REPETA_PICA = [
     ["Nu am primit raportul la timp. Mă gândesc ce facem.",
      "Nu am primit raportul la timp. Poate vorbim mâine."],
+    ["Sincer, eu cred că termenul a fost prea scurt. Asta e.",
+     "Da. Sincer, eu cred că termenul a fost prea scurt!"],
+    ["Bună, Mirela. Am o problemă cu bugetul pe trimestrul trei.",
+     "Am înțeles. Am o problemă cu bugetul pe trimestrul trei."],
+]
+REPETA_TRECE = [
+    # plicul 227 ([banca-praguri], Andrei, 18 nov): numai propoziția întreagă e repetiție;
+    # aceleași 4 cuvinte într-o propoziție altfel diferită trec (erau în REPETA_PICA la 215)
     ["Sincer, eu cred că termenul a fost prea scurt pentru echipă.",
      "Da, dar termenul a fost prea scurt pentru toți, nu doar pentru mine."],
     ["Bună, Mirela. Am o problemă cu bugetul pe trimestrul trei.",
      "Am înțeles. Totuși, am o problemă cu bugetul pe care nu o pot ignora."],
-]
-REPETA_TRECE = [
     ["Nu am primit raportul la timp.", "Bine, atunci îl trimit eu până joi."],
     ["Mă tot întreb de ce ședința a durat atât.", "Hai să stabilim o agendă clară."],
     ["Clientul a sunat iar azi dimineață.", "Ce anume a cerut, concret?",
