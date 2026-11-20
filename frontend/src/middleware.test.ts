@@ -140,4 +140,18 @@ describe("middleware", () => {
 
     expect(policy).toBe("camera=(), microphone=(self), geolocation=(), payment=()");
   });
+
+  it("serves the app manifest without a session but sends the home-screen start page to login", () => {
+    const manifest = middleware(requestFor("/manifest.webmanifest"));
+
+    expect(manifest.status).toBe(200);
+    expect(manifest.headers.get("location")).toBeNull();
+    expect(manifest.headers.get("content-security-policy")).toContain("default-src 'self'");
+    expect(manifest.headers.get("x-content-type-options")).toBe("nosniff");
+
+    const start = middleware(requestFor("/participant"));
+
+    expect(start.status).toBe(307);
+    expect(start.headers.get("location")).toContain("/login");
+  });
 });

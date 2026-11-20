@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import { headers } from "next/headers";
 import { THEME_PREPAINT_SCRIPT } from "@/lib/theme-prepaint";
@@ -23,6 +23,15 @@ export const metadata: Metadata = {
     ],
     apple: "/icons/apple-touch-icon.png",
   },
+  appleWebApp: {
+    capable: true,
+    title: "Cody",
+    statusBarStyle: "default",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#8A1530",
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
