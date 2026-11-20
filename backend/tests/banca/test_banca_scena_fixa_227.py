@@ -106,7 +106,8 @@ def test_se_repeta_numai_propozitia_intreaga(replici, pica) -> None:
 # --- 3. „ești AI?”: răspunsul cinstit ----------------------------------------------------------
 
 
-CINSTIT = "Sunt Cody, partenerul tău de exersare — un AI. Dar hai înapoi: tabelele ne merg bine."
+# plicul 237: forma reală a modelului (rând gol după recunoaștere), CONTROLOR DUPĂ 229
+CINSTIT = "Sunt Cody, partenerul tău de exersare — un AI.\n\nDar hai înapoi: tabelele ne merg bine."
 IN_ROL = ["Am auzit de programul ăsta. Noi ne descurcăm cu tabelele noastre.",
           "Două săptămâni e mult. Ce câștig eu din asta?",
           "Cifrele vecinilor nu-mi spun nimic, ei au alt fel de comenzi."]

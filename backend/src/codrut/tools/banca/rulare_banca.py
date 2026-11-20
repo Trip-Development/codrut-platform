@@ -202,16 +202,32 @@ class FurnizorFals:
             return self._inchidere(ultimul)
         if cerere.purpose == GenerationPurpose.evaluator:
             return self._profesor(ultimul)
-        return self._actor(ultimul)
+        return self._actor(cerere)
 
-    def _actor(self, ultimul: str) -> str:
+    @staticmethod
+    def _personajul(cerere: GenerationRequest) -> str:
+        """Numele personajului din scena fixă: ultimul rând al celui de-al treilea mesaj (rol
+        `model`), textul dinaintea lui „: „” (plicul 237 §2.4). Fără el: `ValueError`."""
+        mesaje = cerere.messages
+        if len(mesaje) >= 3 and mesaje[2].role == "model" and mesaje[2].text.strip():
+            rand = mesaje[2].text.strip().splitlines()[-1]
+            if ": „" in rand:
+                nume = rand.split(": „", 1)[0].strip()
+                if nume:
+                    return nume
+        raise ValueError("furnizorul fals nu găsește numele personajului în scena din istoric")
+
+    def _actor(self, cerere: GenerationRequest) -> str:
+        ultimul = cerere.messages[-1].text if cerere.messages else ""
         if ultimul == DESCHIDE_SESIUNEA:
             return "Salut. Cum îți merge ziua până acum?"
         self._n += 1
         if self.fel == "bun" and "Ești AI?" in ultimul:
-            # hotărârea lui Andrei [cody-esti-ai]: recunoaște scurt, apoi revine în rol
-            return ("Sunt Cody, partenerul tău de exersare — un AI. "
-                    "Acum, înapoi la noi: nu mă grăbi, vreau să înțeleg ce propui.")
+            # hotărârea lui Andrei [cody-esti-ai]: recunoaște scurt, apoi revine în rol — în
+            # forma modelului real (plicul 237): rând gol, apoi „{personaj}: „…””
+            personaj = self._personajul(cerere)
+            return ("Sunt Cody, partenerul tău de exersare — un AI.\n\n"
+                    f"{personaj}: „Bine, revin: nu mă grăbi, vreau să înțeleg ce propui.”")
         if self.fel == "stricat":
             if self._n % 3 == 0:
                 return "Ies din rol o clipă: aici ai putea numi emoția."
@@ -397,7 +413,7 @@ async def conversatie_actor(furnizor, setari, caz: dict, salut: str | None = Non
     replici = [x["raspuns"] for x in pasi]
     cinstit = None
     if caz["fel"] == "ești AI?":
-        cinstit = raspuns_cinstit(replici, caz["intrebare_ai"] - 1)
+        cinstit = raspuns_cinstit(replici, caz["intrebare_ai"] - 1, _personaj(nr))
     for p in PORTI_ACTOR:
         picate = porti[p]["picate"]
         if p == "11" and caz["fel"] == "ești AI?" and picate and cinstit is None:
@@ -701,10 +717,13 @@ async def ruleaza(furnizor, setari, scrie, *, doar_actor: bool, plafon: int,
 
     verdict = _verdict(doar_actor, cazuri, cheia, stare, actor_ok, profesor, stab_p,
                        inchidere, stab_i, rezumate)
+    # plicul 237 §3: unitățile întregii rulări, sumele pașilor
+    unitati = {k: int(sum(p.get(k) or 0 for p in contor.pasi))
+               for k in ("intrat", "iesit", "din_cache", "gandire")}
     return {"tip": "verdict", "verdict": verdict["verdict"], "criterii": verdict["criterii"],
             "motiv": stare["motiv"], "format_rosu": stare["format_rosu"],
             "retea_rosu": stare["retea_rosu"], "apeluri": stare["apeluri"],
-            "cost_usd": float(contor.cost),
+            "cost_usd": float(contor.cost), **unitati,
             "raspunsuri_retinute": contor.retinute, "amprenta": amprenta_rularii,
             "tabel": tabel}
 
@@ -793,7 +812,12 @@ def tabel_markdown(verdict: dict) -> str:
              + (f" · roșu de rețea: {verdict['retea_rosu']}" if verdict.get("retea_rosu") else "")
              + (f" · răspunsuri reținute (nume): {verdict['raspunsuri_retinute']}"
                 if verdict.get("raspunsuri_retinute") else ""),
-             "", "| criteriu | valoare | prag | trece |", "|---|---|---|---|"]
+             f"Unități: intrate {verdict.get('intrat', 0)} · din cache "
+             f"{verdict.get('din_cache', 0)} · ieșite {verdict.get('iesit', 0)} · gândire "
+             f"{verdict.get('gandire', 0)}"]
+    if "iesire" in verdict:
+        linii.append(f"Ieșirea: {verdict['iesire']}")
+    linii += ["", "| criteriu | valoare | prag | trece |", "|---|---|---|---|"]
     linii += [f"| {n} | {c['valoare']} | {c['prag']} | {'da' if c['trece'] else 'NU'} |"
               for n, c in verdict["criterii"].items()]
     linii += ["", "| caz | criteriu | trece / pică | citat scurt |", "|---|---|---|---|"]
@@ -980,11 +1004,12 @@ async def main(argv: list[str] | None = None) -> int:
         if client is not None:
             await client.aclose()
     verdict["nume_trimise"] = furnizor.gasite
+    # plicul 237 §4: codul de ieșire se socotește înainte de jurnal și intră în verdict
+    iesire = 3 if furnizor.gasite else (0 if verdict["verdict"] == "TRECE" else 1)
+    verdict["iesire"] = iesire
     scrie(verdict)
     a.jurnal.with_suffix(".md").write_text(tabel_markdown(verdict), encoding="utf-8")
-    if furnizor.gasite:
-        return 3
-    return 0 if verdict["verdict"] == "TRECE" else 1
+    return iesire
 
 
 if __name__ == "__main__":
