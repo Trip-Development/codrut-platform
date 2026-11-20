@@ -209,6 +209,9 @@ class PracticeSetupRequest(BaseModel):
     # in configurare si nu se putea schimba decat in baza. `None` lasa neatinsa
     # valoarea de acum a proiectului.
     max_sessions_per_day: int | None = Field(default=None, ge=1, le=1000)
+    # Lista de obiective de aplicare a proiectului — plicul 230. `None` lasă neatinsă legătura de
+    # acum; o valoare trebuie să fie cheia unui catalog existent (ex. „comunicare-asertiva”).
+    objective_catalog: str | None = None
 
 
 class PracticeSetupResponse(BaseModel):
@@ -222,6 +225,7 @@ class PracticeSetupResponse(BaseModel):
     competencies: list[ThemeCompetencyItem] = Field(default_factory=list)
     max_sessions_per_day: int | None = None
     quiz_enabled: bool = False
+    objective_catalog: str | None = None
 
 
 # ---- evolutia competentelor pe proiect (plic 29, punctul 2) ----
@@ -452,3 +456,45 @@ class TrainingInvitationSendItem(BaseModel):
     invite_url: str | None = None
     email_queued: bool = False
     error: str | None = None
+
+
+# ---- obiectivele de aplicare (plicul 230, L1-P1) ----
+# Numai ale omului, pentru el însuși: nicio rută de trainer/HR nu primește aceste date.
+
+
+class PracticeObjectiveItem(BaseModel):
+    id: UUID
+    nr: int
+    titlu: str
+    situatie: str
+    competente: list[str]
+    semn_de_reusita: str
+
+
+class PracticeObjectivesResponse(BaseModel):
+    catalog: str | None = None
+    catalog_name: str | None = None
+    obiective: list[PracticeObjectiveItem] = Field(default_factory=list)
+
+
+class PracticeObjectiveChooseRequest(BaseModel):
+    objective_id: UUID
+
+
+class PracticeObjectiveCurrent(BaseModel):
+    obiectiv: PracticeObjectiveItem
+    aleasa_la: datetime
+
+
+class PracticeObjectiveHistoryItem(BaseModel):
+    obiectiv_id: UUID
+    titlu: str
+    aleasa_la: datetime
+    inlocuita_la: datetime | None = None
+
+
+class PracticeObjectiveChoiceResponse(BaseModel):
+    curent: PracticeObjectiveCurrent | None = None
+    # pentru „săptămâna X din 8” (L1-P2)
+    prima_alegere_la: datetime | None = None
+    istoric: list[PracticeObjectiveHistoryItem] = Field(default_factory=list)

@@ -1673,6 +1673,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/practice/projects/{project_id}/obiectiv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My Practice Objective
+         * @description Obiectivul ales de om pe proiect, data primei alegeri și istoricul.
+         */
+        get: operations["get_my_practice_objective_api_practice_projects__project_id__obiectiv_get"];
+        put?: never;
+        /**
+         * Choose Practice Objective
+         * @description Omul își alege obiectivul; alegerea veche rămâne în istoric.
+         */
+        post: operations["choose_practice_objective_api_practice_projects__project_id__obiectiv_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/practice/projects/{project_id}/obiective": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Practice Objectives
+         * @description Lista de obiective a proiectului (goală dacă proiectul nu are una).
+         */
+        get: operations["get_practice_objectives_api_practice_projects__project_id__obiective_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/practice/projects/{project_id}/participants/{profile_id}": {
         parameters: {
             query?: never;
@@ -4718,6 +4762,75 @@ export interface components {
             /** Weekly Average */
             weekly_average?: components["schemas"]["EvolutionWeekPoint"][];
         };
+        /** PracticeObjectiveChoiceResponse */
+        PracticeObjectiveChoiceResponse: {
+            curent?: components["schemas"]["PracticeObjectiveCurrent"] | null;
+            /** Istoric */
+            istoric?: components["schemas"]["PracticeObjectiveHistoryItem"][];
+            /** Prima Alegere La */
+            prima_alegere_la?: string | null;
+        };
+        /** PracticeObjectiveChooseRequest */
+        PracticeObjectiveChooseRequest: {
+            /**
+             * Objective Id
+             * Format: uuid
+             */
+            objective_id: string;
+        };
+        /** PracticeObjectiveCurrent */
+        PracticeObjectiveCurrent: {
+            /**
+             * Aleasa La
+             * Format: date-time
+             */
+            aleasa_la: string;
+            obiectiv: components["schemas"]["PracticeObjectiveItem"];
+        };
+        /** PracticeObjectiveHistoryItem */
+        PracticeObjectiveHistoryItem: {
+            /**
+             * Aleasa La
+             * Format: date-time
+             */
+            aleasa_la: string;
+            /** Inlocuita La */
+            inlocuita_la?: string | null;
+            /**
+             * Obiectiv Id
+             * Format: uuid
+             */
+            obiectiv_id: string;
+            /** Titlu */
+            titlu: string;
+        };
+        /** PracticeObjectiveItem */
+        PracticeObjectiveItem: {
+            /** Competente */
+            competente: string[];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Nr */
+            nr: number;
+            /** Semn De Reusita */
+            semn_de_reusita: string;
+            /** Situatie */
+            situatie: string;
+            /** Titlu */
+            titlu: string;
+        };
+        /** PracticeObjectivesResponse */
+        PracticeObjectivesResponse: {
+            /** Catalog */
+            catalog?: string | null;
+            /** Catalog Name */
+            catalog_name?: string | null;
+            /** Obiective */
+            obiective?: components["schemas"]["PracticeObjectiveItem"][];
+        };
         /** PracticePersonResponse */
         PracticePersonResponse: {
             /** Duration Days */
@@ -4949,6 +5062,8 @@ export interface components {
             is_enabled: boolean;
             /** Max Sessions Per Day */
             max_sessions_per_day?: number | null;
+            /** Objective Catalog */
+            objective_catalog?: string | null;
             /** Quiz Enabled */
             quiz_enabled?: boolean | null;
             /**
@@ -4967,6 +5082,8 @@ export interface components {
             is_enabled: boolean;
             /** Max Sessions Per Day */
             max_sessions_per_day?: number | null;
+            /** Objective Catalog */
+            objective_catalog?: string | null;
             /**
              * Project Id
              * Format: uuid
@@ -15332,6 +15449,238 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TrainingInvitationSendItem"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_my_practice_objective_api_practice_projects__project_id__obiectiv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeObjectiveChoiceResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    choose_practice_objective_api_practice_projects__project_id__obiectiv_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PracticeObjectiveChooseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeObjectiveChoiceResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_practice_objectives_api_practice_projects__project_id__obiective_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeObjectivesResponse"];
                 };
             };
             /** @description Bad Request */

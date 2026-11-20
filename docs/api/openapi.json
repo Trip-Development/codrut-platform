@@ -8124,6 +8124,187 @@
         "title": "PracticeEvolutionResponse",
         "type": "object"
       },
+      "PracticeObjectiveChoiceResponse": {
+        "properties": {
+          "curent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PracticeObjectiveCurrent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "istoric": {
+            "items": {
+              "$ref": "#/components/schemas/PracticeObjectiveHistoryItem"
+            },
+            "title": "Istoric",
+            "type": "array"
+          },
+          "prima_alegere_la": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prima Alegere La"
+          }
+        },
+        "title": "PracticeObjectiveChoiceResponse",
+        "type": "object"
+      },
+      "PracticeObjectiveChooseRequest": {
+        "properties": {
+          "objective_id": {
+            "format": "uuid",
+            "title": "Objective Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "objective_id"
+        ],
+        "title": "PracticeObjectiveChooseRequest",
+        "type": "object"
+      },
+      "PracticeObjectiveCurrent": {
+        "properties": {
+          "aleasa_la": {
+            "format": "date-time",
+            "title": "Aleasa La",
+            "type": "string"
+          },
+          "obiectiv": {
+            "$ref": "#/components/schemas/PracticeObjectiveItem"
+          }
+        },
+        "required": [
+          "obiectiv",
+          "aleasa_la"
+        ],
+        "title": "PracticeObjectiveCurrent",
+        "type": "object"
+      },
+      "PracticeObjectiveHistoryItem": {
+        "properties": {
+          "aleasa_la": {
+            "format": "date-time",
+            "title": "Aleasa La",
+            "type": "string"
+          },
+          "inlocuita_la": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inlocuita La"
+          },
+          "obiectiv_id": {
+            "format": "uuid",
+            "title": "Obiectiv Id",
+            "type": "string"
+          },
+          "titlu": {
+            "title": "Titlu",
+            "type": "string"
+          }
+        },
+        "required": [
+          "obiectiv_id",
+          "titlu",
+          "aleasa_la"
+        ],
+        "title": "PracticeObjectiveHistoryItem",
+        "type": "object"
+      },
+      "PracticeObjectiveItem": {
+        "properties": {
+          "competente": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Competente",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "nr": {
+            "title": "Nr",
+            "type": "integer"
+          },
+          "semn_de_reusita": {
+            "title": "Semn De Reusita",
+            "type": "string"
+          },
+          "situatie": {
+            "title": "Situatie",
+            "type": "string"
+          },
+          "titlu": {
+            "title": "Titlu",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "nr",
+          "titlu",
+          "situatie",
+          "competente",
+          "semn_de_reusita"
+        ],
+        "title": "PracticeObjectiveItem",
+        "type": "object"
+      },
+      "PracticeObjectivesResponse": {
+        "properties": {
+          "catalog": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog"
+          },
+          "catalog_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Name"
+          },
+          "obiective": {
+            "items": {
+              "$ref": "#/components/schemas/PracticeObjectiveItem"
+            },
+            "title": "Obiective",
+            "type": "array"
+          }
+        },
+        "title": "PracticeObjectivesResponse",
+        "type": "object"
+      },
       "PracticePersonResponse": {
         "properties": {
           "duration_days": {
@@ -8690,6 +8871,17 @@
             ],
             "title": "Max Sessions Per Day"
           },
+          "objective_catalog": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objective Catalog"
+          },
           "quiz_enabled": {
             "anyOf": [
               {
@@ -8740,6 +8932,17 @@
               }
             ],
             "title": "Max Sessions Per Day"
+          },
+          "objective_catalog": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objective Catalog"
           },
           "project_id": {
             "format": "uuid",
@@ -23777,6 +23980,296 @@
           }
         },
         "summary": "Send Training Invitations",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/projects/{project_id}/obiectiv": {
+      "get": {
+        "description": "Obiectivul ales de om pe proiect, data primei alegeri \u0219i istoricul.",
+        "operationId": "get_my_practice_objective_api_practice_projects__project_id__obiectiv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeObjectiveChoiceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get My Practice Objective",
+        "tags": [
+          "practice"
+        ]
+      },
+      "post": {
+        "description": "Omul \u00ee\u0219i alege obiectivul; alegerea veche r\u0103m\u00e2ne \u00een istoric.",
+        "operationId": "choose_practice_objective_api_practice_projects__project_id__obiectiv_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PracticeObjectiveChooseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeObjectiveChoiceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Choose Practice Objective",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/projects/{project_id}/obiective": {
+      "get": {
+        "description": "Lista de obiective a proiectului (goal\u0103 dac\u0103 proiectul nu are una).",
+        "operationId": "get_practice_objectives_api_practice_projects__project_id__obiective_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeObjectivesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Practice Objectives",
         "tags": [
           "practice"
         ]

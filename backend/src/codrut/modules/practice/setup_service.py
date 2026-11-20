@@ -22,6 +22,7 @@ from codrut.modules.companies.models import CompanyProject
 from codrut.modules.practice.models import (
     CompetencyTemplate,
     PracticeKnowledgePack,
+    PracticeObjective,
     PracticeProgramSettings,
     PracticeScenario,
     PracticeTheme,
@@ -108,6 +109,7 @@ class PracticeSetupService:
             "is_enabled": bool(settings.is_enabled) if settings else False,
             "max_sessions_per_day": settings.max_sessions_per_day if settings else None,
             "quiz_enabled": bool(settings.quiz_enabled) if settings else False,
+            "objective_catalog": settings.objective_catalog if settings else None,
             "theme_id": settings.theme_id if settings else None,
             "theme_name": theme_name,
             "competencies": [
@@ -124,6 +126,7 @@ class PracticeSetupService:
         is_enabled: bool = True,
         max_sessions_per_day: int | None = None,
         quiz_enabled: bool | None = None,
+        objective_catalog: str | None = None,
     ) -> dict:
         """Make a training project practisable, and record the chosen competencies.
 
@@ -136,8 +139,23 @@ class PracticeSetupService:
 
         ``quiz_enabled`` of ``None`` leaves the project's current value alone. A new project
         starts STINS — plicul 128, partea E: quizul e al cursurilor, nu al team coachingului.
+
+        ``objective_catalog`` of ``None`` leaves the project's objective list alone (plicul 230);
+        a value must be the key of an existing catalog in ``practice_objectives``.
         """
         project = await self._require_project(project_id)
+        if objective_catalog is not None:
+            exista = (await self.session.execute(
+                select(PracticeObjective.id).where(
+                    PracticeObjective.catalog == objective_catalog,
+                    PracticeObjective.is_active.is_(True),
+                ).limit(1)
+            )).first()
+            if exista is None:
+                raise DomainError(
+                    f"Lista de obiective „{objective_catalog}” nu există.",
+                    code="objective_catalog_not_found",
+                )
         if project.project_type != TRAINING_PROJECT_TYPE:
             raise DomainError(
                 "Exersarea se configurează doar pe proiecte de tip training.",
@@ -199,6 +217,7 @@ class PracticeSetupService:
                 max_turns_per_session=20,
                 max_sessions_per_day=max_sessions_per_day or SESIUNI_PE_ZI_IMPLICIT,
                 quiz_enabled=bool(quiz_enabled),
+                objective_catalog=objective_catalog,
                 max_chars_per_turn=1200,
                 turn_retention_days=30,
                 usd_cap_per_participant=Decimal("3.00"),
@@ -213,6 +232,8 @@ class PracticeSetupService:
                 settings.max_sessions_per_day = max_sessions_per_day
             if quiz_enabled is not None:
                 settings.quiz_enabled = quiz_enabled
+            if objective_catalog is not None:
+                settings.objective_catalog = objective_catalog
 
         await self.session.execute(
             delete(ProjectCompetency).where(ProjectCompetency.project_id == project_id)
