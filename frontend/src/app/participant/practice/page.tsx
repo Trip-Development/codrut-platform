@@ -6,6 +6,7 @@ import { ParticipantContextSelector } from "../ParticipantContextSelector";
 import {
   participantActiveHref,
   participantScopeParams,
+  participantScopedHref,
   participantActiveProjectType,
   participantDisplayName,
   participantScopedNavItems,
@@ -61,6 +62,7 @@ export default async function ParticipantPracticePage({
       <PracticeWorkspace
         projectId={summary.projectId}
         quizEnabled={quizEnabled}
+        obiectivHref={participantScopedHref("/participant/obiectiv", scopeParams)}
       />
     </AppShell>
   );

@@ -25,6 +25,7 @@ import { useVoiceToText } from "@/hooks/useVoiceToText";
 import { textPuncteCastigate } from "../texte-177";
 import { LoadingStatus } from "@/components/shell/route-loading";
 import { formatRomanianDateTime } from "@/utils/date-format";
+import { ObiectivulCurent } from "../obiectiv/ObiectivulCurent";
 
 // Replica omului intra in fir IMEDIAT ce apasa trimite — plicul 83, cerinta lui Andrei.
 //
@@ -175,8 +176,11 @@ function aratButoaneleDePornire(
 export function PracticeWorkspace({
   projectId,
   quizEnabled = false,
+  obiectivHref,
 }: {
   projectId?: string | null;
+  /** Unde își alege omul obiectivul — plicul 232. Fără el, ecranul e cel de dinainte. */
+  obiectivHref?: string;
   /**
    * „Verificăm cât ai reținut" e aprins pe proiectul ăsta? — plicul 128, partea E.
    *
@@ -252,7 +256,7 @@ export function PracticeWorkspace({
     scrollToBottom();
   }, [turns, isLoading]);
 
-  const handleStartSession = async () => {
+  const handleStartSession = async (kind?: SessionKind) => {
     if (!projectId) {
       setErrorMsg("Nu a fost selectat niciun proiect activ.");
       return;
@@ -265,7 +269,7 @@ export function PracticeWorkspace({
       }
       const newSession = await startPracticeSession({
         projectId,
-        kind: selectedKind,
+        kind: kind ?? selectedKind,
       });
       setSession(newSession);
       // Cody vorbeste primul. Cand modelul n-a raspuns, `firstTurn` e null si ecranul
@@ -453,6 +457,15 @@ export function PracticeWorkspace({
               </Button>
             </div>
           </div>
+        ) : null}
+
+        {obiectivHref && projectId ? (
+          <ObiectivulCurent
+            projectId={projectId}
+            obiectivHref={obiectivHref}
+            blocat={isLoading || (acordLipsa && !bifat)}
+            onExerseaza={() => handleStartSession("roleplay")}
+          />
         ) : null}
 
         <div>
