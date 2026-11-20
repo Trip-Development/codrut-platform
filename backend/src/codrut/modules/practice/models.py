@@ -234,6 +234,9 @@ class PracticeProgramSettings(TimestampMixin, Base):
         nullable=False,
         default=Decimal("3.00"),
     )
+    # Lista de obiective de aplicare a proiectului (plicul 230): cheia unui catalog din
+    # `practice_objectives`. Gol = proiectul nu are obiective (toate proiectele de dinainte).
+    objective_catalog: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
 class PracticeSession(TimestampMixin, Base):
@@ -655,3 +658,65 @@ class PracticeConsent(TimestampMixin, Base):
     )
     text_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class PracticeObjective(TimestampMixin, Base):
+    """Un obiectiv de aplicare dintr-un catalog (lista unui training) — plicul 230.
+
+    Textele vin din `obiective/<catalog>.json`, aprobate de Andrei; le încarcă migrarea.
+    """
+
+    __tablename__ = "practice_objectives"
+    __table_args__ = (
+        UniqueConstraint("catalog", "order_index", name="uq_practice_objectives_catalog_order"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    catalog: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
+    catalog_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    situation: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    success_sign: Mapped[str] = mapped_column(Text, nullable=False)
+    competencies: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+
+
+class PracticeObjectiveChoice(TimestampMixin, Base):
+    """Ce obiectiv și-a ales un om pe un proiect — plicul 230.
+
+    `replaced_at` gol = alegerea curentă (una singură, apărată de indexul unic parțial); la
+    schimbare, alegerea veche primește data înlocuirii și rămâne în istoric. Fără nume, fără text.
+    """
+
+    __tablename__ = "practice_objective_choices"
+    __table_args__ = (
+        Index(
+            "uq_practice_objective_choices_current",
+            "participant_profile_id",
+            "project_id",
+            unique=True,
+            postgresql_where=text("replaced_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    participant_profile_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("participant_profiles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("company_projects.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    objective_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("practice_objectives.id", ondelete="RESTRICT"),
+        index=True,
+        nullable=False,
+    )
+    chosen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    replaced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

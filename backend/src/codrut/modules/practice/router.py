@@ -16,6 +16,11 @@ from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.practice.acord import da_acordul, starea_acordului
 from codrut.modules.practice.dashboard_service import PracticeDashboardService
 from codrut.modules.practice.evolution_service import PracticeEvolutionService
+from codrut.modules.practice.objective_service import (
+    alege,
+    alegerea_mea,
+    lista_obiectivelor,
+)
 from codrut.modules.practice.person_service import PracticePersonService
 from codrut.modules.practice.room_service import (
     PracticeInvitationsService,
@@ -27,6 +32,9 @@ from codrut.modules.practice.schemas import (
     PracticeConsentResponse,
     PracticeDashboardResponse,
     PracticeEvolutionResponse,
+    PracticeObjectiveChoiceResponse,
+    PracticeObjectiveChooseRequest,
+    PracticeObjectivesResponse,
     PracticePersonResponse,
     PracticeRoomResponse,
     PracticeSessionCreateRequest,
@@ -326,6 +334,44 @@ async def give_practice_consent(
     return PracticeConsentResponse(**stare)
 
 
+# ---- obiectivele de aplicare (plicul 230, L1-P1) ----
+# Numai ale omului, pentru el însuși: omul se caută ca la acord. Nicio rută de trainer/HR nu
+# primește alegerea cuiva; în jurnal nu se scrie nimic despre ea.
+
+
+@router.get("/projects/{project_id}/obiective", response_model=PracticeObjectivesResponse)
+async def get_practice_objectives(
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeObjectivesResponse:
+    """Lista de obiective a proiectului (goală dacă proiectul nu are una)."""
+    return PracticeObjectivesResponse(**await lista_obiectivelor(session, principal, project_id))
+
+
+@router.get("/projects/{project_id}/obiectiv", response_model=PracticeObjectiveChoiceResponse)
+async def get_my_practice_objective(
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeObjectiveChoiceResponse:
+    """Obiectivul ales de om pe proiect, data primei alegeri și istoricul."""
+    return PracticeObjectiveChoiceResponse(**await alegerea_mea(session, principal, project_id))
+
+
+@router.post("/projects/{project_id}/obiectiv", response_model=PracticeObjectiveChoiceResponse)
+async def choose_practice_objective(
+    project_id: UUID,
+    payload: PracticeObjectiveChooseRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeObjectiveChoiceResponse:
+    """Omul își alege obiectivul; alegerea veche rămâne în istoric."""
+    stare = await alege(session, principal, project_id, payload.objective_id)
+    await session.commit()
+    return PracticeObjectiveChoiceResponse(**stare)
+
+
 # ---- configurarea exersarii pe un proiect de training (plic 29, punctele 4 si 6) ----
 # Pana acum niciun punct al aplicatiei nu crea `practice_program_settings`; randul se
 # punea de mana, cu un script. Rutele astea inchid ocolul: trainerul alege tema, bifeaza
@@ -370,6 +416,7 @@ async def configure_practice_setup(
         is_enabled=payload.is_enabled,
         max_sessions_per_day=payload.max_sessions_per_day,
         quiz_enabled=payload.quiz_enabled,
+        objective_catalog=payload.objective_catalog,
     )
     await session.commit()
     return PracticeSetupResponse(**result)
