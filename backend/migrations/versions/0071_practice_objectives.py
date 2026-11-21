@@ -17,20 +17,116 @@ Revises: 0070_practice_consent
 
 from __future__ import annotations
 
+import uuid
+from datetime import UTC, datetime
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
-
-from codrut.modules.practice.obiective import (
-    CATALOG_COMUNICARE_ASERTIVA,
-    citeste_catalog,
-    incarca_catalog,
-)
 
 revision = "0071_practice_objectives"
 down_revision = "0070_practice_consent"
 branch_labels = None
 depends_on = None
+
+# Plicul 235 („230b"): cele 12 obiective, ÎNGHEȚATE aici. Migrarea nu mai importă nimic din
+# `codrut` și nu mai citește niciun fișier, ca rezultatul ei să nu depindă de cum arată codul
+# sau JSON-ul mai târziu. Textul de mai jos e produs de `.audit/cody-plic235/ingheata.py` din
+# `obiective/comunicare-asertiva.json` (amprenta 073eb142…), nu scris de mână.
+CATALOG = 'comunicare-asertiva'
+NUME = 'Comunicare asertivă'
+OBIECTIVE = ({'nr': 1,
+  'titlu': 'Să spun „nu” unei sarcini în plus, fără să mă scuz.',
+  'situatie': 'vineri, 17:00, șeful îți mai dă un raport „urgent”.',
+  'competente': ['Exprimarea asertivă a nevoilor și limitelor',
+                 'Gestionarea propriilor reacții emoționale'],
+  'semn_de_reusita': 'refuză sau negociază termenul clar, fără justificări lungi.'},
+ {'nr': 2,
+  'titlu': 'Să răspund calm la o critică vagă.',
+  'situatie': '„Raportul tău e neglijent, mă întreb dacă ești potrivit.”',
+  'competente': ['Ascultare activă', 'Gestionarea reacțiilor celorlalți'],
+  'semn_de_reusita': 'cere exemple concrete și propune un plan, fără să se apere.'},
+ {'nr': 3,
+  'titlu': 'Să cer resursele de care am nevoie.',
+  'situatie': 'șeful vrea rezultate în două săptămâni, fără oameni în plus.',
+  'competente': ['Exprimarea asertivă a nevoilor și limitelor', 'Verificarea înțelegerii'],
+  'semn_de_reusita': 'propune un schimb concret (rezultate parțiale contra resurse).'},
+ {'nr': 4,
+  'titlu': 'Să cer o mărire sau o promovare.',
+  'situatie': 'ai evaluarea anuală peste o săptămână și vrei să ceri o mărire de salariu.',
+  'competente': ['Exprimarea asertivă a nevoilor și limitelor',
+                 'Gestionarea reacțiilor celorlalți'],
+  'semn_de_reusita': 'vine cu fapte și cu o cerere clară, rămâne calm la primul „nu”.'},
+ {'nr': 5,
+  'titlu': 'Să îi dau feedback șefului.',
+  'situatie': 'îți schimbă prioritățile de trei ori pe săptămână.',
+  'competente': ['Feedback constructiv', 'Gestionarea propriilor reacții emoționale'],
+  'semn_de_reusita': 'descrie ce s-a întâmplat (fapte), nu ce crede despre șef.'},
+ {'nr': 6,
+  'titlu': 'Să dau feedback unui coleg mai vechi care întârzie livrările.',
+  'situatie': 'colegul cu 10 ani în firmă a predat a treia oară raportul lunar cu două zile '
+              'întârziere, iar tu îl preiei pentru client.',
+  'competente': ['Feedback constructiv', 'Gestionarea reacțiilor celorlalți'],
+  'semn_de_reusita': 'spune faptele și efectul asupra lui, cere un termen concret și nu se '
+                     'scuză pentru că e mai tânăr.'},
+ {'nr': 7,
+  'titlu': 'Să opresc un coleg care mă întrerupe în ședințe.',
+  'situatie': 'în ședința de luni, un coleg îți taie vorba a doua oară și îți preia ideea.',
+  'competente': ['Exprimarea asertivă a nevoilor și limitelor',
+                 'Gestionarea propriilor reacții emoționale'],
+  'semn_de_reusita': 'își termină ideea calm și ferm („Lasă-mă să termin, te rog”), fără '
+                     'ironie și fără să tacă.'},
+ {'nr': 8,
+  'titlu': 'Să refuz un coleg care îmi pasează munca lui.',
+  'situatie': '„Tu te pricepi mai bine la Excel, fă-mi și mie tabelul până mâine.”',
+  'competente': ['Exprimarea asertivă a nevoilor și limitelor', 'Verificarea înțelegerii'],
+  'semn_de_reusita': 'spune „nu” sau propune o variantă (îi arată cum se face), fără '
+                     'justificări lungi și fără să-l acuze.'},
+ {'nr': 9,
+  'titlu': 'Să ies dintr-un conflict care se tot repetă.',
+  'situatie': 'aceeași ceartă cu colegul de la alt departament, la fiecare predare de proiect.',
+  'competente': ['Ascultare activă', 'Reformulare activă', 'Gestionarea reacțiilor celorlalți'],
+  'semn_de_reusita': 'separă ce s-a întâmplat de ce a interpretat, reformulează nevoia '
+                     'celuilalt și propune o regulă comună.'},
+ {'nr': 10,
+  'titlu': 'Să țin o limită cu un client care cere ceva în afara contractului.',
+  'situatie': 'clientul cere „doar o mică modificare” care înseamnă trei zile de muncă, fără '
+              'cost în plus.',
+  'competente': ['Exprimarea asertivă a nevoilor și limitelor',
+                 'Gestionarea reacțiilor celorlalți'],
+  'semn_de_reusita': 'recunoaște nevoia clientului, spune clar ce intră în contract și oferă o '
+                     'variantă (ofertă separată sau alt termen).'},
+ {'nr': 11,
+  'titlu': 'Să răspund la o întrebare la care nu știu răspunsul, în fața clientului.',
+  'situatie': 'la prezentare, directorul clientului întreabă de o cifră pe care n-o ai.',
+  'competente': ['Gestionarea propriilor reacții emoționale', 'Verificarea înțelegerii'],
+  'semn_de_reusita': 'spune deschis că nu știe acum, verifică ce anume vrea omul să afle și '
+                     'promite răspunsul cu un termen.'},
+ {'nr': 12,
+  'titlu': 'Să dau feedback corectiv unui om din echipă care a greșit de mai multe ori.',
+  'situatie': 'același om a trimis a treia oară oferta cu prețuri greșite.',
+  'competente': ['Feedback constructiv',
+                 'Ascultare activă',
+                 'Gestionarea reacțiilor celorlalți'],
+  'semn_de_reusita': 'descrie faptele și efectul, ascultă explicația fără să o accepte ca '
+                     'scuză și stabilesc împreună un pas concret.'})
+
+
+def _tabelul_obiectivelor() -> sa.TableClause:
+    return sa.table(
+        "practice_objectives",
+        sa.column("id", sa.Uuid()),
+        sa.column("catalog", sa.String()),
+        sa.column("catalog_name", sa.String()),
+        sa.column("order_index", sa.Integer()),
+        sa.column("title", sa.Text()),
+        sa.column("situation", sa.Text()),
+        sa.column("success_sign", sa.Text()),
+        sa.column("competencies", postgresql.JSONB()),
+        sa.column("is_active", sa.Boolean()),
+        sa.column("created_at", sa.DateTime(timezone=True)),
+        sa.column("updated_at", sa.DateTime(timezone=True)),
+    )
 
 
 def _timestamps() -> list[sa.Column]:
@@ -102,7 +198,19 @@ def upgrade() -> None:
         ["participant_profile_id", "project_id"], unique=True,
         postgresql_where=sa.text("replaced_at IS NULL"),
     )
-    incarca_catalog(op.get_bind(), citeste_catalog(CATALOG_COMUNICARE_ASERTIVA))
+    acum = datetime.now(UTC)
+    op.bulk_insert(
+        _tabelul_obiectivelor(),
+        [
+            {
+                "id": uuid.uuid4(), "catalog": CATALOG, "catalog_name": NUME,
+                "order_index": o["nr"], "title": o["titlu"], "situation": o["situatie"],
+                "success_sign": o["semn_de_reusita"], "competencies": list(o["competente"]),
+                "is_active": True, "created_at": acum, "updated_at": acum,
+            }
+            for o in OBIECTIVE
+        ],
+    )
 
 
 def downgrade() -> None:
