@@ -16,6 +16,8 @@ class FakeAlembicOp:
     def __init__(self) -> None:
         self.pasi: list[tuple[str, ...]] = []
         self.bind = object()
+        self.randuri: list[dict] = []
+        self.executii: list[str] = []
 
     def create_table(self, table_name: str, *args, **kwargs) -> None:
         self.pasi.append(("create_table", table_name))
@@ -37,6 +39,12 @@ class FakeAlembicOp:
 
     def execute(self, *args, **kwargs) -> None:
         self.pasi.append(("execute",))
+        self.executii.append(str(args[0]) if args else "")
+
+    def bulk_insert(self, table, rows, **kwargs) -> None:
+        # plicul 235 (230b): rândurile se țin minte, ca testul să le verifice
+        self.pasi.append(("bulk_insert", table.name))
+        self.randuri.extend(rows)
 
     def f(self, name: str) -> str:
         return name
@@ -51,14 +59,22 @@ class FakeAlembicOp:
         return nullcontext()
 
 
-def _load_migration() -> ModuleType:
+def _json(cheie: str) -> dict:
+    import json
+
+    from codrut.modules.practice import obiective
+
+    return json.loads((obiective.DOSAR / f"{cheie}.json").read_text(encoding="utf-8"))
+
+
+def _load_migration(nume: str = "0071_practice_objectives") -> ModuleType:
     cale = (
         Path(__file__).resolve().parents[1] / "migrations" / "versions"
-        / "0071_practice_objectives.py"
+        / f"{nume}.py"
     )
-    spec = importlib.util.spec_from_file_location("practice_objectives_migration", cale)
+    spec = importlib.util.spec_from_file_location(f"migrare_{nume}", cale)
     if spec is None or spec.loader is None:
-        raise AssertionError("Migrarea 0071_practice_objectives nu se poate încărca.")
+        raise AssertionError(f"Migrarea {nume} nu se poate încărca.")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -71,13 +87,6 @@ def test_migrarea_face_structura_incarca_catalogul_si_se_intoarce_in_ordine(monk
 
     operation = FakeAlembicOp()
     monkeypatch.setattr(migration, "op", operation)
-    incarcari: list[tuple[object, str, int]] = []
-    monkeypatch.setattr(
-        migration, "incarca_catalog",
-        lambda conexiune, date: incarcari.append(
-            (conexiune, date["catalog"], len(date["obiective"]))
-        ) or len(date["obiective"]),
-    )
 
     migration.upgrade()
     pasi = operation.pasi
@@ -92,8 +101,19 @@ def test_migrarea_face_structura_incarca_catalogul_si_se_intoarce_in_ordine(monk
         "ix_practice_objective_choices_objective_id",
         "uq_practice_objective_choices_current",
     }
-    # cele 12 se încarcă în migrare, prin funcția comună, pe conexiunea migrării
-    assert incarcari == [(operation.bind, "comunicare-asertiva", 12)]
+    # plicul 235 (230b): cele 12 se încarcă din copia înghețată a migrării, cu `bulk_insert`
+    assert pasi[-1] == ("bulk_insert", "practice_objectives")
+    date = _json("comunicare-asertiva")
+    assert len(operation.randuri) == 12
+    assert [r["order_index"] for r in operation.randuri] == list(range(1, 13))
+    for rand, o in zip(operation.randuri, date["obiective"], strict=True):
+        assert rand["catalog"] == date["catalog"]
+        assert rand["catalog_name"] == date["nume"]
+        assert (rand["title"], rand["situation"], rand["success_sign"]) == (
+            o["titlu"], o["situatie"], o["semn_de_reusita"]
+        )
+        assert rand["competencies"] == o["competente"]
+        assert rand["is_active"] is True
 
     operation.pasi.clear()
     migration.downgrade()
@@ -104,3 +124,29 @@ def test_migrarea_face_structura_incarca_catalogul_si_se_intoarce_in_ordine(monk
     assert alegeri < obiective < coloana
     scoase = {p[1] for p in pasi if p[0] == "drop_index"}
     assert scoase == indexuri
+
+
+def test_migrarea_0072_pune_numai_cele_10_si_se_intoarce_in_ordine(monkeypatch) -> None:
+    """Plicul 235: 0072 adaugă rânduri, fără nicio schimbare de structură."""
+    migration = _load_migration("0072_practice_objectives_fb")
+    assert migration.revision == "0072_practice_objectives_fb"
+    assert migration.down_revision == "0071_practice_objectives"
+
+    operation = FakeAlembicOp()
+    monkeypatch.setattr(migration, "op", operation)
+    migration.upgrade()
+    assert operation.pasi == [("bulk_insert", "practice_objectives")]
+    date = _json("feedback")
+    assert len(operation.randuri) == 10
+    assert [r["order_index"] for r in operation.randuri] == list(range(1, 11))
+    assert {r["catalog"] for r in operation.randuri} == {"feedback"}
+    assert [r["title"] for r in operation.randuri] == [o["titlu"] for o in date["obiective"]]
+
+    operation.pasi.clear()
+    migration.downgrade()
+    assert operation.pasi == [("execute",), ("execute",), ("execute",)]
+    setari, alegeri, obiective = operation.executii
+    assert setari.startswith("UPDATE practice_program_settings SET objective_catalog = NULL")
+    assert alegeri.startswith("DELETE FROM practice_objective_choices")
+    assert obiective.startswith("DELETE FROM practice_objectives")
+    assert all("'feedback'" in cerere for cerere in operation.executii)
