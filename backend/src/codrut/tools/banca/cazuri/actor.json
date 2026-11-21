@@ -52,7 +52,7 @@
     "Ce propui ca să nu se mai întâmple? Că eu nu mai am răbdare.",
     "Bine, accept calendarul comun, dar dacă se repetă discutăm cu șeful."]},
   {"id": "A08", "tema": "Influențare", "fel": "cooperant", "nr": 8,
-   "scena": "{personaj} coordonează depozitul și programează livrările. Ai observat că mașinile fac multe drumuri pe jumătate goale și ai o idee de grupare a livrărilor pe zone.\n\n**Obiectivul tău:** să obții acordul pentru o probă de o lună pe zona de nord.\n\n{personaj}: „Salut, mi-ai scris că ai o idee pentru livrări. Te ascult, am vreo zece minute.”",
+   "scena": "{personaj} coordonează depozitul și programează livrările. Ai observat că mașinile fac multe drumuri pe jumătate goale și ai o idee de grupare a livrărilor pe zone. În zona de nord livrați, printre alții, la Brutăria Spicul Verde și la magazinul Livada Mică.\n\n**Obiectivul tău:** să obții acordul pentru o probă de o lună pe zona de nord.\n\n{personaj}: „Salut, mi-ai scris că ai o idee pentru livrări. Te ascult, am vreo zece minute.”",
    "replici": [
     "Am o idee pentru cum să reducem drumurile la depozit și aș vrea părerea ta.",
     "Dacă grupăm livrările pe zone, economisim cam o zi pe săptămână.",
