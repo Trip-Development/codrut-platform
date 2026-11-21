@@ -169,6 +169,11 @@ class Settings(BaseSettings):
     # Ocolirea temporară: după atâtea căderi LA RÂND, motorul e sărit atâtea secunde.
     generation_engine_skip_after_failures: int = Field(default=3, ge=1, le=20)
     generation_engine_skip_seconds: int = Field(default=300, ge=30, le=3600)
+    # Al doilea motor: Claude prin Vertex, în UE — plicul 234 (fișa L5). FĂRĂ VALOARE
+    # IMPLICITĂ, dinadins: se completează la L5-P3/P4, cu „da”-ul lui Andrei. Prețul lui
+    # se dă tot prin `prices_by_model` (mai sus); fără preț, motorul nu pornește.
+    claude_vertex_model: str = ""
+    claude_vertex_region: str = ""
     biblioteca_path: str = Field(
         default="/opt/codrut-platform/BIBLIOTECA",
         validation_alias=AliasChoices("BIBLIOTECA_PATH", "biblioteca_path"),
