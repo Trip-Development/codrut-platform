@@ -1,0 +1,21 @@
+# Setările de pe live DUPĂ urcare — plicul 243 (P61 pasul 10, blocurile 1b + 1c), pasul S8.
+# Le completează proiectantul candidatului (mai ales `prompt=` și `motoare=`).
+# Valorile de azi = pachetul 21, pe live din 21 nov (P61, martori-dupa).
+CODRUT_VERTEX_TIMEOUT_EVALUATOR_REPLICA_SECONDS=15
+CODRUT_VERTEX_TIMEOUT_SECONDS=120
+CODRUT_VERTEX_REGION=eu
+CODRUT_VERTEX_ACTOR_MODEL=gemini-3.1-flash-lite
+CODRUT_VERTEX_EVALUATOR_MODEL=gemini-3.8-flash
+CODRUT_GENERATION_PROVIDER=vertex
+CODRUT_GENERATION_ENGINES=(nesetat)
+CODRUT_THINKING_BUDGET_EVALUATOR=(nesetat)|1024
+CODRUT_THINKING_BUDGET_ACTOR=(nesetat)|0
+prompt=v3.12
+provider=vertex
+regiunea=eu
+actor=gemini-3.1-flash-lite
+profesor=gemini-3.8-flash
+gandire_profesor=1024
+gandire_actor=0
+timp=120 15
+motoare=vertex

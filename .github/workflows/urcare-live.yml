@@ -1,0 +1,45 @@
+# Urcarea pe LIVE cu o singură aprobare din aplicația GitHub — plicul 243 (A1).
+#
+# Pornește singură când „Release Gate” iese verde pe o cerere dev → prod, sau manual
+# (implicit REPETIȚIE: citește live-ul și se oprește, fără să urce nimic). Aprobarea lui Andrei
+# e poarta mediului `production` (aprobator obligatoriu, ramuri permise: numai `dev`).
+# Rulează din `dev` (ramura implicită). Calea veche (`deploy-vps.yml`) rămâne neatinsă.
+name: Urcare pe live
+
+on:
+  workflow_run:
+    workflows: ["Release Gate"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Numărul cererii dev → prod (gol la repetiție)"
+        required: false
+        default: ""
+      repetitie:
+        description: "Repetiție: citește live-ul și se oprește, nu urcă nimic"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  packages: read
+
+jobs:
+  urcare:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.head_branch == 'dev')
+    uses: ./.github/workflows/_urcare.yml
+    with:
+      mediu: production
+      loc_asteptat: live
+      sha: ${{ github.event.workflow_run.head_sha || '' }}
+      pr: ${{ github.event_name == 'workflow_run' && format('{0}', github.event.workflow_run.pull_requests[0].number) || inputs.pr }}
+      repetitie: ${{ github.event_name == 'workflow_dispatch' && inputs.repetitie }}
+      simuleaza_picare: false
+    secrets: inherit

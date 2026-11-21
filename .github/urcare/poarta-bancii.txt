@@ -1,0 +1,13 @@
+backend/src/codrut/modules/practice/prompts/
+backend/src/codrut/modules/practice/evaluator.py
+backend/src/codrut/modules/practice/service.py
+backend/src/codrut/modules/practice/scoring.py
+backend/src/codrut/modules/practice/evolution_service.py
+backend/src/codrut/modules/practice/generation_provider.py
+backend/src/codrut/modules/practice/motoare.py
+backend/src/codrut/modules/practice/pricing.py
+backend/src/codrut/modules/practice/budget.py
+backend/src/codrut/contracts/generation.py
+backend/src/codrut/core/config.py
+backend/src/codrut/tools/
+backend/tests/banca/

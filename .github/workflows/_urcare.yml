@@ -1,0 +1,361 @@
+# Urcarea cu o singură aprobare din GitHub — plicul 243 (A1).
+#
+# Același fișier pentru live (`urcare-live.yml`, mediul `production`) și pentru probă
+# (`urcare-proba.yml`, mediul `proba`); diferă numai intrările și mediul.
+# Jobul `verificari` nu are mediu și nici chei: rezultatul lui e pagina pe care o citește Andrei
+# ÎNAINTE de Approve. Tot ce atinge serverul stă într-un singur job, `pe-server`, cu mediul cu
+# aprobare. Depozitul e public: în jurnal și în rezumat ajung numai verdicte, niciodată cifre din
+# bază, adrese sau rânduri din .env. Fără urmărirea comenzilor (xtrace).
+name: Urcare (reutilizabil)
+
+on:
+  workflow_call:
+    inputs:
+      mediu:
+        type: string
+        required: true
+      loc_asteptat:
+        type: string
+        required: true
+      sha:
+        type: string
+        required: false
+        default: ""
+      pr:
+        type: string
+        required: false
+        default: ""
+      repetitie:
+        type: boolean
+        required: false
+        default: true
+      simuleaza_picare:
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  packages: read
+
+jobs:
+  verificari:
+    name: urcare / verificari
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+      prod: ${{ steps.v2.outputs.prod }}
+      migrari_noi: ${{ steps.v2.outputs.migrari_noi }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      MEDIU: ${{ inputs.mediu }}
+      PR: ${{ inputs.pr }}
+      REPETITIE: ${{ inputs.repetitie }}
+      V: python3 .github/scripts/urcare_verificari.py
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Intrările
+        env:
+          SIMULEAZA: ${{ inputs.simuleaza_picare }}
+        run: $V intrari --mediu "$MEDIU" --simuleaza-picare "$SIMULEAZA"
+
+      - name: Vârful de urcat
+        id: sha
+        env:
+          SHA_INTRARE: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          sha="$SHA_INTRARE"
+          if [[ -z "$sha" && "$MEDIU" == production ]]; then
+            sha="$(git rev-parse origin/dev)"
+          fi
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "OPRIT: vârful nu e un sha întreg"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: V0 — poarta de aprobare există
+        if: inputs.mediu == 'production'
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/environments/production" > "$RUNNER_TEMP/mediu.json"
+          $V aprobare "$RUNNER_TEMP/mediu.json"
+
+      - name: V1 — de unde vine
+        if: inputs.mediu == 'production'
+        env:
+          SHA: ${{ steps.sha.outputs.sha }}
+          EVENIMENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENIMENT" == workflow_run ]]; then
+            $V sursa "$GITHUB_EVENT_PATH" --repo "$REPO"
+          fi
+          if [[ -z "$PR" ]]; then
+            [[ "$REPETITIE" == true ]] || { echo "OPRIT: urcare adevărată fără cerere dev → prod"; exit 1; }
+            echo "repetiție fără cerere: V1, V2, V5 sărite"
+            exit 0
+          fi
+          gh pr view "$PR" --repo "$REPO" \
+            --json state,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner,body,mergeStateStatus,statusCheckRollup \
+            > "$RUNNER_TEMP/cerere.json"
+          $V cerere "$RUNNER_TEMP/cerere.json" --sha "$SHA" --repo "$REPO"
+
+      - name: V2 — candidatul legat
+        id: v2
+        env:
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git fetch -q origin prod dev
+          prod="$(git rev-parse origin/prod)"
+          echo "prod=$prod" >> "$GITHUB_OUTPUT"
+          if git diff --name-only "$prod" "$SHA" -- backend/migrations/ | grep -q .; then
+            echo "migrari_noi=1" >> "$GITHUB_OUTPUT"; echo "are migrări — fără întoarcere singură"
+          else
+            echo "migrari_noi=0" >> "$GITHUB_OUTPUT"; echo "0 migrări — mă întorc singur"
+          fi
+          if [[ "$MEDIU" != production || -z "$PR" ]]; then exit 0; fi
+          candidat="$($V corp "$RUNNER_TEMP/cerere.json" --camp candidat)"
+          arbore="$($V corp "$RUNNER_TEMP/cerere.json" --camp arbore)"
+          git cat-file -e "$candidat^{commit}" || { echo "OPRIT: candidatul nu există în depozit"; exit 1; }
+          $V arbore --declarat "$arbore" --al-sha "$(git rev-parse "$SHA^{tree}")" \
+            --al-candidatului "$(git rev-parse "$candidat^{tree}")"
+          git merge-base --is-ancestor "$prod" "$SHA" || { echo "OPRIT: prod nu e strămoș al lui dev"; exit 1; }
+          [[ "$(git rev-list --count "$prod..$SHA")" -gt 0 ]] || { echo "OPRIT: nimic de urcat"; exit 1; }
+
+      - name: V3 — ce atinge
+        id: v3
+        env:
+          SHA: ${{ steps.sha.outputs.sha }}
+          PROD: ${{ steps.v2.outputs.prod }}
+        run: |
+          set -euo pipefail
+          [[ "$MEDIU" == production ]] || { echo "atinse=" >> "$GITHUB_OUTPUT"; exit 0; }
+          git diff --stat "$PROD" "$SHA" | tail -1
+          git diff --name-only "$PROD" "$SHA" > "$RUNNER_TEMP/atinse.txt"
+          atinse="$($V atinse "$RUNNER_TEMP/atinse.txt")" || { echo "$atinse"; exit 1; }
+          echo "atinse=$atinse" >> "$GITHUB_OUTPUT"
+
+      - name: V4 — poarta băncii
+        if: inputs.mediu == 'production' && inputs.pr != ''
+        env:
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          set -euo pipefail
+          banca="$($V corp "$RUNNER_TEMP/cerere.json" --camp banca)"
+          git cat-file -e "$banca^{commit}" || { echo "OPRIT: comiterea băncii nu există"; exit 1; }
+          mapfile -t cai < <(grep -v '^#' .github/urcare/poarta-bancii.txt | grep .)
+          if ! git diff --quiet "$banca" "$SHA" -- "${cai[@]}"; then
+            git diff --stat "$banca" "$SHA" -- "${cai[@]}" | tail -1
+            echo "OPRIT: s-a schimbat ceva din ce a probat banca"; exit 1
+          fi
+          echo "poarta băncii: goală"
+
+      - name: V5 — porțile cererii
+        if: inputs.mediu == 'production' && inputs.pr != ''
+        run: $V porti "$RUNNER_TEMP/cerere.json"
+
+      - name: Rezumatul pentru Andrei
+        env:
+          SHA: ${{ steps.sha.outputs.sha }}
+          MIGRARI: ${{ steps.v2.outputs.migrari_noi }}
+          ATINSE: ${{ steps.v3.outputs.atinse }}
+        run: |
+          set -euo pipefail
+          if [[ "$MEDIU" == production && -n "$PR" ]]; then
+            arbore="$($V corp "$RUNNER_TEMP/cerere.json" --camp arbore)"
+            $V rezumat --cerere-json "$RUNNER_TEMP/cerere.json" --pr "$PR" --arbore "$arbore" \
+              --migrari-noi "$MIGRARI" --atinse "$ATINSE" >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "$MEDIU" == production ]]; then
+            $V rezumat >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Încercare pe PROBĂ — vârful ${SHA:0:8}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  pe-server:
+    name: urcare / pe-server
+    needs: verificari
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: ${{ inputs.mediu }}
+    concurrency:
+      # pe live: același grup cu calea veche (deploy-vps.yml), ca să nu se suprapună niciodată
+      group: ${{ inputs.mediu == 'production' && 'prod-vps-deploy' || 'urcare-proba-server' }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      MEDIU: ${{ inputs.mediu }}
+      LOC: ${{ inputs.loc_asteptat }}
+      PR: ${{ inputs.pr }}
+      SHA: ${{ needs.verificari.outputs.sha }}
+      PROD_LA_VERIFICARE: ${{ needs.verificari.outputs.prod }}
+      RUN_ID: ${{ github.run_id }}
+      V: python3 .github/scripts/urcare_verificari.py
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: S0 — cheia
+        env:
+          URCARE_SSH_KEY: ${{ secrets.URCARE_SSH_KEY }}
+          URCARE_HOST: ${{ secrets.URCARE_HOST }}
+          URCARE_KNOWN_HOSTS: ${{ vars.URCARE_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$URCARE_HOST"
+          [[ -n "$URCARE_SSH_KEY" && -n "$URCARE_HOST" && -n "$URCARE_KNOWN_HOSTS" ]] \
+            || { echo "OPRIT: lipsește cheia, gazda sau amprenta serverului"; exit 1; }
+          umask 077
+          printf '%s\n' "$URCARE_SSH_KEY" > "$RUNNER_TEMP/k"
+          printf '%s\n' "$URCARE_KNOWN_HOSTS" > "$RUNNER_TEMP/kh"
+          cat > "$RUNNER_TEMP/ss" <<EOF
+          #!/usr/bin/env bash
+          exec ssh -i "$RUNNER_TEMP/k" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/kh" -o ConnectTimeout=20 "root@$URCARE_HOST" "\$@"
+          EOF
+          chmod 0700 "$RUNNER_TEMP/ss"
+          "$RUNNER_TEMP/ss" stare | tee "$RUNNER_TEMP/stare-inainte.txt"
+          grep -qx "loc=$LOC" "$RUNNER_TEMP/stare-inainte.txt" \
+            || { echo "OPRIT: cheia duce la alt server"; exit 1; }
+
+      - name: S1 — încă o dată cererea
+        if: inputs.mediu == 'production' && inputs.pr != ''
+        run: |
+          set -euo pipefail
+          gh pr view "$PR" --repo "$REPO" \
+            --json state,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner \
+            > "$RUNNER_TEMP/cerere.json"
+          $V cerere "$RUNNER_TEMP/cerere.json" --sha "$SHA" --repo "$REPO" \
+            || { echo "OPRIT: s-a mișcat ceva de când ai aprobat"; exit 1; }
+          git fetch -q origin prod
+          [[ "$(git rev-parse origin/prod)" == "$PROD_LA_VERIFICARE" ]] \
+            || { echo "OPRIT: s-a mișcat ceva de când ai aprobat"; exit 1; }
+
+      - name: S2 — setările
+        if: inputs.mediu == 'production'
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/ss" setari > "$RUNNER_TEMP/setari-inainte.txt"
+          $V setari .github/urcare/setari-asteptate.txt "$RUNNER_TEMP/setari-inainte.txt"
+          echo "setările de pe live: ca în .github/urcare/setari-asteptate.txt"
+
+      - name: S3 — fereastra
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5 6 7; do
+            f="$("$RUNNER_TEMP/ss" fereastra)"
+            echo "$f"
+            [[ "$f" == fereastra=libera ]] && exit 0
+            [[ "$i" -lt 7 ]] && sleep 300
+          done
+          echo "OPRIT: exersa cineva — n-am urcat nimic; apasă Re-run când vrei"
+          echo "## OPRIT ÎNAINTE DE URCARE — exersa cineva; live-ul neatins" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+      - name: S4 — martorii înainte
+        run: '"$RUNNER_TEMP/ss" martori inainte "$RUN_ID"'
+
+      - name: S5 — repetiția se oprește aici
+        if: inputs.repetitie
+        run: |
+          echo "REPETIȚIE: live-ul citit, nimic urcat"
+          echo "## REPETIȚIE: live-ul citit, nimic urcat" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: S6 — îmbinarea în prod
+        if: ${{ !inputs.repetitie && inputs.mediu == 'production' }}
+        run: |
+          set -euo pipefail
+          gh api -X PUT "repos/$REPO/pulls/$PR/merge" -f merge_method=merge -f sha="$SHA" \
+            --jq '.merged' | grep -qx true || { echo "OPRIT: îmbinarea a fost refuzată"; exit 1; }
+          git fetch -q origin prod
+          nou="$(git rev-parse origin/prod)"
+          [[ "$(git rev-parse "$nou^2")" == "$SHA" ]] || { echo "OPRIT: prod nu are vârful ca al doilea părinte"; exit 1; }
+          [[ "$(git rev-parse "$nou^{tree}")" == "$(git rev-parse "$SHA^{tree}")" ]] \
+            || { echo "OPRIT: arborele lui prod diferă de al vârfului"; exit 1; }
+          sleep 60
+          vechi="$(gh run list --repo "$REPO" --workflow deploy-vps.yml --commit "$nou" --json databaseId --jq 'length')"
+          if [[ "$vechi" != 0 ]]; then
+            echo "- Atenție: calea veche (VPS Production Deployment) a pornit și ea pe noul prod; stă la rând în același grup." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: S7–S9 — punerea, verificarea, întoarcerea
+        if: ${{ !inputs.repetitie }}
+        env:
+          SIMULEAZA: ${{ inputs.simuleaza_picare }}
+          SANATATE_URL: ${{ vars.URCARE_SANATATE_URL }}
+        run: |
+          set -uo pipefail
+          ss="$RUNNER_TEMP/ss"
+          motiv=""
+          if ! printf '%s\n' "$GH_TOKEN" | "$ss" pune "$SHA" "$RUN_ID" | tee "$RUNNER_TEMP/pune.txt"; then
+            motiv="punerea a picat la: $(grep -m1 '=PICAT' "$RUNNER_TEMP/pune.txt" | cut -d= -f1)"
+          fi
+          if [[ -z "$motiv" ]]; then
+            "$ss" stare > "$RUNNER_TEMP/stare-dupa.txt"
+            for s in backend worker frontend; do
+              grep -q "^$s=.*${SHA}$" "$RUNNER_TEMP/stare-dupa.txt" || motiv="imaginea $s nu e cea nouă"
+            done
+          fi
+          if [[ -z "$motiv" && -n "$SANATATE_URL" ]]; then
+            for i in 1 2 3; do
+              cod="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SANATATE_URL" || echo 000)"
+              [[ "$cod" == 200 ]] || { motiv="sănătatea pe domeniu: $cod"; break; }
+              [[ "$i" -lt 3 ]] && sleep 60
+            done
+          fi
+          if [[ -z "$motiv" && "$MEDIU" == production ]]; then
+            "$ss" setari > "$RUNNER_TEMP/setari-dupa.txt"
+            $V setari .github/urcare/setari-dupa.txt "$RUNNER_TEMP/setari-dupa.txt" || motiv="setările de după diferă"
+          fi
+          if [[ -z "$motiv" ]]; then
+            "$ss" jurnal "$RUN_ID" | tee "$RUNNER_TEMP/jurnal.txt"
+            grep -qx 'traceback=0' "$RUNNER_TEMP/jurnal.txt" || motiv="erori în jurnal"
+            grep -qx 'campul_vechi=0' "$RUNNER_TEMP/jurnal.txt" || motiv="câmpul vechi în jurnal"
+          fi
+          if [[ -z "$motiv" ]]; then
+            "$ss" martori dupa "$RUN_ID" | tee "$RUNNER_TEMP/martori.txt" || true
+            grep -qx 'martori=buni' "$RUNNER_TEMP/martori.txt" || motiv="datele de control s-au schimbat"
+          fi
+          if [[ -z "$motiv" && "$SIMULEAZA" == true && "$MEDIU" == proba ]]; then
+            motiv="picare simulată (numai pe probă)"
+          fi
+          if [[ -z "$motiv" ]]; then
+            echo "URCAT"
+            exit 0
+          fi
+          echo "PICAT: $motiv"
+          if "$ss" intoarce "$RUN_ID" | tee "$RUNNER_TEMP/intoarce.txt"; then
+            "$ss" stare
+            echo "## ÎNTORS SINGUR: $motiv. Live-ul e pe pachetul de dinainte. Ramura prod rămâne pe pachetul nou — nicio urcare nouă până nu hotărăște un plic." >> "$GITHUB_STEP_SUMMARY"
+          elif grep -qx 'intoarcere_refuzata=migrare' "$RUNNER_TEMP/intoarce.txt"; then
+            echo "## PICAT, NU m-am întors (are migrări): $motiv. Scrie «dă înapoi» în Terminal." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## PICAT ȘI ÎNTOARCEREA A PICAT: $motiv. Scrie «dă înapoi» în Terminal." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit 1
+
+      - name: S10 — reținerea și rezumatul
+        if: ${{ !inputs.repetitie }}
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/ss" retine "$RUN_ID" || true
+          echo "## URCAT: vârful ${SHA:0:8} e pus (${LOC})." >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$MEDIU" == production && -n "$PR" ]]; then
+            body="$(gh pr view "$PR" --repo "$REPO" --json body --jq .body)"
+            proba="$(printf '%s\n' "$body" | sed -n 's/^proba-andrei:[[:space:]]*//p' | head -1)"
+            [[ -n "$proba" ]] && echo "Verifică tu: $proba" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Cheia se șterge
+        if: always()
+        run: rm -f "$RUNNER_TEMP/k" "$RUNNER_TEMP/kh" "$RUNNER_TEMP/ss"

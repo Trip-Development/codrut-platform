@@ -1,0 +1,16 @@
+# /etc/cody-urcare.conf — root:root 0600. NU vine din depozit: se scrie pe server la instalare
+# (plicul 243, B1 pe probă, B3 pe live). Exemplul de mai jos e pentru PROBĂ; pentru live:
+#   LOC=live  DIR=/opt/codrut-platform  COMPOSE_FILES="compose.yaml compose.prod.yaml"
+#   COMPOSE_SURSE="compose.yaml compose.prod.yaml"  SERV_*=backend/worker/frontend/db  ETICHETA=sha-
+LOC=proba
+DIR=/opt/cody-test
+COMPOSE_FILES="compose.test.yaml"
+COMPOSE_SURSE="infra/test/compose.test.yaml"
+ENV_FILE=.env
+SERV_BACKEND=testbackend
+SERV_WORKER=testworker
+SERV_FRONTEND=testfrontend
+SERV_DB=testdb
+IMAGINE_REPO=ghcr.io/trip-development/codrut-platform
+ETICHETA=test-
+GITHUB_REPO=Trip-Development/codrut-platform

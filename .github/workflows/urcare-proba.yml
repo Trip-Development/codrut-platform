@@ -1,0 +1,68 @@
+# Încercările urcării pe PROBĂ — plicul 243 (A2, în fereastra Code, cu „da”-ul lui Andrei).
+#
+# Același `_urcare.yml` ca live-ul, pe mediul `proba` (fără aprobator; ramuri permise:
+# `feat/urcare-proba*`). Vârful de pus = `.github/urcare/proba-sha.txt` din comiterea împinsă
+# (sha-ul unor imagini `test-…` existente). Pe `feat/urcare-proba-picare` verificarea de după
+# pică dinadins, ca să se vadă întoarcerea singură. NU se împinge pe aceste ramuri din ceas.
+name: Urcare pe probă
+
+on:
+  push:
+    branches: [feat/urcare-proba, feat/urcare-proba-picare]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  packages: read
+
+jobs:
+  citeste-sha:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - id: sha
+        run: |
+          set -euo pipefail
+          sha="$(tr -d '[:space:]' < .github/urcare/proba-sha.txt)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "OPRIT: proba-sha.txt nu are un sha întreg"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+  cheia-nu-face-altceva:
+    needs: citeste-sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: proba
+    steps:
+      - name: P4 — o comandă străină e refuzată (cod 64)
+        env:
+          URCARE_SSH_KEY: ${{ secrets.URCARE_SSH_KEY }}
+          URCARE_HOST: ${{ secrets.URCARE_HOST }}
+          URCARE_KNOWN_HOSTS: ${{ vars.URCARE_KNOWN_HOSTS }}
+        run: |
+          set -uo pipefail
+          echo "::add-mask::$URCARE_HOST"
+          umask 077
+          printf '%s\n' "$URCARE_SSH_KEY" > "$RUNNER_TEMP/k"
+          printf '%s\n' "$URCARE_KNOWN_HOSTS" > "$RUNNER_TEMP/kh"
+          ssh -i "$RUNNER_TEMP/k" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/kh" "root@$URCARE_HOST" "cat /etc/passwd" >/dev/null 2>&1
+          cod=$?
+          rm -f "$RUNNER_TEMP/k" "$RUNNER_TEMP/kh"
+          echo "cod=$cod"
+          [[ "$cod" == 64 ]]
+
+  urcare:
+    needs: [citeste-sha, cheia-nu-face-altceva]
+    uses: ./.github/workflows/_urcare.yml
+    with:
+      mediu: proba
+      loc_asteptat: proba
+      sha: ${{ needs.citeste-sha.outputs.sha }}
+      pr: ""
+      repetitie: false
+      simuleaza_picare: ${{ github.ref_name == 'feat/urcare-proba-picare' }}
+    secrets: inherit

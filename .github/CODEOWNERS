@@ -1,4 +1,4 @@
 # CI policy and release controls require explicit owner review.
-/.github/ @Soimanul
-/compose*.yaml @Soimanul
-/infra/docker/ @Soimanul
+/.github/ @andreyvacaru
+/compose*.yaml @andreyvacaru
+/infra/docker/ @andreyvacaru

@@ -1,0 +1,13 @@
+# Setările de pe live ÎNAINTE de urcare — plicul 243 (P61 §2 pct. 1b), comparate la pasul S2.
+# Le completează proiectantul candidatului, pentru fiecare pachet; intră în candidat, iar
+# controlorul le vede în diff. `a|b` = oricare din ele; `(nesetat)` = setarea lipsește din proces.
+# Valorile de azi = pachetul 21, pe live din 21 nov (P61, martori-dupa).
+CODRUT_VERTEX_TIMEOUT_EVALUATOR_REPLICA_SECONDS=15
+CODRUT_VERTEX_TIMEOUT_SECONDS=120
+CODRUT_VERTEX_REGION=eu
+CODRUT_VERTEX_ACTOR_MODEL=gemini-3.1-flash-lite
+CODRUT_VERTEX_EVALUATOR_MODEL=gemini-3.8-flash
+CODRUT_GENERATION_PROVIDER=vertex
+CODRUT_GENERATION_ENGINES=(nesetat)
+CODRUT_THINKING_BUDGET_EVALUATOR=(nesetat)|1024
+CODRUT_THINKING_BUDGET_ACTOR=(nesetat)|0
