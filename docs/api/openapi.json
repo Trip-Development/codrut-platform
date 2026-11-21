@@ -7939,6 +7939,146 @@
         "title": "PracticeConsentResponse",
         "type": "object"
       },
+      "PracticeDailyReplyRequest": {
+        "properties": {
+          "replica": {
+            "title": "Replica",
+            "type": "string"
+          },
+          "situation_id": {
+            "format": "uuid",
+            "title": "Situation Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "situation_id",
+          "replica"
+        ],
+        "title": "PracticeDailyReplyRequest",
+        "type": "object"
+      },
+      "PracticeDailyReplyResponse": {
+        "properties": {
+          "azi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PracticeDailyReplyToday"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "din_obiectivul_meu": {
+            "default": false,
+            "title": "Din Obiectivul Meu",
+            "type": "boolean"
+          },
+          "motiv": {
+            "anyOf": [
+              {
+                "enum": [
+                  "fara_obiective",
+                  "fara_situatii"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motiv"
+          },
+          "serie": {
+            "default": 0,
+            "title": "Serie",
+            "type": "integer"
+          },
+          "situatie": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PracticeDailySituationItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "PracticeDailyReplyResponse",
+        "type": "object"
+      },
+      "PracticeDailyReplyToday": {
+        "properties": {
+          "nota": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nota"
+          },
+          "raspuns": {
+            "title": "Raspuns",
+            "type": "string"
+          },
+          "replica": {
+            "title": "Replica",
+            "type": "string"
+          },
+          "situatie_id": {
+            "format": "uuid",
+            "title": "Situatie Id",
+            "type": "string"
+          },
+          "trimisa_la": {
+            "format": "date-time",
+            "title": "Trimisa La",
+            "type": "string"
+          }
+        },
+        "required": [
+          "situatie_id",
+          "replica",
+          "raspuns",
+          "trimisa_la"
+        ],
+        "title": "PracticeDailyReplyToday",
+        "type": "object"
+      },
+      "PracticeDailySituationItem": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "obiectiv_nr": {
+            "title": "Obiectiv Nr",
+            "type": "integer"
+          },
+          "obiectiv_titlu": {
+            "title": "Obiectiv Titlu",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "obiectiv_nr",
+          "obiectiv_titlu"
+        ],
+        "title": "PracticeDailySituationItem",
+        "type": "object"
+      },
       "PracticeDashboardResponse": {
         "properties": {
           "cody_alias": {
@@ -24488,6 +24628,202 @@
           }
         },
         "summary": "Add Trainer Note",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/projects/{project_id}/replica-zilei": {
+      "get": {
+        "description": "Situa\u021bia zilei, replica de azi (dac\u0103 exist\u0103) \u0219i seria.",
+        "operationId": "get_daily_reply_api_practice_projects__project_id__replica_zilei_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeDailyReplyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Daily Reply",
+        "tags": [
+          "practice"
+        ]
+      },
+      "post": {
+        "description": "Omul trimite replica zilei; profesorul de azi \u00eei r\u0103spunde.",
+        "operationId": "submit_daily_reply_api_practice_projects__project_id__replica_zilei_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PracticeDailyReplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeDailyReplyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Submit Daily Reply",
         "tags": [
           "practice"
         ]

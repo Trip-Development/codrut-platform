@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -720,3 +721,72 @@ class PracticeObjectiveChoice(TimestampMixin, Base):
     )
     chosen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     replaced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class PracticeDailySituation(TimestampMixin, Base):
+    """O situație pentru „O replică pe zi”, legată de un obiectiv — plicul 236 (L2-P1).
+
+    Textele vin din `obiective/situatii-comunicare-asertiva.json`, aprobate de Andrei; le încarcă
+    migrarea 0073. Fără nume, fără firme.
+    """
+
+    __tablename__ = "practice_daily_situations"
+    __table_args__ = (
+        UniqueConstraint(
+            "objective_id", "order_index", name="uq_practice_daily_situations_objective_order"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    objective_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("practice_objectives.id", ondelete="RESTRICT"),
+        index=True,
+        nullable=False,
+    )
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    # `is_active` înaintea lui `text`: în corpul clasei, coloana `text` ar acoperi `text()`
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class PracticeDailyReply(TimestampMixin, Base):
+    """Replica zilei a unui om și răspunsul profesorului — plicul 236 (L2-P1).
+
+    Una singură pe om, proiect și zi (ziua în ora României), apărată și de bază. Nota o citește
+    codul din răspunsul profesorului; nu e notă pe competență și nu dă puncte pe Tablou.
+    Nimic de aici nu ajunge la trainer, HR sau șef.
+    """
+
+    __tablename__ = "practice_daily_replies"
+    __table_args__ = (
+        UniqueConstraint(
+            "participant_profile_id", "project_id", "day",
+            name="uq_practice_daily_replies_profile_project_day",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    participant_profile_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("participant_profiles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("company_projects.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    situation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("practice_daily_situations.id", ondelete="RESTRICT"),
+        index=True,
+        nullable=False,
+    )
+    day: Mapped[date] = mapped_column(Date, nullable=False)
+    reply_text: Mapped[str] = mapped_column(Text, nullable=False)
+    teacher_text: Mapped[str] = mapped_column(Text, nullable=False)
+    score: Mapped[Decimal | None] = mapped_column(Numeric(3, 1), nullable=True)
+    cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
+    prompt_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

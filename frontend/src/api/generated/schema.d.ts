@@ -1757,6 +1757,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/practice/projects/{project_id}/replica-zilei": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Daily Reply
+         * @description Situația zilei, replica de azi (dacă există) și seria.
+         */
+        get: operations["get_daily_reply_api_practice_projects__project_id__replica_zilei_get"];
+        put?: never;
+        /**
+         * Submit Daily Reply
+         * @description Omul trimite replica zilei; profesorul de azi îi răspunde.
+         */
+        post: operations["submit_daily_reply_api_practice_projects__project_id__replica_zilei_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/practice/projects/{project_id}/room": {
         parameters: {
             query?: never;
@@ -4686,6 +4710,66 @@ export interface components {
             paragrafe: string[];
             /** Titlu */
             titlu: string;
+        };
+        /** PracticeDailyReplyRequest */
+        PracticeDailyReplyRequest: {
+            /** Replica */
+            replica: string;
+            /**
+             * Situation Id
+             * Format: uuid
+             */
+            situation_id: string;
+        };
+        /** PracticeDailyReplyResponse */
+        PracticeDailyReplyResponse: {
+            azi?: components["schemas"]["PracticeDailyReplyToday"] | null;
+            /**
+             * Din Obiectivul Meu
+             * @default false
+             */
+            din_obiectivul_meu: boolean;
+            /** Motiv */
+            motiv?: ("fara_obiective" | "fara_situatii") | null;
+            /**
+             * Serie
+             * @default 0
+             */
+            serie: number;
+            situatie?: components["schemas"]["PracticeDailySituationItem"] | null;
+        };
+        /** PracticeDailyReplyToday */
+        PracticeDailyReplyToday: {
+            /** Nota */
+            nota?: number | null;
+            /** Raspuns */
+            raspuns: string;
+            /** Replica */
+            replica: string;
+            /**
+             * Situatie Id
+             * Format: uuid
+             */
+            situatie_id: string;
+            /**
+             * Trimisa La
+             * Format: date-time
+             */
+            trimisa_la: string;
+        };
+        /** PracticeDailySituationItem */
+        PracticeDailySituationItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Obiectiv Nr */
+            obiectiv_nr: number;
+            /** Obiectiv Titlu */
+            obiectiv_titlu: string;
+            /** Text */
+            text: string;
         };
         /** PracticeDashboardResponse */
         PracticeDashboardResponse: {
@@ -15839,6 +15923,162 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TrainerNoteItem"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_daily_reply_api_practice_projects__project_id__replica_zilei_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeDailyReplyResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    submit_daily_reply_api_practice_projects__project_id__replica_zilei_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PracticeDailyReplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeDailyReplyResponse"];
                 };
             };
             /** @description Bad Request */

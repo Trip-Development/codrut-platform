@@ -1,0 +1,186 @@
+{
+  "catalog": "comunicare-asertiva",
+  "sursa": "Situațiile pentru „O replică pe zi”. Ordinea 1 = situația obiectivului din L1-obiective-comunicare-asertiva.json (amprenta 073eb142…8a73), copiată fără schimbări. Ordinile 2 și 3 = situațiile a) și b) aprobate de Andrei în panou, 20 nov 2026 14:53 ([replica-pe-zi-situatii]), copiate literă cu literă.",
+  "situatii": [
+    {
+      "obiectiv_nr": 1,
+      "ordine": 1,
+      "text": "vineri, 17:00, șeful îți mai dă un raport „urgent”."
+    },
+    {
+      "obiectiv_nr": 1,
+      "ordine": 2,
+      "text": "Luni dimineață, șeful îți cere să preiei și ședința săptămânală a altui departament, „doar o lună”."
+    },
+    {
+      "obiectiv_nr": 1,
+      "ordine": 3,
+      "text": "Ai deja trei termene vineri. Șeful îți scrie pe chat: „Mai bagi și prezentarea pentru board, da?”"
+    },
+    {
+      "obiectiv_nr": 2,
+      "ordine": 1,
+      "text": "„Raportul tău e neglijent, mă întreb dacă ești potrivit.”"
+    },
+    {
+      "obiectiv_nr": 2,
+      "ordine": 2,
+      "text": "După ședință, șeful îți spune: „Nu te-am simțit implicat în proiect în ultima vreme.”"
+    },
+    {
+      "obiectiv_nr": 2,
+      "ordine": 3,
+      "text": "În evaluare scrie: „Comunicarea trebuie îmbunătățită.” Nimic altceva."
+    },
+    {
+      "obiectiv_nr": 3,
+      "ordine": 1,
+      "text": "șeful vrea rezultate în două săptămâni, fără oameni în plus."
+    },
+    {
+      "obiectiv_nr": 3,
+      "ordine": 2,
+      "text": "Proiectul s-a dublat, dar bugetul a rămas același. Ai cinci minute cu șeful înainte de comitet."
+    },
+    {
+      "obiectiv_nr": 3,
+      "ordine": 3,
+      "text": "Colegul care te ajuta pleacă în concediu trei săptămâni, chiar în perioada de lansare."
+    },
+    {
+      "obiectiv_nr": 4,
+      "ordine": 1,
+      "text": "ai evaluarea anuală peste o săptămână și vrei să ceri o mărire de salariu."
+    },
+    {
+      "obiectiv_nr": 4,
+      "ordine": 2,
+      "text": "Ai preluat de jumătate de an atribuțiile unui coleg care a plecat, fără nicio schimbare de salariu."
+    },
+    {
+      "obiectiv_nr": 4,
+      "ordine": 3,
+      "text": "Șeful îți spune: „Promovarea anul ăsta nu se poate, poate la anul.”"
+    },
+    {
+      "obiectiv_nr": 5,
+      "ordine": 1,
+      "text": "îți schimbă prioritățile de trei ori pe săptămână."
+    },
+    {
+      "obiectiv_nr": 5,
+      "ordine": 2,
+      "text": "Șeful îți corectează e-mailurile către client după ce le-ai trimis deja, cu clientul în copie."
+    },
+    {
+      "obiectiv_nr": 5,
+      "ordine": 3,
+      "text": "În ședințe, șeful răspunde el la întrebările adresate ție."
+    },
+    {
+      "obiectiv_nr": 6,
+      "ordine": 1,
+      "text": "colegul cu 10 ani în firmă a predat a treia oară raportul lunar cu două zile întârziere, iar tu îl preiei pentru client."
+    },
+    {
+      "obiectiv_nr": 6,
+      "ordine": 2,
+      "text": "Colegul cu experiență îți spune: „Lasă, că știu eu cum se face, îl trimit mâine.” E a doua oară luna asta."
+    },
+    {
+      "obiectiv_nr": 6,
+      "ordine": 3,
+      "text": "Datele de la el vin incomplete și tu trebuie să le refaci noaptea."
+    },
+    {
+      "obiectiv_nr": 7,
+      "ordine": 1,
+      "text": "în ședința de luni, un coleg îți taie vorba a doua oară și îți preia ideea."
+    },
+    {
+      "obiectiv_nr": 7,
+      "ordine": 2,
+      "text": "Prezinți rezultatele trimestrului și colegul intervine: „Pe scurt, ce vrea să zică e…”"
+    },
+    {
+      "obiectiv_nr": 7,
+      "ordine": 3,
+      "text": "În call, colegul începe să vorbească peste tine chiar când ajungi la propunerea ta."
+    },
+    {
+      "obiectiv_nr": 8,
+      "ordine": 1,
+      "text": "„Tu te pricepi mai bine la Excel, fă-mi și mie tabelul până mâine.”"
+    },
+    {
+      "obiectiv_nr": 8,
+      "ordine": 2,
+      "text": "„Tu ai mai făcut raportul ăsta, nu-l faci și pe al meu? Durează zece minute.”"
+    },
+    {
+      "obiectiv_nr": 8,
+      "ordine": 3,
+      "text": "Colegul îți trimite un e-mail cu șeful în copie: „X se ocupă de asta, că are mai multă experiență.” Nu v-ați înțeles așa."
+    },
+    {
+      "obiectiv_nr": 9,
+      "ordine": 1,
+      "text": "aceeași ceartă cu colegul de la alt departament, la fiecare predare de proiect."
+    },
+    {
+      "obiectiv_nr": 9,
+      "ordine": 2,
+      "text": "Iar ședință de predare, iar aceeași replică: „Voi nu ne dați niciodată informațiile la timp.”"
+    },
+    {
+      "obiectiv_nr": 9,
+      "ordine": 3,
+      "text": "Colegul de la alt departament îți scrie: „Din nou ne-ați încurcat planificarea.”"
+    },
+    {
+      "obiectiv_nr": 10,
+      "ordine": 1,
+      "text": "clientul cere „doar o mică modificare” care înseamnă trei zile de muncă, fără cost în plus."
+    },
+    {
+      "obiectiv_nr": 10,
+      "ordine": 2,
+      "text": "Clientul te sună sâmbătă seara pentru o modificare „urgentă” care nu e urgentă."
+    },
+    {
+      "obiectiv_nr": 10,
+      "ordine": 3,
+      "text": "Clientul cere încă o rundă de revizii, a patra, deși contractul prevede două."
+    },
+    {
+      "obiectiv_nr": 11,
+      "ordine": 1,
+      "text": "la prezentare, directorul clientului întreabă de o cifră pe care n-o ai."
+    },
+    {
+      "obiectiv_nr": 11,
+      "ordine": 2,
+      "text": "Clientul te întreabă în ședință cât costă o funcție pe care n-ați discutat-o niciodată."
+    },
+    {
+      "obiectiv_nr": 11,
+      "ordine": 3,
+      "text": "Un specialist de la client îți pune o întrebare tehnică foarte detaliată, de față cu toată echipa lui."
+    },
+    {
+      "obiectiv_nr": 12,
+      "ordine": 1,
+      "text": "același om a trimis a treia oară oferta cu prețuri greșite."
+    },
+    {
+      "obiectiv_nr": 12,
+      "ordine": 2,
+      "text": "Același om din echipă a întârziat a patra oară la ședința cu clientul."
+    },
+    {
+      "obiectiv_nr": 12,
+      "ordine": 3,
+      "text": "Omul îți spune: „Toată lumea greșește prețurile, nu doar eu.”"
+    }
+  ]
+}
