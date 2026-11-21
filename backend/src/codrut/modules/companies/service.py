@@ -34,6 +34,7 @@ from codrut.modules.companies.models import (
     ProjectLifecycleAction,
     ProjectLifecycleEvent,
     ProjectMembership,
+    ProjectTrainer,
 )
 from codrut.modules.companies.repository import CompanyRepository
 from codrut.modules.companies.schemas import (
@@ -336,6 +337,8 @@ class CompanyService:
                 show_participant_results=payload.show_participant_results,
             )
         )
+        # Plicul 242: cine face proiectul e alocat la el (paza trainerului pe proiect).
+        self.repository.session.add(ProjectTrainer(project_id=project.id, user_id=user_id))
         self.repository.session.add(
             AssessmentCycle(
                 company_id=company_id,

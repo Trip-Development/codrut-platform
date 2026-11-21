@@ -458,3 +458,24 @@ class ParticipantViewAudit(Base):
         nullable=False,
         index=True,
     )
+
+
+class ProjectTrainer(TimestampMixin, Base):
+    """Ce trainer e alocat la ce proiect (plicul 242). Numai id-uri și date."""
+
+    __tablename__ = "project_trainers"
+    __table_args__ = (
+        UniqueConstraint("project_id", "user_id", name="uq_project_trainers_project_user"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("company_projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
