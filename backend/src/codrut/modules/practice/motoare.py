@@ -37,7 +37,7 @@ from codrut.core.errors import DomainError
 
 logger = logging.getLogger("codrut.model")
 
-MOTOARE_CUNOSCUTE = ("vertex",)
+MOTOARE_CUNOSCUTE = ("vertex", "claude_vertex")
 
 _CODURI_CARE_COMUTA = ("vertex_rate_limited", "vertex_network_error")
 
@@ -56,8 +56,17 @@ def _vertex(settings: Settings, credentials: Any, client: Any) -> _Motor:
     return VertexGenerationProvider(settings, credentials=credentials, client=client)
 
 
-# nume → constructor(settings, credentials, client). Plicul 234 adaugă `claude_vertex`.
-CONSTRUCTORI: dict[str, Callable[[Settings, Any, Any], _Motor]] = {"vertex": _vertex}
+def _claude_vertex(settings: Settings, credentials: Any, client: Any) -> _Motor:
+    from codrut.modules.practice import motor_claude_vertex
+
+    return motor_claude_vertex.construieste(settings, credentials, client)
+
+
+# nume → constructor(settings, credentials, client).
+CONSTRUCTORI: dict[str, Callable[[Settings, Any, Any], _Motor]] = {
+    "vertex": _vertex,
+    "claude_vertex": _claude_vertex,  # plicul 234
+}
 
 
 def citeste_lista(settings: Settings) -> tuple[str, ...]:
@@ -182,6 +191,10 @@ class ComutareMotoare:
                 rezultat = await motor.generate(request)
             except Exception as exc:
                 if not se_comuta(exc):
+                    if risipit:
+                        # Plicul 234 (CONTROLOR DUPĂ 233): costul golului de dinainte nu se
+                        # pierde; `service.py` nu-l citește încă (L5-P4).
+                        exc.cost_risipit_usd = risipit  # type: ignore[attr-defined]
                     raise
                 assert isinstance(exc, GenerationError)
                 ultima_eroare = exc

@@ -220,3 +220,46 @@ async def test_7_transcrierea_merge_la_primul_cu_audio() -> None:
     with pytest.raises(GenerationError) as niciunul:
         await fara.transcribe_audio(b"sunet")
     assert niciunul.value.code == "transcription_failed"
+
+
+# --- plicul 234, corecțiile moștenite din CONTROLOR DUPĂ 233 -------------------------------
+
+
+async def test_234_1_gol_la_a_eroare_care_comuta_la_b_se_intoarce_golul() -> None:
+    ga = rezultat("a", text="", usd="0.001000")
+    a = MotorFals(ga)
+    b = MotorFals(eroare("vertex_rate_limited", 429))
+    r = await lant(a, b).generate(cerere())
+    assert r.model == "model-a"
+    assert r.text == ""
+    assert r.estimated_usd == Decimal("0.001000")
+
+
+async def test_234_2_gol_la_a_eroare_care_nu_comuta_la_b_poarta_costul() -> None:
+    a = MotorFals(rezultat("a", text="", usd="0.001000"))
+    eb = eroare("vertex_no_candidates")
+    b = MotorFals(eb)
+    with pytest.raises(GenerationError) as prins:
+        await lant(a, b).generate(cerere())
+    assert prins.value is eb
+    assert prins.value.cost_risipit_usd == Decimal("0.001000")
+
+
+def test_234_3_motoare_importa_sus_numai_din_contracts_si_core() -> None:
+    import ast
+    import inspect
+
+    from codrut.modules.practice import motoare
+
+    arbore = ast.parse(inspect.getsource(motoare))
+    din_codrut = [
+        nod.module for nod in arbore.body
+        if isinstance(nod, ast.ImportFrom) and nod.module and nod.module.startswith("codrut")
+    ] + [
+        alias.name for nod in arbore.body if isinstance(nod, ast.Import)
+        for alias in nod.names if alias.name.startswith("codrut")
+    ]
+    assert din_codrut, "motoare.py importă ceva din codrut"
+    for modul in din_codrut:
+        assert modul.startswith(("codrut.contracts", "codrut.core")), modul
+    assert "claude_vertex" in motoare.CONSTRUCTORI

@@ -11,6 +11,7 @@ from codrut.core.errors import DomainError
 class GenerationProviderKey(StrEnum):
     local = "local"
     vertex = "vertex"
+    claude_vertex = "claude_vertex"
 
 
 class GenerationPurpose(StrEnum):

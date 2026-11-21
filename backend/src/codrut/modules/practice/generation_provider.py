@@ -515,7 +515,9 @@ def build_generation_provider(
             ) from exc
         if len(lista) == 1:
             # Un singur motor: exact obiectul de azi, nu un lanț cu un motor.
-            return VertexGenerationProvider(settings, credentials=credentials, client=client)
+            if lista[0] == "vertex":
+                return VertexGenerationProvider(settings, credentials=credentials, client=client)
+            return motoare.CONSTRUCTORI[lista[0]](settings, credentials, client)
         return motoare.ComutareMotoare(
             [(nume, motoare.CONSTRUCTORI[nume](settings, credentials, client)) for nume in lista],
             settings,
