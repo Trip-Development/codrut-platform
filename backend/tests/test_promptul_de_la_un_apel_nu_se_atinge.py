@@ -23,7 +23,9 @@ from codrut.modules.practice.prompts import (
 # `actor.md`, așa cum era înainte de comiterea plicului 119 (măsurat pe `573bb7a`).
 # Plicul 200, hotărârea lui Andrei din 27 oct: fraza „nu ieși din rol” adăugată la final,
 # pentru ambele drumuri; restul fișierului neschimbat.
-AMPRENTA_ACTOR_MD = "7b108b9169b51957b49b1c8bf4a1da694397f2a709766d11bfe21193db3d318e"
+# Plicul 228, hotărârea lui Andrei din 19 nov: paragraful „ești AI?” adăugat la final, pentru
+# ambele drumuri; restul fișierului neschimbat.
+AMPRENTA_ACTOR_MD = "be596dc65db69f8b7cc36717ade414664a5b54c1b0d9ea6d3bf9eb6fa1e81cc4"
 
 CAP_VECHI = "Ești simultan actor și Cody-ca-profesor."
 CAP_NOU = "NU ești Cody-ca-profesor"

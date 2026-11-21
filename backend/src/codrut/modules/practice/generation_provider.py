@@ -314,6 +314,7 @@ class VertexGenerationProvider:
                 f"Vertex AI is busy (HTTP {response.status_code}) after "
                 f"{len(PAUZE) + 1} tries",
                 code="vertex_rate_limited",
+                http_status=response.status_code,
             )
 
         if response.status_code != 200:
@@ -322,6 +323,7 @@ class VertexGenerationProvider:
             raise GenerationError(
                 f"Vertex AI returned HTTP {response.status_code}",
                 code="vertex_http_error",
+                http_status=response.status_code,
             )
 
         try:
@@ -475,7 +477,9 @@ class VertexGenerationProvider:
         _urma_apelului("transcription_failed", ultimul_http, len(candidate_models), inceput,
                        ",".join(candidate_models) or "-", "transcriere")
         raise GenerationError(
-            f"Transcription failed across models: {last_exc}",
+            # numai tipul erorii, nu textul ei — plicul 220
+            f"Transcription failed across models: "
+            f"{type(last_exc).__name__ if last_exc else '-'}",
             code="transcription_failed",
         )
 
@@ -489,6 +493,10 @@ def build_generation_provider(
         return LocalGenerationProvider(settings)
 
     if settings.generation_provider == "vertex":
+        # Plicul 233: lista de motoare se citește întâi, înainte de cheie.
+        from codrut.modules.practice import motoare
+
+        lista = motoare.citeste_lista(settings)
         cred_path = Path(settings.vertex_credentials_path)
         if not cred_path.is_file():
             raise DomainError(
@@ -505,7 +513,13 @@ def build_generation_provider(
                 "Failed to load Vertex credentials file",
                 code="credentials_invalid",
             ) from exc
-        return VertexGenerationProvider(settings, credentials=credentials, client=client)
+        if len(lista) == 1:
+            # Un singur motor: exact obiectul de azi, nu un lanț cu un motor.
+            return VertexGenerationProvider(settings, credentials=credentials, client=client)
+        return motoare.ComutareMotoare(
+            [(nume, motoare.CONSTRUCTORI[nume](settings, credentials, client)) for nume in lista],
+            settings,
+        )
 
     raise DomainError(
         f"Unsupported generation provider: {settings.generation_provider}",

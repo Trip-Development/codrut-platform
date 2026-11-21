@@ -162,6 +162,13 @@ class Settings(BaseSettings):
     # Forma: JSON, model -> [intrare, din cache, iesire, gandire], in dolari pe milion.
     # Se da din mediu, ca sa nu ceara o comitere cand furnizorul schimba pretul — lectia 101.
     prices_by_model: str = ""
+    # Lista de motoare, în ordine — plicul 233 (fișa L5). Implicit numai motorul de azi:
+    # cu un singur motor, aplicația se poartă exact ca înainte. Al doilea motor se pune
+    # aici numai după „da”-ul lui Andrei (L5-P3/P4).
+    generation_engines: str = "vertex"
+    # Ocolirea temporară: după atâtea căderi LA RÂND, motorul e sărit atâtea secunde.
+    generation_engine_skip_after_failures: int = Field(default=3, ge=1, le=20)
+    generation_engine_skip_seconds: int = Field(default=300, ge=30, le=3600)
     biblioteca_path: str = Field(
         default="/opt/codrut-platform/BIBLIOTECA",
         validation_alias=AliasChoices("BIBLIOTECA_PATH", "biblioteca_path"),
