@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     Enum,
@@ -87,6 +88,11 @@ class User(TimestampMixin, Base):
         nullable=True,
     )
     terms_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # Proprietarul platformei (plicul 242): vede toate proiectele, peste alocare. Un singur
+    # cont, pus la urcare cu cuvântul lui Andrei; migrarea nu-l pune pe nimeni.
+    is_platform_owner: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false"),
+    )
     xp: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 

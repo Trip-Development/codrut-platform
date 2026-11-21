@@ -111,6 +111,21 @@ async def setup_practice_context(
     )
     session.add(program_settings)
     await session.flush()
+
+    # Plicul 242: trainerul fixturii are cont și e alocat pe proiect (paza pe proiect).
+    from codrut.modules.companies.models import ProjectTrainer
+    from codrut.modules.identity.models import User
+
+    trainer_user_id = uuid.uuid4()
+    session.add(User(
+        id=trainer_user_id,
+        email=f"trainer_{suffix}@example.com",
+        password_hash="registered-password-hash",  # noqa: S106
+        role=UserRole.trainer,
+    ))
+    await session.flush()
+    session.add(ProjectTrainer(project_id=project.id, user_id=trainer_user_id))
+    await session.flush()
     await session.commit()
 
     participant_principal = SessionPrincipal(
@@ -138,7 +153,7 @@ async def setup_practice_context(
     )
 
     trainer_principal = SessionPrincipal(
-        user_id=uuid.uuid4(),
+        user_id=trainer_user_id,
         email=f"trainer_{suffix}@example.com",
         role=UserRole.trainer,
         account_type=UserAccountType.registered,

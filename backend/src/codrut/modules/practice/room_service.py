@@ -406,6 +406,19 @@ class PracticeInvitationsService:
                                  "Omul nu are email."))
                 continue
 
+            # Plicul 242: un cont care si-a pus deja parola nu primeste link de parola
+            # (ar fi preluarea contului). Aceeasi masura ca in `_contul_lui`.
+            existent = (await self.session.execute(
+                select(User).where(func.lower(User.email) == profil.email.lower())
+            )).scalar_one_or_none()
+            if existent is not None and existent.password_hash != SHADOW_ACCOUNT_PASSWORD_HASH:
+                out.append(_rand(
+                    profil_id, profil.full_name, profil.email, None, False,
+                    "Omul are deja cont cu parolă. Intră cu parola lui; dacă a uitat-o, "
+                    "folosește «Am uitat parola» la intrare.",
+                ))
+                continue
+
             try:
                 async with self.session.begin_nested():
                     utilizator = await self._contul_lui(profil)

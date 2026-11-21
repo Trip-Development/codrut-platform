@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
 from codrut.core.config import Settings, get_settings
+from codrut.modules.companies.access import require_project_trainer
 from codrut.modules.companies.models import ParticipantProfile
 from codrut.modules.companies.policies import require_trainer_principal
 from codrut.modules.identity.models import UserRole
@@ -132,6 +133,7 @@ async def start_trainer_practice_session(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Not Found",
         )
+    await require_project_trainer(session, principal, payload.project_id)
 
     service = PracticeSessionService(session=session, settings=settings)
     practice_session, prima_replica = await service.start_trainer_session(
@@ -441,7 +443,7 @@ async def get_practice_setup(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> PracticeSetupResponse:
     """Cum e configurata exersarea pe proiect: tema si competentele bifate."""
-    require_trainer_principal(principal)
+    await require_project_trainer(session, principal, project_id)
     return PracticeSetupResponse(**await PracticeSetupService(session).get_setup(project_id))
 
 
@@ -453,7 +455,7 @@ async def configure_practice_setup(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> PracticeSetupResponse:
     """Configureaza exersarea si scrie competentele alese. Se poate reveni oricand."""
-    require_trainer_principal(principal)
+    await require_project_trainer(session, principal, project_id)
     result = await PracticeSetupService(session).configure(
         project_id=project_id,
         theme_id=payload.theme_id,
@@ -474,7 +476,7 @@ async def get_project_evolution(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> PracticeEvolutionResponse:
     """Evolutia competentelor pe echipa — fila trainerului la proiectele de training."""
-    require_trainer_principal(principal)
+    await require_project_trainer(session, principal, project_id)
     date = await PracticeEvolutionService(session).project_evolution(project_id)
     return PracticeEvolutionResponse(**date)
 
@@ -486,7 +488,7 @@ async def get_project_room(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> PracticeRoomResponse:
     """Camera de training — ecranul proiectului, cu toate sectiunile lui."""
-    require_trainer_principal(principal)
+    await require_project_trainer(session, principal, project_id)
     return PracticeRoomResponse(**await PracticeRoomService(session).project_room(project_id))
 
 
@@ -501,7 +503,7 @@ async def get_project_person(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> PracticePersonResponse:
     """Pagina omului — al doilea ecran al camerei de training."""
-    require_trainer_principal(principal)
+    await require_project_trainer(session, principal, project_id)
     date = await PracticePersonService(session).person(project_id, profile_id)
     return PracticePersonResponse(**date)
 
@@ -519,7 +521,7 @@ async def add_trainer_note(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> TrainerNoteItem:
     """Nota trainerului despre un participant. Andrei scrie, se salveaza."""
-    require_trainer_principal(principal)
+    await require_project_trainer(session, principal, project_id)
     nota = await PracticePersonService(session).add_note(
         project_id, profile_id, principal.user_id, payload.note,
     )
@@ -537,7 +539,7 @@ async def list_training_invitations(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> list[TrainingInvitationItem]:
     """Cine e invitat, cine a intrat, cine a facut testul de intrare."""
-    require_trainer_principal(principal)
+    await require_project_trainer(session, principal, project_id)
     randuri = await PracticeInvitationsService(session).statuses(project_id)
     return [TrainingInvitationItem(**r) for r in randuri]
 
@@ -558,7 +560,7 @@ async def send_training_invitations(
     proiect de training n-o are — de aceea trainingul are calea lui. Linkul se
     intoarce si cand emailul nu pleaca.
     """
-    require_trainer_principal(principal)
+    await require_project_trainer(session, principal, project_id)
     randuri = await PracticeInvitationsService(session).send(
         project_id,
         payload.participant_profile_ids,
