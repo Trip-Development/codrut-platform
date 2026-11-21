@@ -108,7 +108,9 @@ PLAFON_DOLARI_PE_BUNE = Decimal("1.00")
 
 _JSON_REZUMAT = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 _PUNCTAJ_IN_PROMPT = re.compile(r"EXACT cum ți-l dă aplicația: (.*?)\. Nu calcula")
-_NOTA_PE_10 = re.compile(r"\d+(?:[.,]\d+)?\s*/\s*10")
+# plicul 248: aceeași formă ca `_NOTA_IN_PROZA` din aplicație (prompts/__init__.py), scrisă aici
+_NOTA_IN_TEXT = re.compile(r"\d+(?:[.,]\d+)?\s*/\s*10|\d+\s+din\s+\d+\s+răspunsuri\s+corecte")
+_NOTE_DE_JOC = re.compile(r"media notelor din joc: ([^)]*)")
 _CHEI_REZUMAT = ("questionsRatio", "assertiveness", "sbiFeedback", "conciseness")
 
 
@@ -339,6 +341,18 @@ class Contor:
             rand["cost_usd"] = float(cost)
         return rez
 
+    def pune_text_final(self, text: str) -> None:
+        """Plicul 248: textul final al rezumatului (după `pune_punctajul_in_rezumat`), pe ULTIMUL
+        rând din `pasi` — rândul pasului de rezumat (o reluare de rețea stă pe același rând).
+        Paznicul de nume trece și peste el; `retinute` nu crește a doua oară (același răspuns)."""
+        if not self.pasi:
+            return
+        rand = self.pasi[-1]
+        if rand.get("raspuns") == RETINUT or (
+                self._numara is not None and self._numara(text) > 0):
+            text = RETINUT
+        rand["text_final"] = text
+
 
 def _modelul_cererii(setari, cerere: GenerationRequest) -> str:
     return (setari.vertex_actor_model if cerere.purpose == GenerationPurpose.actor
@@ -366,10 +380,12 @@ def _profil(nr: int) -> dict:
             "nr_sesiuni_anterioare": nr - 1}
 
 
-async def _cere(furnizor, cerere) -> tuple[str, str | None, str | None]:
+async def _cere(furnizor, cerere, *, taie_spatiile: bool = True
+                ) -> tuple[str, str | None, str | None]:
     try:
         rez = await furnizor.generate(cerere)
-        return (rez.text or "").strip(), rez.finish_reason, None
+        text = rez.text or ""
+        return (text.strip() if taie_spatiile else text), rez.finish_reason, None
     except Exception as err:  # noqa: BLE001
         return "", None, _codul(err)
 
@@ -518,15 +534,20 @@ async def sedinta_rezumat(furnizor, setari, s: dict) -> dict:
     """Rezumatul de la închidere, cererea ca la `service.py` (plicul 199)."""
     istoric = "\n\n".join(f"{COD_PARTICIPANT if c == 'om' else 'Cody'}: {x}" for c, x in s["ture"])
     punctaj = punctajul_final(s["fel"], [(c == "om", este_feedback(x), x) for c, x in s["ture"]])
-    raspuns, _oprire, eroare = await _cere(furnizor, GenerationRequest(
+    brut, _oprire, eroare = await _cere(furnizor, GenerationRequest(
         messages=(GenerationMessage(role="user", text=get_summary_prompt(
             name=COD_PARTICIPANT, opt_text=s["fel"], history=istoric, punctaj=punctaj)),),
         system_instruction="Ești analizator de discurs.", purpose=GenerationPurpose.evaluator,
         max_output_tokens=setari.vertex_max_output_tokens_evaluator, temperature=0.2,
         thinking_budget=setari.thinking_budget_evaluator,
-    ))
-    # datoria din 226: ce vede omul = textul trecut prin funcția care pune nota codului
-    raspuns = pune_punctajul_in_rezumat(raspuns, punctaj) or ""
+    ), taie_spatiile=False)
+    # datoria din 226: ce vede omul = textul trecut prin funcția care pune nota codului; plicul
+    # 248: chemată ca în `service.py` (pe textul netăiat), iar textul final ajunge în jurnal
+    text_final = pune_punctajul_in_rezumat(brut, punctaj)
+    pune_text_final = getattr(furnizor, "pune_text_final", None)
+    if pune_text_final is not None:
+        pune_text_final(text_final or "")
+    raspuns = text_final or ""
     date = None
     m = _JSON_REZUMAT.search(raspuns)
     if m:
@@ -538,13 +559,37 @@ async def sedinta_rezumat(furnizor, setari, s: dict) -> dict:
     json_ok = isinstance(note, dict) and all(
         isinstance(note.get(k), (int, float)) and not isinstance(note.get(k), bool)
         and 1 <= note[k] <= 10 for k in _CHEI_REZUMAT)
-    fara_json = _JSON_REZUMAT.sub("", raspuns)
+    motiv_punctaj = nota_codului_in_text(raspuns, punctaj)
+    return {"json": json_ok, "punctaj": punctaj, "punctaj_ok": motiv_punctaj is None,
+            "motiv_punctaj": motiv_punctaj, "eroare": eroare, "raspuns": raspuns}
+
+
+def _fara_spatii(nota: str) -> str:
+    return re.sub(r"\s+", "", nota).replace(".", ",")
+
+
+def nota_codului_in_text(text: str, punctaj: str) -> str | None:
+    """Plicul 248: regula „punctajul codului” pe textul FINAL al rezumatului (ce vede omul).
+
+    Pe textul fără blocul ```json: (1) fără punctaj („—”), orice notă pică; (2) altfel, trebuie
+    să existe exact propoziția pusă de cod, „Punctajul final: {punctaj}.”; (3) nicio altă notă
+    decât a codului sau notele de joc numărate de el (din „media notelor din joc: …”), comparate
+    fără spații și cu „.” citit ca „,”. Întoarce motivul căderii sau `None`.
+    """
+    fara_json = _JSON_REZUMAT.sub("", text or "")
+    gasite = [m.group(0) for m in _NOTA_IN_TEXT.finditer(fara_json)]
     if punctaj == "—":
-        punctaj_ok = not _NOTA_PE_10.search(fara_json)
-    else:
-        punctaj_ok = punctaj.split(" (")[0] in fara_json
-    return {"json": json_ok, "punctaj": punctaj, "punctaj_ok": punctaj_ok, "eroare": eroare,
-            "raspuns": raspuns}
+        return f"notă fără punctaj: {gasite[0]}" if gasite else None
+    if f"Punctajul final: {punctaj}." not in fara_json:
+        return f"lipsește „Punctajul final: {punctaj}.”"
+    voie = {_fara_spatii(punctaj.split(" (")[0])}
+    m = _NOTE_DE_JOC.search(punctaj)
+    if m:
+        voie |= {_fara_spatii(f"{k.strip()}/10") for k in m.group(1).split(",") if k.strip()}
+    for nota in gasite:
+        if _fara_spatii(nota) not in voie:
+            return f"altă notă decât a codului: {nota}"
+    return None
 
 
 # ---------------------------------------------------------------- rularea și verdictul
@@ -711,7 +756,8 @@ async def ruleaza(furnizor, setari, scrie, *, doar_actor: bool, plafon: int,
                 rand(s["id"], "JSON valid (4 note 1–10)", r["json"], r["eroare"] or "")
                 if not r["json"]:
                     rosu_de_format(s["id"], "rezumatul fără JSON valid")
-                rand(s["id"], "punctajul codului, exact", r["punctaj_ok"], r["punctaj"])
+                rand(s["id"], "punctajul codului, exact", r["punctaj_ok"],
+                     r["motiv_punctaj"] or r["punctaj"])
     except _Oprire:
         pass
 
