@@ -64,5 +64,9 @@ class GenerationError(DomainError):
         message: str,
         code: str = "generation_error",
         details: dict[str, Any] | list[Any] | None = None,
+        http_status: int | None = None,
     ) -> None:
         super().__init__(message=message, code=code, details=details)
+        # Plicul 233: codul HTTP al furnizorului, ca lanțul de motoare să deosebească 5xx
+        # de 4xx. Ținut numai ca atribut: NU intră în `details`, deci nu ajunge în răspuns.
+        self.http_status = http_status

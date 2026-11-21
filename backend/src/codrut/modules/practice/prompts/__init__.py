@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 # sesiunile de dinainte si de dupa nu se mai pot compara sub aceeasi versiune.
 # v3.11 — plicul 143 (codul ca eticheta, fara adresare), dupa 138 (codul in loc de nume) si 142
 # (fara functie). Sare peste v3.10, care a fost a candidatului 2 (vocea la Cody, scoasa la 137).
-CODY_PROMPT_VERSION = "v3.11"
+# v3.12 — plicul 228: paragraful „ești AI?” la finalul actor.md (hotărârea lui Andrei, 19 nov).
+CODY_PROMPT_VERSION = "v3.12"
 
 # Comanda care declanseaza pornirea, pusa ULTIMA in prompt — plicul 45.
 #
@@ -860,6 +861,51 @@ def punctajul_final(kind: str, ture: list[tuple[bool, bool, str]]) -> str:
             return "—"
         return f"{corecte} din {corecte + gresite} răspunsuri corecte"
     return "—"
+
+
+# Plicul 226, hotărârea din plicul 199: nota din rezumat o pune codul, nu modelul.
+# Banca din 18 nov (plicul 225, R02): aplicația dădea 6,5/10, iar rezumatul a scris 5,7/10,
+# recalculat de model. Deci, după răspunsul modelului, în Concluzie se șterg propozițiile cu o
+# notă și se adaugă la sfârșit propoziția cu punctajul socotit de `punctajul_final`.
+_NOTA_IN_PROZA = re.compile(r"\d+(?:[.,]\d+)?\s*/\s*10|\d+\s+din\s+\d+\s+răspunsuri\s+corecte")
+_SFARSIT_DE_PROPOZITIE = re.compile(r"(?<=[.!?…])\s+")
+
+
+def pune_punctajul_in_rezumat(text: str | None, punctaj: str) -> str | None:
+    """Înlocuiește nota scrisă de model în Concluzie cu punctajul calculat de cod.
+
+    Numai între „##Concluzie” și „##Recomandări” (sau, fără Recomandări, până la „---” ori
+    blocul ```json). Restul textului, inclusiv blocul JSON, rămâne octet cu octet. Când
+    punctajul e „—”, textul nu se atinge.
+    """
+    if not text or punctaj == "—":
+        return text
+    titlu = text.find("##Concluzie")
+    corp = titlu + len("##Concluzie") if titlu >= 0 else 0
+    sfarsit = text.find("##Recomandări", corp)
+    if sfarsit < 0:
+        capete = [p for p in (text.find("\n---", corp), text.find("```json", corp)) if p >= 0]
+        sfarsit = min(capete) if capete else len(text)
+
+    randuri: list[str] = []
+    for rand in text[corp:sfarsit].splitlines():
+        propozitii = [
+            p
+            for p in _SFARSIT_DE_PROPOZITIE.split(rand.strip())
+            if p and not _NOTA_IN_PROZA.search(p)
+        ]
+        if propozitii:
+            randuri.append(" ".join(propozitii))
+    linia = f"Punctajul final: {punctaj}."
+    if randuri:
+        randuri[-1] = f"{randuri[-1]} {linia}"
+    else:
+        randuri.append(linia)
+
+    concluzie = "\n\n".join(randuri)
+    cap = f"{text[:corp]}\n" if titlu >= 0 else ""
+    rest = text[sfarsit:].lstrip("\n")
+    return f"{cap}{concluzie}\n\n{rest}" if rest else f"{cap}{concluzie}\n"
 
 
 def get_summary_prompt(name: str, opt_text: str, history: str, punctaj: str = "—") -> str:

@@ -21,7 +21,7 @@ import json
 import logging
 import re
 import uuid
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 
 from sqlalchemy import select
@@ -47,6 +47,7 @@ from codrut.modules.practice.models import (
     TurnRole,
 )
 from codrut.modules.practice.pricing import estimate_pessimistic_cost
+from codrut.modules.practice.scoring import nivel_din_scor
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +143,50 @@ def _extract_json(text: str) -> dict | None:
     return None
 
 
+
+_SCOR_CA_TEXT = re.compile(r"\d+(\.\d+)?")
+
+
+def _numarul_citit(valoare) -> Decimal | None:
+    """O notă dată de model → `Decimal`, sau `None` dacă nu e o notă — plicurile 218, 223.
+
+    Cititorul comun al evaluatorului și al rezumatului de la închidere. Primește `int`, `float`
+    sau text numeric cu punct („85.5”). Refuză (`None`, nota se sare): `bool`, NaN, infinit,
+    negativul (număr sau text), numărul prea mare ca să fie rotunjit (1e28, 10**30, 40 de cifre),
+    „8/10”, „85,5”, golul, orice altceva.
+    """
+    if isinstance(valoare, bool):
+        return None
+    if isinstance(valoare, int):
+        text = str(valoare)
+    elif isinstance(valoare, float):
+        text = repr(valoare)
+    elif isinstance(valoare, str) and _SCOR_CA_TEXT.fullmatch(valoare.strip()):
+        text = valoare.strip()
+    else:
+        return None
+    try:
+        numar = Decimal(text)
+        if not numar.is_finite() or numar < 0:
+            return None
+        # uriaș = nu încape în precizia rotunjirii (plicul 223): sare, nu pierde tot răspunsul
+        numar.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    except InvalidOperation:
+        return None
+    return numar
+
+
+def _scorul_citit(valoare) -> int | None:
+    """Scorul dat de profesor → întreg, sau `None` dacă nu e un număr — plicul 218.
+
+    `_numarul_citit` + rotunjirea jumătății în sus (hotărârea din plicul 123), nu `round()`,
+    care rotunjește la par.
+    """
+    numar = _numarul_citit(valoare)
+    if numar is None:
+        return None
+    return int(numar.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
 class PracticeEvaluator:
     """Evalueaza o sesiune pe competentele proiectului si scrie ce a gasit."""
 
@@ -233,10 +278,14 @@ class PracticeEvaluator:
         try:
             rezultat = await self.generation_provider.generate(cerere)
         except Exception as err:
-            logger.warning("[EVALUATOR] chemarea a esuat: %s", err)
+            # numai tipul erorii: textul ei poate purta ce a scris omul — plicul 220
+            logger.warning(
+                "[EVALUATOR] chemarea a esuat: %s %s",
+                type(err).__name__, getattr(err, "code", ""),
+            )
             if rezervare_id is not None:
                 await release(self.session, rezervare_id)
-            return {"error": str(err)}
+            return {"error": type(err).__name__}
 
         if rezervare_id is not None:
             await settle(self.session, rezervare_id, actual_usd=rezultat.estimated_usd)
@@ -293,17 +342,30 @@ class PracticeEvaluator:
         for scor in date.get("scores") or []:
             if not isinstance(scor, dict) or not scor.get("evaluated"):
                 continue
-            valoare = scor.get("score")
-            nivel = scor.get("level")
             nume = scor.get("competency")
-            if valoare is None or nivel is None or not nume:
+            if not nume:
                 continue
+            # Plicul 218: un scor stricat sare numai nota lui, nu tot răspunsul (DEFECT-01);
+            # nivelul vine din scor, după regula din evaluator.md:12 (DEFECT-02, DEFECT-03).
+            valoare = _scorul_citit(scor.get("score"))
+            if valoare is None:
+                logger.warning(
+                    "practice_nota_sarita sesiune=%s competenta=%s motiv=scor_nevalid",
+                    session_id, nume,
+                )
+                continue
+            valoare = max(0, min(100, valoare))
+            nivel = nivel_din_scor(valoare)
+            if scor.get("level") != nivel:
+                logger.info(
+                    "practice_nivel_recalculat sesiune=%s competenta=%s", session_id, nume,
+                )
             self.session.add(CompetencyScore(
                 user_id=user_id,
                 project_id=project_id,
                 competency_id=None,
-                score=max(0, min(100, int(valoare))),
-                level=max(1, min(3, int(nivel))),
+                score=valoare,
+                level=nivel,
                 justification=scor.get("justification"),
                 conversation_id=str(session_id),
                 competency_name=str(nume),

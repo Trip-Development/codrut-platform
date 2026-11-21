@@ -33,7 +33,11 @@ from codrut.modules.practice.budget import (
     settle,
 )
 from codrut.modules.practice.conturi_test import e_cont_de_test
-from codrut.modules.practice.evaluator import sedinta_prea_scurta, text_sedinta_prea_scurta
+from codrut.modules.practice.evaluator import (
+    _numarul_citit,
+    sedinta_prea_scurta,
+    text_sedinta_prea_scurta,
+)
 from codrut.modules.practice.generation_provider import (
     GenerationProvider,
     build_generation_provider,
@@ -65,6 +69,7 @@ from codrut.modules.practice.quotas import (
     ensure_turn_length,
     is_session_turn_limit_reached,
 )
+from codrut.modules.practice.scoring import nivel_din_scor
 
 logger = logging.getLogger(__name__)
 
@@ -1262,10 +1267,10 @@ class PracticeSessionService:
 
             # 9. Invoke model generation provider
             logger.info(
-                "practice_generare sesiune=%s mesaje=%s ultima_replica_om=%r",
+                "practice_generare sesiune=%s mesaje=%s lungime_replica_om=%d",
                 session_id,
                 len(messages),
-                messages[-1].text[:80] if messages else "",
+                len(messages[-1].text) if messages else 0,
             )
             try:
                 if cerere_evaluator is None:
@@ -1438,7 +1443,11 @@ class PracticeSessionService:
                 speaker = cod if t.role == TurnRole.participant else "Cody"
                 history_lines.append(f"{speaker}: {t.text}")
             history_str = "\n\n".join(history_lines)
-            from codrut.modules.practice.prompts import get_summary_prompt, punctajul_final
+            from codrut.modules.practice.prompts import (
+                get_summary_prompt,
+                punctajul_final,
+                pune_punctajul_in_rezumat,
+            )
 
             # Plicul 199: punctajul final îl socotește codul, rezumatul doar îl trece.
             punctaj = punctajul_final(
@@ -1511,7 +1520,8 @@ class PracticeSessionService:
                 if peste_plafon:
                     raise _FaraEvaluare()
                 res = await self.generation_provider.generate(req)
-                summary_text = res.text
+                # plicul 226, hotărârea din plicul 199: nota din Concluzie o pune codul
+                summary_text = pune_punctajul_in_rezumat(res.text, punctaj)
                 if rezervare_id is not None:
                     await settle(self.session, rezervare_id, actual_usd=res.estimated_usd)
 
@@ -1521,6 +1531,13 @@ class PracticeSessionService:
                     try:
                         eval_data = json.loads(json_match.group(1))
                         scores_dict = eval_data.get("scores", {})
+                        if not isinstance(scores_dict, dict):
+                            # plicul 224: notele în alt format (listă, text, număr) se sar;
+                            # momentul și memoria se salvează mai departe
+                            logger.warning(
+                                "practice_nota_sarita sesiune=%s motiv=format", session_id,
+                            )
+                            scores_dict = {}
                         topic = eval_data.get("topic", "")
                         characters = eval_data.get("characters", [])
 
@@ -1530,28 +1547,36 @@ class PracticeSessionService:
                             "sbiFeedback": "Feedback Structurat (SBI)",
                             "conciseness": "Concizie și Echilibru",
                         }
+                        # plicul 223: același cititor ca evaluatorul; o notă ciudată (True,
+                        # NaN, infinit, negativă, uriașă) se sare singură, restul se salvează
+                        note_valide: dict[str, Decimal] = {}
                         for k, v in scores_dict.items():
-                            if isinstance(v, (int, float)):
-                                c_name = score_name_map.get(k, k)
-                                normalized_score = int(round(float(v) * 10))
-                                level = (
-                                    1 if normalized_score < 50
-                                    else (2 if normalized_score < 80 else 3)
+                            numar = _numarul_citit(v)
+                            c_name = score_name_map.get(k, k)
+                            if numar is None:
+                                logger.warning(
+                                    "practice_nota_sarita sesiune=%s competenta=%s "
+                                    "motiv=scor_nevalid", session_id, c_name,
                                 )
-                                cs = CompetencyScore(
-                                    user_id=profile.user_id or principal.user_id,
-                                    project_id=proiect_id,
-                                    score=min(100, max(0, normalized_score)),
-                                    level=level,
-                                    justification=(
-                                        f"Scor evaluat automat în modul "
-                                        f"{session_obj.kind.value}: {v}/10."
-                                    ),
-                                    conversation_id=str(session_id),
-                                    competency_name=c_name,
-                                    source_type="session",
-                                )
-                                self.session.add(cs)
+                                continue
+                            note_valide[k] = numar
+                            normalized_score = min(100, max(0, int(round(float(numar) * 10))))
+                            # plicul 218: aceeași regulă ca la evaluator (evaluator.md:12)
+                            level = nivel_din_scor(normalized_score)
+                            cs = CompetencyScore(
+                                user_id=profile.user_id or principal.user_id,
+                                project_id=proiect_id,
+                                score=normalized_score,
+                                level=level,
+                                justification=(
+                                    f"Scor evaluat automat în modul "
+                                    f"{session_obj.kind.value}: {v}/10."
+                                ),
+                                conversation_id=str(session_id),
+                                competency_name=c_name,
+                                source_type="session",
+                            )
+                            self.session.add(cs)
 
                         conclusion_part = (
                             summary_text.split("##Recomandări")[0]
@@ -1567,9 +1592,8 @@ class PracticeSessionService:
                         )
                         self.session.add(im)
 
-                        numeric_scores = [
-                            float(x) for x in scores_dict.values() if isinstance(x, (int, float))
-                        ]
+                        # media și semnalele, numai din notele valide (plicul 223)
+                        numeric_scores = [float(x) for x in note_valide.values()]
                         avg_score = (
                             int(round(sum(numeric_scores) / max(1, len(numeric_scores)) * 10))
                             if numeric_scores else 50
@@ -1581,7 +1605,10 @@ class PracticeSessionService:
                                 conclusion_part[:1000] if conclusion_part else summary_text[:1000]
                             ),
                             key_quotes=[],
-                            evolution_signals=scores_dict,
+                            evolution_signals={
+                                k: int(x) if x == x.to_integral_value() else float(x)
+                                for k, x in note_valide.items()
+                            },
                             personal_context={"topic": topic, "characters": characters},
                             relevant_competencies=list(score_name_map.values()),
                             source_type=session_obj.kind.value,
@@ -1600,8 +1627,10 @@ class PracticeSessionService:
                             user_obj.streak = (user_obj.streak or 0) + 1
 
                     except Exception as parse_err:
+                        # numai tipul erorii: textul ei poate purta date — plicul 223
                         logging.getLogger(__name__).warning(
-                            f"Failed to parse evaluation JSON in end_session: {parse_err}"
+                            "Failed to parse evaluation JSON in end_session: %s",
+                            type(parse_err).__name__,
                         )
                 else:
                     # Fara randul asta defectul e invizibil: raspunsul vine 200 OK,
@@ -1616,7 +1645,10 @@ class PracticeSessionService:
             except _FaraEvaluare:
                 summary_text = None
             except Exception as err:
-                logging.getLogger(__name__).warning(f"Failed to generate session summary: {err}")
+                # numai tipul erorii: textul ei poate purta date — plicul 224 (223 O2)
+                logging.getLogger(__name__).warning(
+                    "Failed to generate session summary: %s", type(err).__name__,
+                )
                 if rezervare_id is not None:
                     # Banii rezervati se dau inapoi daca apelul n-a avut loc — ca la
                     # `_prima_replica`. Altfel plafonul ar scadea pentru un apel care n-a fost.
@@ -1658,7 +1690,9 @@ class PracticeSessionService:
                 )
             except Exception as eval_err:
                 logging.getLogger(__name__).warning(
-                    f"Structural evaluation failed in end_session: {eval_err}"
+                    # numai tipul erorii — plicul 220
+                    "Structural evaluation failed in end_session: "
+                    f"{type(eval_err).__name__}"
                 )
 
         if session_obj.state != SessionState.closed:

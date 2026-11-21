@@ -38,6 +38,7 @@ from codrut.modules.practice.scoring import (
     COMPETENCY_LEVEL_COLORS,
     COMPETENCY_LEVEL_DESCRIPTIONS,
     compute_competency_evidence,
+    e_nota_de_role_play,
 )
 from codrut.modules.practice.setup_service import competency_names_for_project
 
@@ -129,10 +130,18 @@ class PracticeEvolutionService:
         nume_afisate = competente or sorted(pe_competenta)
         # plicul 165: aceleași reguli de punctaj; aici notele ÎNTREGII echipe, puse la un loc
         intrari_punctaj = await intrarile_de_punctaj(self.session, scoruri)
+        # Plicul 218 (DEFECT-04): media, numărul de note, seria pe săptămâni și tabelul oamenilor
+        # iau NUMAI notele care intră și în puncte — role-play (după ședință și după
+        # `source_type`). Quiz-ul, testele IN/OUT și ședințele de coaching nu intră.
+        numarate = {
+            s.id for s in scoruri
+            if s.id in intrari_punctaj and e_nota_de_role_play(s.source_type)
+        }
         evolutie = []
         for nume in nume_afisate:
             canonic = match_comp(nume)
             lst = pe_competenta.get(nume) or (pe_competenta.get(canonic, []) if canonic else [])
+            lst = [s for s in lst if s.id in numarate]
             # Plicul 166 D: întâi pe fiecare om, apoi adunat. Până acum regula „o notă pe zi” se
             # aplica echipei puse la un loc. Acum: punctele echipei = media punctelor oamenilor cu
             # cel puțin o notă la competența asta; nivelul echipei = nivelul omului median (ordonați
@@ -172,6 +181,8 @@ class PracticeEvolutionService:
         # --- media echipei, saptamana de saptamana (rd. 323-326) ---
         pe_saptamana: dict[date, list[int]] = defaultdict(list)
         for s in scoruri:
+            if s.id not in numarate:
+                continue
             zi = s.created_at.date()
             inceput = zi - timedelta(days=zi.weekday())
             pe_saptamana[inceput].append(s.score)
@@ -187,7 +198,8 @@ class PracticeEvolutionService:
         # --- tabelul cu oamenii (rd. 340) ---
         scoruri_pe_user: dict[uuid.UUID, list[CompetencyScore]] = defaultdict(list)
         for s in scoruri:
-            scoruri_pe_user[s.user_id].append(s)
+            if s.id in numarate:
+                scoruri_pe_user[s.user_id].append(s)
 
         oameni = []
         for profil, apartenenta in randuri:
