@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
@@ -16,12 +18,14 @@ from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.practice.acord import da_acordul, starea_acordului
 from codrut.modules.practice.dashboard_service import PracticeDashboardService
 from codrut.modules.practice.evolution_service import PracticeEvolutionService
+from codrut.modules.practice.generation_provider import build_generation_provider
 from codrut.modules.practice.objective_service import (
     alege,
     alegerea_mea,
     lista_obiectivelor,
 )
 from codrut.modules.practice.person_service import PracticePersonService
+from codrut.modules.practice.replica_zilei import starea_zilei, trimite_replica
 from codrut.modules.practice.room_service import (
     PracticeInvitationsService,
     PracticeRoomService,
@@ -30,6 +34,8 @@ from codrut.modules.practice.schemas import (
     PointsEarnedItem,
     PracticeConsentRequest,
     PracticeConsentResponse,
+    PracticeDailyReplyRequest,
+    PracticeDailyReplyResponse,
     PracticeDashboardResponse,
     PracticeEvolutionResponse,
     PracticeObjectiveChoiceResponse,
@@ -370,6 +376,45 @@ async def choose_practice_objective(
     stare = await alege(session, principal, project_id, payload.objective_id)
     await session.commit()
     return PracticeObjectiveChoiceResponse(**stare)
+
+
+# ---- „O replică pe zi” (plicul 236, L2-P1) ----
+# Numai ale omului, pentru el însuși: omul se caută ca la acord, cu aceleași verificări ca la
+# pornirea unei ședințe. Nicio rută de trainer/HR nu primește nimic despre replica zilei; în
+# jurnal nu se scrie nimic despre ea.
+
+
+@router.get("/projects/{project_id}/replica-zilei", response_model=PracticeDailyReplyResponse)
+async def get_daily_reply(
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeDailyReplyResponse:
+    """Situația zilei, replica de azi (dacă există) și seria."""
+    stare = await starea_zilei(session, principal, project_id, acum=datetime.now(UTC))
+    await session.commit()
+    return PracticeDailyReplyResponse(**stare)
+
+
+@router.post("/projects/{project_id}/replica-zilei", response_model=PracticeDailyReplyResponse)
+async def submit_daily_reply(
+    project_id: UUID,
+    payload: PracticeDailyReplyRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> PracticeDailyReplyResponse:
+    """Omul trimite replica zilei; profesorul de azi îi răspunde."""
+    redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        stare = await trimite_replica(
+            session, principal, project_id, payload.situation_id, payload.replica,
+            profesor=build_generation_provider(settings), settings=settings, redis=redis,
+            acum=datetime.now(UTC),
+        )
+    finally:
+        await redis.aclose()
+    return PracticeDailyReplyResponse(**stare)
 
 
 # ---- configurarea exersarii pe un proiect de training (plic 29, punctele 4 si 6) ----

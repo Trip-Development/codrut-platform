@@ -498,3 +498,34 @@ class PracticeObjectiveChoiceResponse(BaseModel):
     # pentru „săptămâna X din 8” (L1-P2)
     prima_alegere_la: datetime | None = None
     istoric: list[PracticeObjectiveHistoryItem] = Field(default_factory=list)
+
+
+# ---- „O replică pe zi” (plicul 236, L2-P1): numai ale omului, pentru el însuși ----
+
+
+class PracticeDailySituationItem(BaseModel):
+    id: UUID
+    text: str
+    obiectiv_nr: int
+    obiectiv_titlu: str
+
+
+class PracticeDailyReplyToday(BaseModel):
+    situatie_id: UUID
+    replica: str
+    raspuns: str
+    nota: float | None = None
+    trimisa_la: datetime
+
+
+class PracticeDailyReplyResponse(BaseModel):
+    situatie: PracticeDailySituationItem | None = None
+    motiv: Literal["fara_obiective", "fara_situatii"] | None = None
+    din_obiectivul_meu: bool = False
+    azi: PracticeDailyReplyToday | None = None
+    serie: int = 0
+
+
+class PracticeDailyReplyRequest(BaseModel):
+    situation_id: UUID
+    replica: str
