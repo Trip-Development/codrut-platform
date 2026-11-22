@@ -160,6 +160,9 @@ async def test_t5_apelul_anulat_tot_se_plateste_in_buget(monkeypatch) -> None:
         replica = await service.add_participant_turn(
             principal=ctx["principal"], session_id=sedinta.id, text="Replica omului."
         )
+        # plicul 247: nota vine în fundal — se așteaptă și se recitește rândul
+        await modul_service.asteapta_notele()
+        await session.refresh(replica)
 
         cerere = profesor.cereri_evaluator[-1]
         cuvinte = sum(len(m.text.split()) for m in cerere.messages) + len(

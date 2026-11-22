@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 
@@ -304,6 +304,8 @@ class PracticeTurn(TimestampMixin, Base):
     __tablename__ = "practice_turns"
     __table_args__ = (
         UniqueConstraint("session_id", "ordinal", name="uq_practice_turns_session_id_ordinal"),
+        # Plicul 247: numele final îl dă convenția — ck_practice_turns_evaluare_stare.
+        CheckConstraint("evaluare_stare IN ('vine','gata','lipsa')", name="evaluare_stare"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -346,6 +348,26 @@ class PracticeTurn(TimestampMixin, Base):
         index=True,
         nullable=False,
     )
+    # Plicul 247: NULL = drumul vechi; vine = nota e în lucru; gata = scrisă; lipsa = profesorul
+    # a căzut.
+    evaluare_stare: Mapped[str | None] = mapped_column(String(8), nullable=True)
+
+    @property
+    def evaluare_vine(self) -> bool:
+        """Nota e încă în lucru — numai cât e plauzibil s-o mai aștepte ecranul (plicul 247).
+
+        Un rând rămas „vine” după o repornire a serverului nu ține ecranul la nesfârșit: după
+        limita profesorului + 30 s, nu mai „vine”.
+        """
+        if self.evaluare_stare != "vine" or self.created_at is None:
+            return False
+        from codrut.core.config import get_settings
+
+        cat = get_settings().vertex_timeout_evaluator_replica_seconds + 30
+        creat = self.created_at
+        if creat.tzinfo is None:
+            creat = creat.replace(tzinfo=UTC)
+        return datetime.now(UTC) - creat < timedelta(seconds=cat)
 
 
 class PracticeOutcome(TimestampMixin, Base):

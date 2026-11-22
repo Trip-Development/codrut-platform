@@ -5372,6 +5372,11 @@ export interface components {
              */
             created_at: string;
             /**
+             * Evaluare Vine
+             * @default false
+             */
+            evaluare_vine: boolean;
+            /**
              * Id
              * Format: uuid
              */

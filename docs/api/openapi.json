@@ -9556,6 +9556,11 @@
             "title": "Created At",
             "type": "string"
           },
+          "evaluare_vine": {
+            "default": false,
+            "title": "Evaluare Vine",
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
