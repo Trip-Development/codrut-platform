@@ -98,7 +98,7 @@ describe("PracticeWorkspace — obiectivul", () => {
     fireEvent.click(await screen.findByText("Verificăm cât ai reținut"));
     fireEvent.click(await screen.findByRole("button", { name: "Exersează pe obiectiv" }));
     await waitFor(() => expect(api.startPracticeSession).toHaveBeenCalledTimes(1));
-    expect(api.startPracticeSession).toHaveBeenCalledWith({ projectId: "proiect-1", kind: "roleplay" });
+    expect(api.startPracticeSession).toHaveBeenCalledWith({ projectId: "proiect-1", kind: "roleplay", peObiectiv: true });
   });
 
   it("d. fără acord bifat butonul e oprit; după bifă, acordul se dă întâi", async () => {

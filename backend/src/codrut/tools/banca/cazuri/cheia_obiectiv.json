@@ -1,0 +1,25 @@
+{
+  "descriere": "Plicul 244 — CHEIA cazurilor pe obiectiv (propusă). Separată de cazuri: nu pleacă niciodată spre model. Pragul pe ele (propus: 3 din 3, cu O03-c 4 din 4) intră în SPEC-CODY/BANCA/PRAGURI.md NUMAI cu „da”-ul lui Andrei, în plicul de bancă următor (regula 10). Copia de citit: SPEC-CODY/BANCA/CHEIA.md, secțiunea „Pe obiectiv (plicul 244)”.",
+  "actor": {
+    "asteptat": "toate criteriile actorului de azi pe cele 4 replici; în plus setup-ul are „Obiectivul tău”, se încheie cu replica personajului („{personaj}:”) și conține cel puțin 2 din cele 3 `cuvinte_situatie` (fără deosebire de litere, ca început de cuvânt)",
+    "cuvinte_minim": 2,
+    "cazuri": [
+      "O01",
+      "O02"
+    ]
+  },
+  "profesor_replica": {
+    "O03-a": {
+      "asteptat": "bun",
+      "nota_minima": 8
+    },
+    "O03-b": {
+      "asteptat": "slab",
+      "nota_maxima": 5
+    },
+    "O03-c": {
+      "asteptat": "pas parțial, nu se penalizează",
+      "nota_minima": 7
+    }
+  }
+}

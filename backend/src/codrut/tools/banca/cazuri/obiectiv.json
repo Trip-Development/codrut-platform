@@ -1,0 +1,52 @@
+{
+  "descriere": "Plicul 244 — cazurile „pe obiectiv” (L1-P3). NU intră în FISIERE_CAZURI: --banca și --doar-actor rămân neschimbate (105 / 16 apeluri), ca etalonul 238 să rămână comparabil; rularea lor vine prin plicul de bancă următor (--obiectiv). Texte inventate, fără nume; `{personaj}` = numele dat de aplicație pentru `nr`. `obiectiv_nr` = numărul din obiective/comunicare-asertiva.json. La actor scena NU e fixă: banca lasă modelul să facă setup-ul din obiectiv (salutul fix → „Da, hai.” → setup-ul generat), fiindcă tocmai setup-ul pe obiectiv se măsoară. Ce e bun și ce e slab stă în cheia_obiectiv.json, nu aici.",
+  "salut": "Salut. Ești gata să începem un joc de rol?",
+  "actor": [
+    {
+      "id": "O01",
+      "tema": "Comunicare asertivă",
+      "obiectiv_nr": 1,
+      "nr": 1,
+      "cuvinte_situatie": [
+        "vineri",
+        "raport",
+        "urgent"
+      ],
+      "replici": [
+        "Înțeleg că e urgent. Azi la cinci nu-l mai pot începe; ți-l pot da luni la prânz.",
+        "Dacă trebuie neapărat, pot face acum doar partea cu cifrele, iar comentariile vin luni.",
+        "Atunci rămâne așa: cifrele luni la nouă, raportul întreg marți la prânz.",
+        "Mulțumesc. Îți scriu acum pe mail ce am stabilit."
+      ]
+    },
+    {
+      "id": "O02",
+      "tema": "Comunicare asertivă",
+      "obiectiv_nr": 8,
+      "nr": 2,
+      "cuvinte_situatie": [
+        "Excel",
+        "tabel",
+        "mâine"
+      ],
+      "replici": [
+        "Până mâine nu pot, am și eu termenul meu la ofertă.",
+        "Pot să-ți arăt în zece minute cum se face formula, apoi îl termini tu.",
+        "Nu, tabelul nu-l fac eu. Îți arăt azi la patru, dacă vrei.",
+        "Bine, ne vedem la patru la biroul meu."
+      ]
+    }
+  ],
+  "profesor_replica": [
+    {
+      "id": "O03",
+      "tema": "Comunicare asertivă",
+      "obiectiv_nr": 2,
+      "nr": 3,
+      "scena": "{personaj}: Raportul tău e neglijent. Mă întreb dacă ești potrivit pentru postul ăsta.",
+      "a": "Vreau să înțeleg exact ce n-a mers. Îmi dai două exemple din raport? Apoi îți propun până joi o variantă corectată și o verificăm împreună înainte de predare.",
+      "b": "Nu e corect ce spui. Am lucrat două săptămâni la el, am stat și seara, iar datele le-am primit târziu de la alții. Nu e vina mea.",
+      "c": "Îmi dai două exemple concrete din raport, ca să înțeleg ce să schimb?"
+    }
+  ]
+}

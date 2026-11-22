@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 # v3.11 — plicul 143 (codul ca eticheta, fara adresare), dupa 138 (codul in loc de nume) si 142
 # (fara functie). Sare peste v3.10, care a fost a candidatului 2 (vocea la Cody, scoasa la 137).
 # v3.12 — plicul 228: paragraful „ești AI?” la finalul actor.md (hotărârea lui Andrei, 19 nov).
-CODY_PROMPT_VERSION = "v3.12"
+# v3.13 — plicul 244: Cody pe obiectiv (hotărârea lui Andrei [l1-p3-text])
+CODY_PROMPT_VERSION = "v3.13"
 
 # Comanda care declanseaza pornirea, pusa ULTIMA in prompt — plicul 45.
 #
@@ -120,6 +121,15 @@ def bloc_de_distributie(profil_rol: dict[str, Any] | None, prenume: str = "") ->
     primeste o scena cu un coleg pierde putin, un om care nu conduce si e pus „manager
     de echipa" joaca o minciuna.
     """
+    return _directia_scenei(profil_rol, prenume) + bloc_de_nume(profil_rol, prenume)
+
+
+def _directia_scenei(profil_rol: dict[str, Any] | None, prenume: str = "") -> str:
+    """Rândul „DISTRIBUȚIA SCENEI…”, cu interdicția — prima jumătate a distribuției (plicul 244).
+
+    Pe obiectiv nu se trimite: cine e personajul reiese din situația obiectivului, iar rotația
+    „jos / lateral / sus / client” s-ar bate cap în cap cu ea.
+    """
     if not profil_rol:
         profil_rol = {}
     conduce = bool(profil_rol.get("conduce_oameni"))
@@ -136,10 +146,20 @@ def bloc_de_distributie(profil_rol: dict[str, Any] | None, prenume: str = "") ->
         else " INTERZIS să-l pui pe participant în poziție de manager sau de șef de "
         "echipă — nu conduce pe nimeni."
     )
-    nume = _numele_personajului(n, prenume)
     return (
         f"\nDISTRIBUȚIA SCENEI: {DIRECTII_SCENA[directie]}"
         f"{interdictia} Competența exersată rămâne aceeași; se schimbă doar cu cine."
+    )
+
+
+def bloc_de_nume(profil_rol: dict[str, Any] | None, prenume: str = "") -> str:
+    """Rândul „PERSONAJUL SE NUMEȘTE …” — a doua jumătate a distribuției (plicul 244).
+
+    Numele se alege ca până acum, după numărătoarea role-play-urilor omului.
+    """
+    n = int((profil_rol or {}).get("nr_roleplay_anterioare") or 0)
+    nume = _numele_personajului(n, prenume)
+    return (
         f"\nPERSONAJUL SE NUMEȘTE {nume}. Ăsta e numele lui în tot scenariul — în setup, "
         f"în etichetele replicilor și în dialog. Nu-i da alt nume și nu inventa altul."
     )
@@ -207,6 +227,40 @@ REGULI_GENERALE_TEMPLATE = (_PROMPTS_DIR / "reguli-generale.md").read_text(encod
 REGULI_COACHING_PROMPT = (_PROMPTS_DIR / "reguli-coaching.md").read_text(encoding="utf-8").strip()
 ACTOR_PROMPT = (_PROMPTS_DIR / "actor.md").read_text(encoding="utf-8").strip()
 EVALUARE_PROMPT = (_PROMPTS_DIR / "evaluare.md").read_text(encoding="utf-8").strip()
+# Plicul 244 (L1-P3): textele aprobate de Andrei ([l1-p3-text]), octet cu octet din fișă.
+OBIECTIV_ACTOR = (_PROMPTS_DIR / "obiectiv-actor.md").read_text(encoding="utf-8").strip()
+OBIECTIV_PROFESOR = (_PROMPTS_DIR / "obiectiv-profesor.md").read_text(encoding="utf-8").strip()
+_LOCURILE_OBIECTIVULUI = (
+    ("{titlu}", "titlu"),
+    ("{situatie}", "situatie"),
+    ("{semn_de_reusita}", "semn_de_reusita"),
+)
+
+
+def completeaza_obiectivul(sablon: str, obiectiv: dict[str, str]) -> str:
+    """Pune titlul, situația și semnul de reușită în șablon — plicul 244.
+
+    `str.replace`, nu `.format`: o acoladă din catalog nu strică nimic. Dacă rămâne vreun loc
+    necompletat, se oprește aici (`ValueError`), nu pleacă spre model.
+    """
+    rezultat = sablon
+    for semn, cheie in _LOCURILE_OBIECTIVULUI:
+        if cheie in obiectiv:
+            rezultat = rezultat.replace(semn, (obiectiv[cheie] or "").strip())
+    for semn, _ in _LOCURILE_OBIECTIVULUI:
+        if semn in rezultat:
+            raise ValueError(f"Obiectivul n-a completat {semn}.")
+    return rezultat
+
+
+def _blocurile_obiectivului(obiectiv: dict[str, str] | None) -> tuple[str, str]:
+    """`(bloc_actor, bloc_profesor)`; amândouă goale fără obiectiv."""
+    if obiectiv is None:
+        return "", ""
+    return (
+        "\n\n---\n" + completeaza_obiectivul(OBIECTIV_ACTOR, obiectiv),
+        "\n\n---\n" + completeaza_obiectivul(OBIECTIV_PROFESOR, obiectiv),
+    )
 
 # Promptul ACTORULUI la doua apeluri — plicul 119, partea B.
 #
@@ -544,6 +598,7 @@ def _bucatile_comune(
     history_length: int,
     profil_rol: dict[str, Any] | None,
     memories: list[dict[str, Any]] | None = None,
+    obiectiv: dict[str, str] | None = None,
 ) -> tuple[str, str, str]:
     """Bucatile pe care le folosesc si promptul de azi, si cele doua ale despartirii.
 
@@ -663,8 +718,12 @@ def _bucatile_comune(
         else ""
     )
     # Distributia se lipeste de comanda de pornire: acelasi moment, aceeasi pozitie.
+    # Plicul 244: pe obiectiv numai numele — cine e personajul reiese din situație.
     if comanda and kind_val == "roleplay":
-        comanda += bloc_de_distributie(profil_rol, prenume)
+        if obiectiv is None:
+            comanda += bloc_de_distributie(profil_rol, prenume)
+        else:
+            comanda += bloc_de_nume(profil_rol, prenume)
 
     return reguli_generale, memory_block, comanda
 
@@ -678,11 +737,15 @@ def get_system_prompt_for_kind(
     memories: list[dict[str, Any]] | None = None,
     biblioteca_path: str = "",
     profil_rol: dict[str, Any] | None = None,
+    obiectiv: dict[str, str] | None = None,
 ) -> str:
     material, _ = get_core_material(biblioteca_path)
     kind_val = kind.value if isinstance(kind, SessionKind) else str(kind)
+    # Plicul 244: obiectivul e numai al jocului de rol; quizul și strategia îl ignoră.
+    if kind_val != "roleplay":
+        obiectiv = None
     reguli_generale, memory_block, comanda = _bucatile_comune(
-        kind_val, name, history_length, profil_rol, memories
+        kind_val, name, history_length, profil_rol, memories, obiectiv
     )
     if kind_val == "roleplay":
         # Actorul si evaluarea merg impreuna, ca in aplicatia veche si ca in plicul 22:
@@ -697,9 +760,13 @@ def get_system_prompt_for_kind(
         # Grija ca actorul sa nu iasa din rol in mijlocul scenei e deja in textul
         # evaluarii („IESI COMPLET DIN ROL" dupa replica participantului), deci nu are
         # nevoie de un comutator in cod.
+        # Plicul 244: pe obiectiv, profesorul primește titlul și semnul după `evaluare.md`;
+        # personajul primește titlul și situația ultimele, numai la replica de confirmare.
+        bloc_actor, bloc_profesor = _blocurile_obiectivului(obiectiv)
         return (
             f"{material}\n\n---\n\n{reguli_generale}\n\n---\n\n"
-            f"{ACTOR_PROMPT}\n\n---\n\n{EVALUARE_PROMPT}{memory_block}{comanda}"
+            f"{ACTOR_PROMPT}\n\n---\n\n{EVALUARE_PROMPT}{bloc_profesor}{memory_block}{comanda}"
+            f"{bloc_actor if comanda else ''}"
         )
 
     elif kind_val == "knowledge":
@@ -774,6 +841,7 @@ def get_prompts_pe_meserii(
     biblioteca_path: str = "",
     profil_rol: dict[str, Any] | None = None,
     competenta_tinta: str | None = None,
+    obiectiv: dict[str, str] | None = None,
 ) -> tuple[str, str]:
     """Cele doua prompturi ale despartirii actor/evaluator — plicul 112, decizia 7.
 
@@ -787,8 +855,12 @@ def get_prompts_pe_meserii(
     metodelor (poarta 7). Se scrie in raport ca atare.
     """
     reguli_generale, memory_block, comanda = _bucatile_comune(
-        "roleplay", name, history_length, profil_rol, memories
+        "roleplay", name, history_length, profil_rol, memories, obiectiv
     )
+    # Plicul 244: pe obiectiv, obiectivul ține locul competenței țintă.
+    if obiectiv is not None:
+        competenta_tinta = None
+    bloc_actor, bloc_profesor = _blocurile_obiectivului(obiectiv)
 
     material_actor, _ = get_core_material(biblioteca_path, felie="actor")
     material_evaluator, _ = get_core_material(biblioteca_path, felie="evaluator")
@@ -800,10 +872,11 @@ def get_prompts_pe_meserii(
     prompt_actor = (
         f"{material_actor}\n\n---\n\n{reguli_generale}\n\n---\n\n"
         f"{ACTOR_PROMPT_DOUA_APELURI}{memory_block}{comanda}{regula_setupului}"
+        f"{bloc_actor if comanda else ''}"
     )
     prompt_evaluator = (
         f"{material_evaluator}\n\n---\n\n{reguli_generale}\n\n---\n\n"
-        f"{EVALUARE_PROMPT}{FARA_SCENA}"
+        f"{EVALUARE_PROMPT}{bloc_profesor}{FARA_SCENA}"
     )
     return prompt_actor, prompt_evaluator
 
