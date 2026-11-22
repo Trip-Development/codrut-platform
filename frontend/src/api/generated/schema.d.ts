@@ -1645,6 +1645,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/practice/projects/{project_id}/harta-echipei": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Harta Echipei
+         * @description Harta echipei pentru HR — numai cifre de grup, prag de 5 oameni (plicul 240).
+         */
+        get: operations["get_harta_echipei_api_practice_projects__project_id__harta_echipei_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/practice/projects/{project_id}/invitations": {
         parameters: {
             query?: never;
@@ -2854,6 +2874,13 @@ export interface components {
             /** Video Url */
             video_url?: string | null;
         };
+        /** Cifra */
+        Cifra: {
+            /** Motiv */
+            motiv: "prea_putini" | null;
+            /** Valoare */
+            valoare: number | null;
+        };
         /** CompanyAccessCodeCreateRequest */
         CompanyAccessCodeCreateRequest: {
             /** Label */
@@ -3572,6 +3599,69 @@ export interface components {
             scores_count: number;
             /** Week Start */
             week_start: string;
+        };
+        /** HartaCompetenta */
+        HartaCompetenta: {
+            acum: components["schemas"]["Cifra"];
+            inceput: components["schemas"]["Cifra"];
+            /** Nume */
+            nume: string;
+            oameni: components["schemas"]["Cifra"];
+        };
+        /** HartaEchipeiResponse */
+        HartaEchipeiResponse: {
+            au_exersat: components["schemas"]["Cifra"];
+            /**
+             * Calculat La
+             * Format: date-time
+             */
+            calculat_la: string;
+            cele_mai_slabe: components["schemas"]["HartaSlabe"];
+            /** Competente */
+            competente: components["schemas"]["HartaCompetenta"][];
+            invitati: components["schemas"]["Cifra"];
+            minute: components["schemas"]["Cifra"];
+            obiective: components["schemas"]["HartaObiective"];
+            /** Pe Saptamani */
+            pe_saptamani: components["schemas"]["HartaSaptamana"][];
+            /** Prag Oameni */
+            prag_oameni: number;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            sesiuni: components["schemas"]["Cifra"];
+        };
+        /** HartaObiectiv */
+        HartaObiectiv: {
+            /** Nr */
+            nr: number;
+            /** Oameni */
+            oameni: number;
+            /** Titlu */
+            titlu: string;
+        };
+        /** HartaObiective */
+        HartaObiective: {
+            /** Cele Mai Alese */
+            cele_mai_alese: components["schemas"]["HartaObiectiv"][];
+            /** Motiv */
+            motiv: ("prea_putini" | "fara_obiective") | null;
+            si_au_ales: components["schemas"]["Cifra"];
+        };
+        /** HartaSaptamana */
+        HartaSaptamana: {
+            au_exersat: components["schemas"]["Cifra"];
+            /** Saptamana */
+            saptamana: string;
+        };
+        /** HartaSlabe */
+        HartaSlabe: {
+            /** Motiv */
+            motiv: "prea_putini" | null;
+            /** Nume */
+            nume: string[] | null;
         };
         /** IcareAnswerReviewResponse */
         IcareAnswerReviewResponse: {
@@ -15377,6 +15467,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PracticeEvolutionResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_harta_echipei_api_practice_projects__project_id__harta_echipei_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HartaEchipeiResponse"];
                 };
             };
             /** @description Bad Request */
