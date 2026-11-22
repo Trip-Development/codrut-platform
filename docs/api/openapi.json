@@ -2557,6 +2557,42 @@
         "title": "CampaignUpdateRequest",
         "type": "object"
       },
+      "Cifra": {
+        "properties": {
+          "motiv": {
+            "anyOf": [
+              {
+                "const": "prea_putini",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motiv"
+          },
+          "valoare": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valoare"
+          }
+        },
+        "required": [
+          "valoare",
+          "motiv"
+        ],
+        "title": "Cifra",
+        "type": "object"
+      },
       "CompanyAccessCodeCreateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4668,6 +4704,208 @@
           "scores_count"
         ],
         "title": "EvolutionWeekPoint",
+        "type": "object"
+      },
+      "HartaCompetenta": {
+        "properties": {
+          "acum": {
+            "$ref": "#/components/schemas/Cifra"
+          },
+          "inceput": {
+            "$ref": "#/components/schemas/Cifra"
+          },
+          "nume": {
+            "title": "Nume",
+            "type": "string"
+          },
+          "oameni": {
+            "$ref": "#/components/schemas/Cifra"
+          }
+        },
+        "required": [
+          "nume",
+          "oameni",
+          "inceput",
+          "acum"
+        ],
+        "title": "HartaCompetenta",
+        "type": "object"
+      },
+      "HartaEchipeiResponse": {
+        "properties": {
+          "au_exersat": {
+            "$ref": "#/components/schemas/Cifra"
+          },
+          "calculat_la": {
+            "format": "date-time",
+            "title": "Calculat La",
+            "type": "string"
+          },
+          "cele_mai_slabe": {
+            "$ref": "#/components/schemas/HartaSlabe"
+          },
+          "competente": {
+            "items": {
+              "$ref": "#/components/schemas/HartaCompetenta"
+            },
+            "title": "Competente",
+            "type": "array"
+          },
+          "invitati": {
+            "$ref": "#/components/schemas/Cifra"
+          },
+          "minute": {
+            "$ref": "#/components/schemas/Cifra"
+          },
+          "obiective": {
+            "$ref": "#/components/schemas/HartaObiective"
+          },
+          "pe_saptamani": {
+            "items": {
+              "$ref": "#/components/schemas/HartaSaptamana"
+            },
+            "title": "Pe Saptamani",
+            "type": "array"
+          },
+          "prag_oameni": {
+            "title": "Prag Oameni",
+            "type": "integer"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "sesiuni": {
+            "$ref": "#/components/schemas/Cifra"
+          }
+        },
+        "required": [
+          "project_id",
+          "calculat_la",
+          "prag_oameni",
+          "invitati",
+          "au_exersat",
+          "pe_saptamani",
+          "sesiuni",
+          "minute",
+          "competente",
+          "cele_mai_slabe",
+          "obiective"
+        ],
+        "title": "HartaEchipeiResponse",
+        "type": "object"
+      },
+      "HartaObiectiv": {
+        "properties": {
+          "nr": {
+            "title": "Nr",
+            "type": "integer"
+          },
+          "oameni": {
+            "title": "Oameni",
+            "type": "integer"
+          },
+          "titlu": {
+            "title": "Titlu",
+            "type": "string"
+          }
+        },
+        "required": [
+          "nr",
+          "titlu",
+          "oameni"
+        ],
+        "title": "HartaObiectiv",
+        "type": "object"
+      },
+      "HartaObiective": {
+        "properties": {
+          "cele_mai_alese": {
+            "items": {
+              "$ref": "#/components/schemas/HartaObiectiv"
+            },
+            "title": "Cele Mai Alese",
+            "type": "array"
+          },
+          "motiv": {
+            "anyOf": [
+              {
+                "enum": [
+                  "prea_putini",
+                  "fara_obiective"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motiv"
+          },
+          "si_au_ales": {
+            "$ref": "#/components/schemas/Cifra"
+          }
+        },
+        "required": [
+          "si_au_ales",
+          "cele_mai_alese",
+          "motiv"
+        ],
+        "title": "HartaObiective",
+        "type": "object"
+      },
+      "HartaSaptamana": {
+        "properties": {
+          "au_exersat": {
+            "$ref": "#/components/schemas/Cifra"
+          },
+          "saptamana": {
+            "title": "Saptamana",
+            "type": "string"
+          }
+        },
+        "required": [
+          "saptamana",
+          "au_exersat"
+        ],
+        "title": "HartaSaptamana",
+        "type": "object"
+      },
+      "HartaSlabe": {
+        "properties": {
+          "motiv": {
+            "anyOf": [
+              {
+                "const": "prea_putini",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motiv"
+          },
+          "nume": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nume"
+          }
+        },
+        "required": [
+          "nume",
+          "motiv"
+        ],
+        "title": "HartaSlabe",
         "type": "object"
       },
       "IcareAnswerReviewResponse": {
@@ -23916,6 +24154,100 @@
           }
         },
         "summary": "Get Project Evolution",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/practice/projects/{project_id}/harta-echipei": {
+      "get": {
+        "description": "Harta echipei pentru HR \u2014 numai cifre de grup, prag de 5 oameni (plicul 240).",
+        "operationId": "get_harta_echipei_api_practice_projects__project_id__harta_echipei_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HartaEchipeiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Harta Echipei",
         "tags": [
           "practice"
         ]
