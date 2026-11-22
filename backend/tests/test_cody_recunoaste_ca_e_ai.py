@@ -34,5 +34,6 @@ def test_paragraful_ajunge_in_promptul_de_role_play() -> None:
 
 
 def test_paragraful_vine_ultimul_in_actor() -> None:
-    assert ACTOR_PROMPT.rstrip().endswith(PARAGRAF_AI)
-    assert ACTOR_PROMPT_DOUA_APELURI.rstrip().endswith(PARAGRAF_AI)
+    # Plicul 249: după paragraful 228 vine numai propoziția „după ce ai răspuns”.
+    assert ACTOR_PROMPT.rstrip().rsplit("\n\n", 1)[0].endswith(PARAGRAF_AI)
+    assert ACTOR_PROMPT_DOUA_APELURI.rstrip().rsplit("\n\n", 1)[0].endswith(PARAGRAF_AI)

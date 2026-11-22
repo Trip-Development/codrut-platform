@@ -72,6 +72,12 @@ from codrut.modules.practice.quotas import (
     ensure_turn_length,
     is_session_turn_limit_reached,
 )
+from codrut.modules.practice.replica_omului import (
+    contine_recunoasterea,
+    fara_recunoastere,
+    fara_regie,
+    sare_nota,
+)
 from codrut.modules.practice.scoring import nivel_din_scor
 
 logger = logging.getLogger(__name__)
@@ -521,6 +527,10 @@ class PracticeSessionService:
                     # judeca. Se pune deci inaintea replicii urmatoare a omului, pe rolul
                     # „user" si cu o eticheta: e vorba celuilalt din scena, nu a lui.
                     scena_in_asteptare = (getattr(t, "text_actor", None) or "").strip()
+                    if not continut and contine_recunoasterea(scena_in_asteptare):
+                        # Plicul 249: la rândul de recunoaștere profesorul n-a dat notă; scena
+                        # i se dă fără fraza „Sunt Cody…”, ca să nu răspundă și el la întrebare.
+                        scena_in_asteptare = fara_recunoastere(scena_in_asteptare)
             if (continut or "").strip():
                 mesaje.append(GenerationMessage(role="model", text=continut))
 
@@ -1401,15 +1411,30 @@ class PracticeSessionService:
 
             # Ordinea o pune aplicatia acum, nu modelul: personajul intai, evaluarea dupa.
             # `***` e acelasi despartitor pe care il scrie azi un singur apel.
-            text_final = result.text.strip() if doar_evaluatorul else result.text
+            # Plicul 249 (a): indicațiile de regie („*Revine în rol:*”) nu ajung la om.
+            text_final = result.text.strip() if doar_evaluatorul else fara_regie(result.text)
             doar_personajul = cerere_evaluator is not None or pornire_doar_actor
-            text_personaj = _fara_despartitor(result.text) if doar_personajul else None
-            if pornire_doar_actor:
+            text_personaj = (
+                _fara_despartitor(fara_regie(result.text)) if doar_personajul else None
+            )
+            # Plicul 249 (b): la „ești AI?” actorul a spus fraza aprobată — nota nu se arată,
+            # deci recunoașterea apare o singură dată. Profesorul a pornit deodată cu actorul
+            # (nu se putea ști înainte) și s-a plătit; nota lui nu se arată, nu se salvează.
+            recunoaste = cerere_evaluator is not None and sare_nota(text_personaj, text)
+            if recunoaste:
+                logger.info("practice_fara_nota_recunoastere sesiune=%s", session_id)
+                if sarcina_notei is not None:
+                    sarcina_notei.cancel()
+                    _NOTE_IN_LUCRU.add(sarcina_notei)
+                    sarcina_notei.add_done_callback(_NOTE_IN_LUCRU.discard)
+                    sarcina_notei = None
+                in_fundal = False
+            if pornire_doar_actor or recunoaste:
                 text_final = text_personaj
             if in_fundal:
                 # Plicul 247: numai personajul; nota se adaugă după, pe același rând.
                 text_final = text_personaj
-            elif cerere_evaluator is not None:
+            elif cerere_evaluator is not None and not recunoaste:
                 evaluarea = (
                     (rezultat_evaluator.text or "").strip()
                     if rezultat_evaluator is not None else ""
@@ -1433,6 +1458,7 @@ class PracticeSessionService:
                 text_evaluator=(
                     (rezultat_evaluator.text or "").strip()
                     if cerere_evaluator is not None and rezultat_evaluator is not None
+                    and not recunoaste
                     # la /feedback raspunsul E evaluarea, iar bucata actorului ramane goala
                     else (result.text or "").strip() if doar_evaluatorul
                     else None

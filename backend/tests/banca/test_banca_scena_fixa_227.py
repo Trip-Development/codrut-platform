@@ -80,8 +80,9 @@ async def test_scena_fixa_ajunge_la_actor_in_istoric() -> None:
 
 
 def test_apelurile_planificate_fara_salut_si_pornire() -> None:
-    assert rb.apeluri_planificate(False) == 12 * 4 + 39 + 14 + 4 == 105
-    assert rb.apeluri_planificate(True) == 16
+    # plicul 249: +1 — la „ești AI?” (A04) se cheamă și profesorul
+    assert rb.apeluri_planificate(False) == 12 * 4 + 1 + 39 + 14 + 4 == 106
+    assert rb.apeluri_planificate(True) == 16 + 1
 
 
 # --- 2. se_repeta: numai propoziția întreagă ------------------------------------------------------
@@ -158,7 +159,7 @@ def test_p12_a_nu_mai_cere_sa_vorbeasca_cu_seful() -> None:
 async def test_jurnalul_tine_costul_intreg_pe_fiecare_apel() -> None:
     verdict, randuri = await _ruleaza(rb.FurnizorFals("bun"))
     pasi = [p for r in randuri if r["tip"] == "sesiune" for p in r["pasi"]]
-    assert len(pasi) == 105
+    assert len(pasi) == 106
     assert all({"intrat", "iesit", "din_cache", "gandire", "model", "cost_usd"} <= set(p)
                for p in pasi)
     assert any(p["din_cache"] > 0 for p in pasi) and any(p["gandire"] > 0 for p in pasi)
@@ -168,7 +169,7 @@ async def test_jurnalul_tine_costul_intreg_pe_fiecare_apel() -> None:
 async def test_costul_maxim_se_socoteste_inainte() -> None:
     s = get_settings()
     maxim = await rb.cost_maxim(s, doar_actor=False)
-    assert maxim["apeluri"] == 105 and maxim["usd"] > 0
+    assert maxim["apeluri"] == 106 and maxim["usd"] > 0
     assert (await rb.cost_maxim(s, doar_actor=True))["usd"] < maxim["usd"]
 
 

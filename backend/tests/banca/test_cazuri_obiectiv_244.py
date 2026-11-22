@@ -57,5 +57,5 @@ def test_banca_de_azi_ramane_neschimbata() -> None:
     assert rb.FISIERE_CAZURI == (
         "actor.json", "profesor_replica.json", "inchidere.json", "rezumat.json",
     )
-    assert rb.apeluri_planificate(False) == 105
-    assert rb.apeluri_planificate(True) == 16
+    assert rb.apeluri_planificate(False) == 106  # plicul 249: +1 la A04
+    assert rb.apeluri_planificate(True) == 17

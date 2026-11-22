@@ -25,7 +25,9 @@ from codrut.modules.practice.prompts import (
 # pentru ambele drumuri; restul fișierului neschimbat.
 # Plicul 228, hotărârea lui Andrei din 19 nov: paragraful „ești AI?” adăugat la final, pentru
 # ambele drumuri; restul fișierului neschimbat.
-AMPRENTA_ACTOR_MD = "be596dc65db69f8b7cc36717ade414664a5b54c1b0d9ea6d3bf9eb6fa1e81cc4"
+# Plicul 249, hotărârea lui Andrei din 21 nov ([esti-ai-fara-glume]): propoziția „după ce ai
+# răspuns” adăugată la final, pentru ambele drumuri; restul fișierului neschimbat.
+AMPRENTA_ACTOR_MD = "e0bb998ce837bc24f51ca507cb9334aa1e2d3f581ed48f0d5ebc5c9b06cf43a4"
 
 CAP_VECHI = "Ești simultan actor și Cody-ca-profesor."
 CAP_NOU = "NU ești Cody-ca-profesor"

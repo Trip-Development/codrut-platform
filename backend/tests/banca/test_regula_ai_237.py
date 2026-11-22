@@ -126,7 +126,8 @@ async def test_unitatile_in_verdict_banca_intreaga() -> None:
 async def test_unitatile_in_verdict_doar_actor() -> None:
     verdict, randuri = await _ruleaza(doar_actor=True)
     assert {k: verdict[k] for k in ("intrat", "iesit", "din_cache", "gandire")} == _sume(randuri)
-    assert verdict["gandire"] == 0 and verdict["din_cache"] > 0
+    # plicul 249: singura gândire e a profesorului chemat la A04 (64, furnizorul fals)
+    assert verdict["gandire"] == 64 and verdict["din_cache"] > 0
 
 
 # --- codul de ieșire în verdict (§4) ------------------------------------------------------------

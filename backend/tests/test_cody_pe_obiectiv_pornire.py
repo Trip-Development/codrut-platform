@@ -98,8 +98,8 @@ async def test_cu_alegere_sesiunea_e_legata_de_alegerea_curenta() -> None:
         await _alege(client, ctx, ctx["obiective"][4])
         r = await _porneste(client, ctx, pe_obiectiv=True)
     assert r.status_code == 201, r.text
-    assert CODY_PROMPT_VERSION == "v3.13"
-    assert r.json()["prompt_version"] == "v3.13"
+    assert CODY_PROMPT_VERSION == "v3.14"
+    assert r.json()["prompt_version"] == "v3.14"
     assert "objective_id" not in r.json() and "pe_obiectiv" not in r.json()
     assert [o for _, o in await _sesiunile(ctx)] == [ctx["obiective"][4]]
 
