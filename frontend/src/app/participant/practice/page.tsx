@@ -14,6 +14,7 @@ import {
   type ParticipantRouteSearchParams,
 } from "../participant-context";
 import { PracticeWorkspace } from "./PracticeWorkspace";
+import { CartonasulReplicaZilei } from "../replica-zilei/CartonasulReplicaZilei";
 import { participantAccountContexts } from "../proiectele-contului";
 
 export default async function ParticipantPracticePage({
@@ -59,11 +60,19 @@ export default async function ParticipantPracticePage({
         />
       }
     >
-      <PracticeWorkspace
-        projectId={summary.projectId}
-        quizEnabled={quizEnabled}
-        obiectivHref={participantScopedHref("/participant/obiectiv", scopeParams)}
-      />
+      <>
+        {summary.projectId ? (
+          <CartonasulReplicaZilei
+            projectId={summary.projectId}
+            href={participantScopedHref("/participant/replica-zilei", scopeParams)}
+          />
+        ) : null}
+        <PracticeWorkspace
+          projectId={summary.projectId}
+          quizEnabled={quizEnabled}
+          obiectivHref={participantScopedHref("/participant/obiectiv", scopeParams)}
+        />
+      </>
     </AppShell>
   );
 }
