@@ -372,22 +372,30 @@ async def test_randul_salvat_si_nimic_altceva() -> None:
 
 
 @pytest.mark.asyncio
-async def test_proiect_numai_cu_contul_de_test_e_refuzat_de_buget() -> None:
-    """Comportament de azi, documentat: rezervarea replicii zilei n-are sesiune, deci nu
-    recunoaște contul de test (scutirea plicului 173 se sprijină pe sesiune), iar punga
-    proiectului fără conturile de test e 0. DATORIE înainte de L2-P2/L2-P3: rezervarea replicii
-    zilei recunoaște contul de test după profil (atinge `budget.py`, plic separat)."""
-    from codrut.modules.practice.budget import BudgetExceeded
+async def test_proiect_numai_cu_contul_de_test_primeste_replica_zilei() -> None:
+    """Plicul 250 a plătit datoria 236: contul de test se recunoaște după profil."""
     from codrut.modules.practice.conturi_test import CONTURI_DE_TEST
+    from test_buget_cont_de_test_replica_zilei import _curata
 
     async with SessionLocal() as session:
-        ctx = await proiect_legat(session)
-        adresa = sorted(CONTURI_DE_TEST)[0]
-        ctx["profile"].email = adresa
-        await session.flush()
-        principal = ctx["principal"].model_copy(update={"email": adresa})
-        await session.commit()
-        profesor = ProfesorFals()
-        with pytest.raises(BudgetExceeded):
+        await _curata(session)
+        try:
+            ctx = await proiect_legat(session)
+            adresa = sorted(CONTURI_DE_TEST)[0]
+            ctx["profile"].email = adresa
+            await session.flush()
+            principal = ctx["principal"].model_copy(update={"email": adresa})
+            await session.commit()
+            profesor = ProfesorFals()
             await trimite(session, ctx, profesor=profesor, principal=principal)
-        assert profesor.cereri == []
+            assert len(profesor.cereri) == 1
+            from codrut.modules.practice.models import PracticeDailyReply
+
+            replici = (await session.execute(
+                select(func.count(PracticeDailyReply.id))
+                .where(PracticeDailyReply.participant_profile_id == ctx["profile"].id)
+            )).scalar_one()
+            assert replici == 1
+        finally:
+            await session.rollback()
+            await _curata(session)

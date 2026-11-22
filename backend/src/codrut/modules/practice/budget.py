@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
@@ -14,6 +14,7 @@ from codrut.modules.identity.models import User
 from codrut.modules.practice.conturi_test import (
     CONTURI_DE_TEST,
     PLAFON_LUNAR_CONT_TEST_USD,
+    contul_de_test_al_profilului,
     contul_de_test_al_sedintei,
 )
 from codrut.modules.practice.models import (
@@ -69,6 +70,28 @@ def _sedintele_conturilor_de_test() -> Any:
     )
 
 
+def _profilurile_conturilor_de_test() -> Any:
+    """Id-urile profilurilor care sunt ale unui cont de test — plicul 250 (corecția 6).
+
+    Aceeași întâietate ca `contul_de_test_al_profilului`: contul legat al profilului, iar dacă
+    profilul nu e legat, adresa scrisă pe el. (Un profil legat de un cont obișnuit nu e de test,
+    chiar dacă pe profil e scrisă adresa de test.)
+    """
+    return (
+        select(ParticipantProfile.id)
+        .outerjoin(User, User.id == ParticipantProfile.user_id)
+        .where(
+            or_(
+                func.lower(User.email).in_(CONTURI_DE_TEST),
+                and_(
+                    ParticipantProfile.user_id.is_(None),
+                    func.lower(ParticipantProfile.email).in_(CONTURI_DE_TEST),
+                ),
+            )
+        )
+    )
+
+
 async def plafonul_programului(
     session: AsyncSession,
     program_settings: PracticeProgramSettings,
@@ -108,7 +131,13 @@ async def _cheltuit_de_contul_de_test_luna_asta(session: AsyncSession) -> Decima
     return (
         await session.execute(
             select(func.coalesce(func.sum(_cheltuiala()), Decimal("0.0000"))).where(
-                PracticeBudgetReservation.session_id.in_(_sedintele_conturilor_de_test()),
+                or_(
+                    PracticeBudgetReservation.session_id.in_(_sedintele_conturilor_de_test()),
+                    # plicul 250: și replica zilei a contului de test, care n-are ședință
+                    PracticeBudgetReservation.participant_profile_id.in_(
+                        _profilurile_conturilor_de_test()
+                    ),
+                ),
                 PracticeBudgetReservation.created_at >= inceputul_lunii,
             )
         )
@@ -121,6 +150,8 @@ async def reserve(
     estimated_usd: Decimal,
     cap_usd: Decimal,
     session_id: uuid.UUID | None = None,
+    *,
+    participant_profile_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
     """Reserve budget for a practice generation call before execution.
 
@@ -132,6 +163,9 @@ async def reserve(
 
     # Contul de test (plicul 173): nu atinge punga proiectului, are frana lui lunara.
     adresa_de_test = await contul_de_test_al_sedintei(session, session_id)
+    if adresa_de_test is None and session_id is None:
+        # Plicul 250: fără ședință (replica zilei), contul de test se recunoaște după profil.
+        adresa_de_test = await contul_de_test_al_profilului(session, participant_profile_id)
     if adresa_de_test is not None:
         cheltuit_luna: Decimal = await _cheltuit_de_contul_de_test_luna_asta(session)
         if cheltuit_luna + estimated_usd > PLAFON_LUNAR_CONT_TEST_USD:
@@ -149,13 +183,22 @@ async def reserve(
             )
     else:
         # Punga proiectului, FARA ce au consumat conturile de test. Rezervarile fara
-        # `session_id` raman numarate: nu se stie al cui e consumul lor.
+        # `session_id` raman numarate: nu se stie al cui e consumul lor — afară de cele ale
+        # unui profil de test (plicul 250).
         sum_stmt = select(func.coalesce(func.sum(spending_expr), Decimal("0.0000"))).where(
             PracticeBudgetReservation.program_settings_id == program_settings_id,
             or_(
                 PracticeBudgetReservation.session_id.is_(None),
                 PracticeBudgetReservation.session_id.not_in(
                     _sedintele_conturilor_de_test()
+                ),
+            ),
+            # Capcana lui NULL: fără `is_(None)`, `NOT IN` dă NULL pe rândurile fără profil și
+            # punga ar părea goală.
+            or_(
+                PracticeBudgetReservation.participant_profile_id.is_(None),
+                PracticeBudgetReservation.participant_profile_id.not_in(
+                    _profilurile_conturilor_de_test()
                 ),
             ),
         )
@@ -176,6 +219,7 @@ async def reserve(
     reservation = PracticeBudgetReservation(
         program_settings_id=program_settings_id,
         session_id=session_id,
+        participant_profile_id=participant_profile_id,
         reserved_usd=estimated_usd,
         state=BudgetReservationState.reserved,
     )

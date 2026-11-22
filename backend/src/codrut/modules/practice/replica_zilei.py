@@ -378,6 +378,7 @@ async def trimite_replica(
             estimated_usd=estimare,
             cap_usd=await plafonul_programului(session, setari),
             session_id=None,
+            participant_profile_id=profil_id,
         )
         await session.commit()
 
