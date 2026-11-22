@@ -9,7 +9,6 @@ from pathlib import Path
 from sqlalchemy import select
 
 from codrut.core.database import SessionLocal
-from codrut.core.security import hash_password
 from codrut.modules.companies.models import (
     Company,
     CompanyProject,
@@ -17,7 +16,12 @@ from codrut.modules.companies.models import (
     ParticipantProfile,
     ProjectMembership,
 )
-from codrut.modules.identity.models import User, UserAccountType, UserRole
+from codrut.modules.identity.models import (
+    SHADOW_ACCOUNT_PASSWORD_HASH,
+    User,
+    UserAccountType,
+    UserRole,
+)
 from codrut.modules.practice.models import (
     CompetencyScore,
     CompetencyTemplate,
@@ -208,7 +212,9 @@ async def import_supabase_archive() -> dict[str, int]:
             if not user_obj:
                 user_obj = User(
                     email=email,
-                    password_hash=hash_password("ArhivaSupabase2026!"),
+                    # Plicul 254: fără parolă. Omul își pune parola prin invitație sau
+                    # „Am uitat parola”; nicio parolă nu se scrie în cod.
+                    password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
                     role=UserRole.trainer if u.get("role") == "admin" else UserRole.participant,
                     account_type=UserAccountType.registered,
                     xp=u.get("xp", 0) or 0,
