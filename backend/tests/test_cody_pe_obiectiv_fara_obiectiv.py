@@ -5,6 +5,10 @@ Amprentele de mai jos (`AMPRENTE`) au fost calculate pe baza `9d3ea9c` (vârful 
 generatorul `_cazurile` din acest fișier. Chemarea fără argumentul nou și chemarea cu
 `obiectiv=None` trebuie să dea exact aceleași șiruri.
 
+Plicul 249 a schimbat NUMAI amprentele ieșirilor care conțin `actor.md` (90 din 219 și cele 8
+cereri de actor pe serviciu; `.audit/cody-plic249/raw/A0-amprente.txt`): propoziția aprobată de
+Andrei [esti-ai-fara-glume], la finalul lui `actor.md`.
+
 Pe serviciu: o sesiune pornită fără `pe_obiectiv` (salut → „Da, hai.” → 2 replici, pe ambele
 drumuri) nu trimite nimic din textele obiectivului, iar competența țintă (plicul 165) se
 calculează ca azi.
@@ -100,65 +104,65 @@ def _cazurile(**extra) -> list[tuple[str, str]]:
 # --- A0, baza 9d3ea9c (lipite din raw/A0-amprente-azi.txt) ---
 AMPRENTE: dict[str, str] = {
     "sys|roleplay|0|fara|gol":
-        "e550a584d06531414ed9444442748e6bc548225f70fc9198bade3b7711a852ad",
+        "1c8501b47a5347931bfd182d47d2f90282a419ec8d02feb07ad66888991fece6",
     "sys|roleplay|0|fara|conduce":
-        "e550a584d06531414ed9444442748e6bc548225f70fc9198bade3b7711a852ad",
+        "1c8501b47a5347931bfd182d47d2f90282a419ec8d02feb07ad66888991fece6",
     "sys|roleplay|0|fara|nu_conduce":
-        "e550a584d06531414ed9444442748e6bc548225f70fc9198bade3b7711a852ad",
+        "1c8501b47a5347931bfd182d47d2f90282a419ec8d02feb07ad66888991fece6",
     "sys|roleplay|0|cu|gol":
-        "b5fec8b9bb7c49de9ceb7037d4aa0b36ff4b2e664320182a9dfe93f5150b9ef0",
+        "2662a99a809b1b12d62409f9db3e035a9a8f1695beec37cbed7ed6190825d0e4",
     "sys|roleplay|0|cu|conduce":
-        "b5fec8b9bb7c49de9ceb7037d4aa0b36ff4b2e664320182a9dfe93f5150b9ef0",
+        "2662a99a809b1b12d62409f9db3e035a9a8f1695beec37cbed7ed6190825d0e4",
     "sys|roleplay|0|cu|nu_conduce":
-        "b5fec8b9bb7c49de9ceb7037d4aa0b36ff4b2e664320182a9dfe93f5150b9ef0",
+        "2662a99a809b1b12d62409f9db3e035a9a8f1695beec37cbed7ed6190825d0e4",
     "sys|roleplay|1|fara|gol":
-        "e550a584d06531414ed9444442748e6bc548225f70fc9198bade3b7711a852ad",
+        "1c8501b47a5347931bfd182d47d2f90282a419ec8d02feb07ad66888991fece6",
     "sys|roleplay|1|fara|conduce":
-        "e550a584d06531414ed9444442748e6bc548225f70fc9198bade3b7711a852ad",
+        "1c8501b47a5347931bfd182d47d2f90282a419ec8d02feb07ad66888991fece6",
     "sys|roleplay|1|fara|nu_conduce":
-        "e550a584d06531414ed9444442748e6bc548225f70fc9198bade3b7711a852ad",
+        "1c8501b47a5347931bfd182d47d2f90282a419ec8d02feb07ad66888991fece6",
     "sys|roleplay|1|cu|gol":
-        "b5fec8b9bb7c49de9ceb7037d4aa0b36ff4b2e664320182a9dfe93f5150b9ef0",
+        "2662a99a809b1b12d62409f9db3e035a9a8f1695beec37cbed7ed6190825d0e4",
     "sys|roleplay|1|cu|conduce":
-        "b5fec8b9bb7c49de9ceb7037d4aa0b36ff4b2e664320182a9dfe93f5150b9ef0",
+        "2662a99a809b1b12d62409f9db3e035a9a8f1695beec37cbed7ed6190825d0e4",
     "sys|roleplay|1|cu|nu_conduce":
-        "b5fec8b9bb7c49de9ceb7037d4aa0b36ff4b2e664320182a9dfe93f5150b9ef0",
+        "2662a99a809b1b12d62409f9db3e035a9a8f1695beec37cbed7ed6190825d0e4",
     "sys|roleplay|2|fara|gol":
-        "7e291c97739c0000780a9690ed6b1474aa96dab0402c1670f8fcf8dec41c9088",
+        "31aecf2a2748de9dabde3dbc83e1b3632312b71c8c18ac094acdd4baf017c9a7",
     "sys|roleplay|2|fara|conduce":
-        "cbc7e65748f2342213cda6dbea53b73a790be1364b9d8904586bd3d3ef8b5752",
+        "f1b61fbc69a6616751c7edf650f0c8eeb29d8c40bf1da51c612f753a45ff5aa0",
     "sys|roleplay|2|fara|nu_conduce":
-        "183bfa858c49e7c3168f635ca2ffeb6cb7d50ef8f844fa1135a6ce7c12a48efe",
+        "f832ef2e85bbab1074f7425d6d502628deb787f82bd59bcb6c8887b3304c2a9d",
     "sys|roleplay|2|cu|gol":
-        "7ab4d34feb423f9cefb6314b8bc4945b7a096b76f3522881c52da1707b9af5e6",
+        "29dfc8e3b5de1959f6ca20e67d5806769cbe7788ec1e8ada7adca9fb4a65b158",
     "sys|roleplay|2|cu|conduce":
-        "3b40df191dc15fef1bc4810a114ce8b34c2298d6ebab6e0a1f853065275eda77",
+        "af7b7c4158af516f9844d64dc1111f56aac53c066264dbb268ddf15e2018acb7",
     "sys|roleplay|2|cu|nu_conduce":
-        "9dd591d9a8b4e842712f43857374f3bf29d44e6e6c00c3d238c6cdd9805c2992",
+        "3d7a4ab0f16af2243d9beccca9e7aaf1311890ac43b5c70bbf933d56cdff2027",
     "sys|roleplay|3|fara|gol":
-        "45035da1e6944758cd872b3b446535e54702e05a4136befa996d6ecc8843171c",
+        "eed719b43b7a5c412ba2ab353f145e18e7f98312d250b7b941fa971d75d63104",
     "sys|roleplay|3|fara|conduce":
-        "45035da1e6944758cd872b3b446535e54702e05a4136befa996d6ecc8843171c",
+        "eed719b43b7a5c412ba2ab353f145e18e7f98312d250b7b941fa971d75d63104",
     "sys|roleplay|3|fara|nu_conduce":
-        "45035da1e6944758cd872b3b446535e54702e05a4136befa996d6ecc8843171c",
+        "eed719b43b7a5c412ba2ab353f145e18e7f98312d250b7b941fa971d75d63104",
     "sys|roleplay|3|cu|gol":
-        "45035da1e6944758cd872b3b446535e54702e05a4136befa996d6ecc8843171c",
+        "eed719b43b7a5c412ba2ab353f145e18e7f98312d250b7b941fa971d75d63104",
     "sys|roleplay|3|cu|conduce":
-        "45035da1e6944758cd872b3b446535e54702e05a4136befa996d6ecc8843171c",
+        "eed719b43b7a5c412ba2ab353f145e18e7f98312d250b7b941fa971d75d63104",
     "sys|roleplay|3|cu|nu_conduce":
-        "45035da1e6944758cd872b3b446535e54702e05a4136befa996d6ecc8843171c",
+        "eed719b43b7a5c412ba2ab353f145e18e7f98312d250b7b941fa971d75d63104",
     "sys|roleplay|4|fara|gol":
-        "45035da1e6944758cd872b3b446535e54702e05a4136befa996d6ecc8843171c",
+        "eed719b43b7a5c412ba2ab353f145e18e7f98312d250b7b941fa971d75d63104",
     "sys|roleplay|4|fara|conduce":
-        "45035da1e6944758cd872b3b446535e54702e05a4136befa996d6ecc8843171c",
+        "eed719b43b7a5c412ba2ab353f145e18e7f98312d250b7b941fa971d75d63104",
     "sys|roleplay|4|fara|nu_conduce":
-        "45035da1e6944758cd872b3b446535e54702e05a4136befa996d6ecc8843171c",
+        "eed719b43b7a5c412ba2ab353f145e18e7f98312d250b7b941fa971d75d63104",
     "sys|roleplay|4|cu|gol":
-        "45035da1e6944758cd872b3b446535e54702e05a4136befa996d6ecc8843171c",
+        "eed719b43b7a5c412ba2ab353f145e18e7f98312d250b7b941fa971d75d63104",
     "sys|roleplay|4|cu|conduce":
-        "45035da1e6944758cd872b3b446535e54702e05a4136befa996d6ecc8843171c",
+        "eed719b43b7a5c412ba2ab353f145e18e7f98312d250b7b941fa971d75d63104",
     "sys|roleplay|4|cu|nu_conduce":
-        "45035da1e6944758cd872b3b446535e54702e05a4136befa996d6ecc8843171c",
+        "eed719b43b7a5c412ba2ab353f145e18e7f98312d250b7b941fa971d75d63104",
     "sys|knowledge|0|fara|gol":
         "e2a6e10b9915e1287c7682220c15d805fb433aa54c1ffcb2d7317f8847163b55",
     "sys|knowledge|0|fara|conduce":
@@ -280,243 +284,243 @@ AMPRENTE: dict[str, str] = {
     "sys|coaching|4|cu|nu_conduce":
         "9df266d4d0148f2d22055a3ccf5e6a51874357fe19b01f32c7ee1e5a9f6026c1",
     "actor|0|fara|fara|gol":
-        "f8c6253cd258bd5c51192efd4d41ff7caab3c732dc863ab2e88a2125f29c137b",
+        "2f2e6d6e341e75eb3bee1f5dd4430fb8ffcfecd7e927239deb03413edb79e12a",
     "profesor|0|fara|fara|gol":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|0|fara|fara|conduce":
-        "f8c6253cd258bd5c51192efd4d41ff7caab3c732dc863ab2e88a2125f29c137b",
+        "2f2e6d6e341e75eb3bee1f5dd4430fb8ffcfecd7e927239deb03413edb79e12a",
     "profesor|0|fara|fara|conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|0|fara|fara|nu_conduce":
-        "f8c6253cd258bd5c51192efd4d41ff7caab3c732dc863ab2e88a2125f29c137b",
+        "2f2e6d6e341e75eb3bee1f5dd4430fb8ffcfecd7e927239deb03413edb79e12a",
     "profesor|0|fara|fara|nu_conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|0|fara|ascultare|gol":
-        "f8c6253cd258bd5c51192efd4d41ff7caab3c732dc863ab2e88a2125f29c137b",
+        "2f2e6d6e341e75eb3bee1f5dd4430fb8ffcfecd7e927239deb03413edb79e12a",
     "profesor|0|fara|ascultare|gol":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|0|fara|ascultare|conduce":
-        "f8c6253cd258bd5c51192efd4d41ff7caab3c732dc863ab2e88a2125f29c137b",
+        "2f2e6d6e341e75eb3bee1f5dd4430fb8ffcfecd7e927239deb03413edb79e12a",
     "profesor|0|fara|ascultare|conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|0|fara|ascultare|nu_conduce":
-        "f8c6253cd258bd5c51192efd4d41ff7caab3c732dc863ab2e88a2125f29c137b",
+        "2f2e6d6e341e75eb3bee1f5dd4430fb8ffcfecd7e927239deb03413edb79e12a",
     "profesor|0|fara|ascultare|nu_conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|0|cu|fara|gol":
-        "3d969bb2aa19060f6beb063d3b9cc02a05508180cb91dc174e01de730fb24740",
+        "b4f962baf65c6a22e69573781d9ef9abeba08709375d39bc87a10502ff1ebb82",
     "profesor|0|cu|fara|gol":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|0|cu|fara|conduce":
-        "3d969bb2aa19060f6beb063d3b9cc02a05508180cb91dc174e01de730fb24740",
+        "b4f962baf65c6a22e69573781d9ef9abeba08709375d39bc87a10502ff1ebb82",
     "profesor|0|cu|fara|conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|0|cu|fara|nu_conduce":
-        "3d969bb2aa19060f6beb063d3b9cc02a05508180cb91dc174e01de730fb24740",
+        "b4f962baf65c6a22e69573781d9ef9abeba08709375d39bc87a10502ff1ebb82",
     "profesor|0|cu|fara|nu_conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|0|cu|ascultare|gol":
-        "3d969bb2aa19060f6beb063d3b9cc02a05508180cb91dc174e01de730fb24740",
+        "b4f962baf65c6a22e69573781d9ef9abeba08709375d39bc87a10502ff1ebb82",
     "profesor|0|cu|ascultare|gol":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|0|cu|ascultare|conduce":
-        "3d969bb2aa19060f6beb063d3b9cc02a05508180cb91dc174e01de730fb24740",
+        "b4f962baf65c6a22e69573781d9ef9abeba08709375d39bc87a10502ff1ebb82",
     "profesor|0|cu|ascultare|conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|0|cu|ascultare|nu_conduce":
-        "3d969bb2aa19060f6beb063d3b9cc02a05508180cb91dc174e01de730fb24740",
+        "b4f962baf65c6a22e69573781d9ef9abeba08709375d39bc87a10502ff1ebb82",
     "profesor|0|cu|ascultare|nu_conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|1|fara|fara|gol":
-        "f8c6253cd258bd5c51192efd4d41ff7caab3c732dc863ab2e88a2125f29c137b",
+        "2f2e6d6e341e75eb3bee1f5dd4430fb8ffcfecd7e927239deb03413edb79e12a",
     "profesor|1|fara|fara|gol":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|1|fara|fara|conduce":
-        "f8c6253cd258bd5c51192efd4d41ff7caab3c732dc863ab2e88a2125f29c137b",
+        "2f2e6d6e341e75eb3bee1f5dd4430fb8ffcfecd7e927239deb03413edb79e12a",
     "profesor|1|fara|fara|conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|1|fara|fara|nu_conduce":
-        "f8c6253cd258bd5c51192efd4d41ff7caab3c732dc863ab2e88a2125f29c137b",
+        "2f2e6d6e341e75eb3bee1f5dd4430fb8ffcfecd7e927239deb03413edb79e12a",
     "profesor|1|fara|fara|nu_conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|1|fara|ascultare|gol":
-        "f8c6253cd258bd5c51192efd4d41ff7caab3c732dc863ab2e88a2125f29c137b",
+        "2f2e6d6e341e75eb3bee1f5dd4430fb8ffcfecd7e927239deb03413edb79e12a",
     "profesor|1|fara|ascultare|gol":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|1|fara|ascultare|conduce":
-        "f8c6253cd258bd5c51192efd4d41ff7caab3c732dc863ab2e88a2125f29c137b",
+        "2f2e6d6e341e75eb3bee1f5dd4430fb8ffcfecd7e927239deb03413edb79e12a",
     "profesor|1|fara|ascultare|conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|1|fara|ascultare|nu_conduce":
-        "f8c6253cd258bd5c51192efd4d41ff7caab3c732dc863ab2e88a2125f29c137b",
+        "2f2e6d6e341e75eb3bee1f5dd4430fb8ffcfecd7e927239deb03413edb79e12a",
     "profesor|1|fara|ascultare|nu_conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|1|cu|fara|gol":
-        "3d969bb2aa19060f6beb063d3b9cc02a05508180cb91dc174e01de730fb24740",
+        "b4f962baf65c6a22e69573781d9ef9abeba08709375d39bc87a10502ff1ebb82",
     "profesor|1|cu|fara|gol":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|1|cu|fara|conduce":
-        "3d969bb2aa19060f6beb063d3b9cc02a05508180cb91dc174e01de730fb24740",
+        "b4f962baf65c6a22e69573781d9ef9abeba08709375d39bc87a10502ff1ebb82",
     "profesor|1|cu|fara|conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|1|cu|fara|nu_conduce":
-        "3d969bb2aa19060f6beb063d3b9cc02a05508180cb91dc174e01de730fb24740",
+        "b4f962baf65c6a22e69573781d9ef9abeba08709375d39bc87a10502ff1ebb82",
     "profesor|1|cu|fara|nu_conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|1|cu|ascultare|gol":
-        "3d969bb2aa19060f6beb063d3b9cc02a05508180cb91dc174e01de730fb24740",
+        "b4f962baf65c6a22e69573781d9ef9abeba08709375d39bc87a10502ff1ebb82",
     "profesor|1|cu|ascultare|gol":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|1|cu|ascultare|conduce":
-        "3d969bb2aa19060f6beb063d3b9cc02a05508180cb91dc174e01de730fb24740",
+        "b4f962baf65c6a22e69573781d9ef9abeba08709375d39bc87a10502ff1ebb82",
     "profesor|1|cu|ascultare|conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|1|cu|ascultare|nu_conduce":
-        "3d969bb2aa19060f6beb063d3b9cc02a05508180cb91dc174e01de730fb24740",
+        "b4f962baf65c6a22e69573781d9ef9abeba08709375d39bc87a10502ff1ebb82",
     "profesor|1|cu|ascultare|nu_conduce":
         "3d36203e6d7261c7e0333d8e369bddd0b5105efc03881c81642d38afd00d5481",
     "actor|2|fara|fara|gol":
-        "880ec76326fb122fc5badd0e4235e1dbee1b3476c0cd723bf63365abfd9b4cdd",
+        "49dc4bc010bc27b8134815ed9cbf24ca231e6bda5d5623da459a32db8f721927",
     "profesor|2|fara|fara|gol":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|2|fara|fara|conduce":
-        "faec94ff571212628ff217f636a897c7eac2d57c4d4a9126ba7e94f952426344",
+        "cc528aed982ae98768f18a5c0c081e62d68d690956c25701010fdc354741ceba",
     "profesor|2|fara|fara|conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|2|fara|fara|nu_conduce":
-        "b5a88547d86b829842d5948754a6cf3a3d4d942f31b15dd7096bc93c0fbb2f76",
+        "3ec5840227117f81e6ac6f5eb48555e7daed9e7cdf25e1bc40b2604d9e90baad",
     "profesor|2|fara|fara|nu_conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|2|fara|ascultare|gol":
-        "1c5d28f552a2aec2ee79ca730454dc51fe4050b650f24dce120694194e78087c",
+        "57baf98bf7d9ebf0acf93784ba4f61b5d886206ba8d0a614c1c099e5a3fa7a94",
     "profesor|2|fara|ascultare|gol":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|2|fara|ascultare|conduce":
-        "56ec58f5492d5dc2b96e17e96899cf1d22aca954533ee4ca0b42228432fe6892",
+        "7cde213522c394e9e7f76e82a5f73509d653b33fbc4e5e72c7a13fe33c5ff7ad",
     "profesor|2|fara|ascultare|conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|2|fara|ascultare|nu_conduce":
-        "8935ee01c4eca60a9f5dbac5dcd9424c7d8be4a3ae7e350ad27694f27ae44cf8",
+        "e1838015a0f1e3ffbaa4af0a420554af84918a546d2087372654d064ac099925",
     "profesor|2|fara|ascultare|nu_conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|2|cu|fara|gol":
-        "cd4f662f67ebb8e497f2b02ead78ee740ac7cfda8d9915bfcaf4d5bca5fe76b2",
+        "1e580d554cb06c6629c1d294b8120fcad7c1e645caa641a1172aa4012091253f",
     "profesor|2|cu|fara|gol":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|2|cu|fara|conduce":
-        "3e61e84657bf275c0cdd41a521586960ee9ec7ea585eb1eff1a63e379d013f4e",
+        "498b15bda32bb66e225ae89f90504aae17900778669e8ef7136f155306d86f5d",
     "profesor|2|cu|fara|conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|2|cu|fara|nu_conduce":
-        "fd31460b23917fe0162d9f062fcad530e9d855012526540bc0a511f9d1580af9",
+        "347c0f9730f8ec59d9be49fb5ff3270d6c80a7f373fe01074d89de9fc346f290",
     "profesor|2|cu|fara|nu_conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|2|cu|ascultare|gol":
-        "c044235c059d1c7e1ccd69bab25b4a50a543d026fbbecd78df5cde921dc8b3e5",
+        "33f2050d31e158be0e37daa9720d9df6c080aa8f5a17a2d20628292c392bf9aa",
     "profesor|2|cu|ascultare|gol":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|2|cu|ascultare|conduce":
-        "8020048bd0dca4cbb0e40e68848c7097ea950cacffdebc25d7d14bf7429032ba",
+        "cd1fad363153ee996ddd6660088ae8bca7f1c10bead1c6e27c844506d87726bc",
     "profesor|2|cu|ascultare|conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|2|cu|ascultare|nu_conduce":
-        "6a072f5c607854a53fd145cfe52fd23eb81fbb82652b0d67b45258b24c9dab87",
+        "e29a44498b1356b78c742fb335d10c8e49ec5640d2d7b7b549b0c4f8d8596c87",
     "profesor|2|cu|ascultare|nu_conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|3|fara|fara|gol":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|3|fara|fara|gol":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|3|fara|fara|conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|3|fara|fara|conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|3|fara|fara|nu_conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|3|fara|fara|nu_conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|3|fara|ascultare|gol":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|3|fara|ascultare|gol":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|3|fara|ascultare|conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|3|fara|ascultare|conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|3|fara|ascultare|nu_conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|3|fara|ascultare|nu_conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|3|cu|fara|gol":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|3|cu|fara|gol":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|3|cu|fara|conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|3|cu|fara|conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|3|cu|fara|nu_conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|3|cu|fara|nu_conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|3|cu|ascultare|gol":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|3|cu|ascultare|gol":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|3|cu|ascultare|conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|3|cu|ascultare|conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|3|cu|ascultare|nu_conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|3|cu|ascultare|nu_conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|4|fara|fara|gol":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|4|fara|fara|gol":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|4|fara|fara|conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|4|fara|fara|conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|4|fara|fara|nu_conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|4|fara|fara|nu_conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|4|fara|ascultare|gol":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|4|fara|ascultare|gol":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|4|fara|ascultare|conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|4|fara|ascultare|conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|4|fara|ascultare|nu_conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|4|fara|ascultare|nu_conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|4|cu|fara|gol":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|4|cu|fara|gol":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|4|cu|fara|conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|4|cu|fara|conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|4|cu|fara|nu_conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|4|cu|fara|nu_conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|4|cu|ascultare|gol":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|4|cu|ascultare|gol":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|4|cu|ascultare|conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|4|cu|ascultare|conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "actor|4|cu|ascultare|nu_conduce":
-        "516ce9d77b40656ff007d6a9cc6dec7cc573d1434b728e3d455b8cbc30eba8ed",
+        "181d4f313cf016b3c2e1b7b03f0dc4693154c42f8058ba1cad8fbd4267869941",
     "profesor|4|cu|ascultare|nu_conduce":
         "77eccd0a98208e27151008cfa3f4740817e85b8293abd3ce63925187f011fc62",
     "distributie|gol":
@@ -561,18 +565,18 @@ def test_cu_obiectiv_none_instructiunile_sunt_cele_de_azi() -> None:
 # dau aceleași amprente (măsurat la A0).
 AMPRENTE_SERVICIU: dict[bool, list[str]] = {
     True: [
-        "94745a05a895cf5c9839cadee2d3fd7aff2c42310270ceca1c4912c462ec17a8",
-        "dff84e9e9e571aea090ec921bc7fad1102b64e9f89f526e6aa1254da8cd27f0c",
-        "0c588e09109ca3eec51f550c0afa07bbcbdf9a9694fc6a6a520798af5f437c72",
+        "a3bc6ab125a5ad854a6885df332549cc6e92b5cbbca1194160fb8222591d7c27",
+        "f51455f2a7348de1335332f6f69e1ba4d4b57a2862b8c2c8ab547529e28596ff",
+        "d9ed3c265f5015f3b2d1fd10a01ba5dedf09dae102cc5edb3eda7793d8030cce",
         "a1467ea2c6c4d40bb9beb6220aae8251cd6bafee830cdc2f5a8152c96a456d80",
-        "0c588e09109ca3eec51f550c0afa07bbcbdf9a9694fc6a6a520798af5f437c72",
+        "d9ed3c265f5015f3b2d1fd10a01ba5dedf09dae102cc5edb3eda7793d8030cce",
         "a1467ea2c6c4d40bb9beb6220aae8251cd6bafee830cdc2f5a8152c96a456d80",
     ],
     False: [
-        "94745a05a895cf5c9839cadee2d3fd7aff2c42310270ceca1c4912c462ec17a8",
-        "fa595d7a4b73c5f1b315f61ab8310074054c05eccde300a53764cc04acc07088",
-        "afd6ef7a68abc4539ebf4f006288b281b0504fa241f68a11864e2ee186dfff37",
-        "afd6ef7a68abc4539ebf4f006288b281b0504fa241f68a11864e2ee186dfff37",
+        "a3bc6ab125a5ad854a6885df332549cc6e92b5cbbca1194160fb8222591d7c27",
+        "1e277b58d65dbd42e122801fa08a2588bada31328d131e3e9cc0aac8215974a9",
+        "e9434d2ad0859b372b6be51baf0c1c35aece9dcc36773b43dd9d72fa1d250bf1",
+        "e9434d2ad0859b372b6be51baf0c1c35aece9dcc36773b43dd9d72fa1d250bf1",
     ],
 }
 

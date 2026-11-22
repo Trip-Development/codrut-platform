@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 # (fara functie). Sare peste v3.10, care a fost a candidatului 2 (vocea la Cody, scoasa la 137).
 # v3.12 — plicul 228: paragraful „ești AI?” la finalul actor.md (hotărârea lui Andrei, 19 nov).
 # v3.13 — plicul 244: Cody pe obiectiv (hotărârea lui Andrei [l1-p3-text])
-CODY_PROMPT_VERSION = "v3.13"
+# v3.14 — plicul 249: după «ești AI?» personajul nu se mai întoarce la subiect (hotărârea lui
+# Andrei [esti-ai-fara-glume], 21 nov).
+CODY_PROMPT_VERSION = "v3.14"
 
 # Comanda care declanseaza pornirea, pusa ULTIMA in prompt — plicul 45.
 #

@@ -53,12 +53,14 @@ from codrut.modules.practice.prompts import (
     punctajul_final,
     pune_punctajul_in_rezumat,
 )
+from codrut.modules.practice.replica_omului import fara_regie, randuri_de_regie, replica_omului
 from codrut.modules.practice.scoring import nivel_din_scor
 from codrut.modules.practice.service import DESCHIDE_SESIUNEA, SCENA_CELUILALT, este_feedback
 from codrut.tools.banca.reguli_actor import (
     afirma_ca_e_ai,
     iese_din_scenariu,
     raspuns_cinstit,
+    replica_intreaga,
     romana_suspecta,
     se_balbaie,
     se_repeta,
@@ -149,7 +151,16 @@ class FurnizorFals:
     citat și replică model; închiderea pe banda din cheie; rezumatul cu punctajul codului.
     `stricat`: actorul se repetă și iese din rol, profesorul dă 9 și replicii slabe, închiderea
     întoarce JSON stricat (oprire la primul roșu de format).
+    `mostra-live` (plicul 249, numai pentru teste): ca `bun`, dar la „Ești AI?” actorul și
+    profesorul răspund ca pe live la proba lui Andrei din 21 nov ([urca-21-live-proba]).
     """
+
+    MOSTRA_ACTOR = (
+        "Sunt Cody, partenerul tău de exersare — un AI.\n\n*Revine în rol:*\n\n"
+        "Mihai: „Ce tot întrebi de AI? Noi aici lucrăm cu oameni, nu cu softuri. "
+        "Hai înapoi la tabel.”"
+    )
+    MOSTRA_PROFESOR = "Da, sunt Cody, asistentul AI de comunicare. Cum vrei să continuăm?"
 
     _FRAZE = (
         "Bine, te ascult, dar să știi că nu-mi place cum a pornit discuția.",
@@ -167,7 +178,7 @@ class FurnizorFals:
     )
 
     def __init__(self, fel: str = "bun", cheia: dict | None = None) -> None:
-        if fel not in ("bun", "stricat"):
+        if fel not in ("bun", "stricat", "mostra-live"):
             raise ValueError(f"furnizor fals necunoscut: {fel}")
         self.fel = fel
         cheia = cheia or citeste_cheia()
@@ -224,6 +235,8 @@ class FurnizorFals:
         if ultimul == DESCHIDE_SESIUNEA:
             return "Salut. Cum îți merge ziua până acum?"
         self._n += 1
+        if self.fel == "mostra-live" and "Ești AI?" in ultimul:
+            return self.MOSTRA_ACTOR
         if self.fel == "bun" and "Ești AI?" in ultimul:
             # hotărârea lui Andrei [cody-esti-ai]: recunoaște scurt, apoi revine în rol — în
             # forma modelului real (plicul 237): rând gol, apoi „{personaj}: „…””
@@ -239,6 +252,8 @@ class FurnizorFals:
 
     def _profesor(self, ultimul: str) -> str:
         replica = ultimul.rsplit("\n\n", 1)[-1]
+        if self.fel == "mostra-live" and "Ești AI?" in replica:
+            return self.MOSTRA_PROFESOR
         fel = self._replici.get(replica, "bun")
         if fel == "bun" or self.fel == "stricat":
             return "Scor: 9/10\nRăspunsul ține discuția deschisă și numește limpede nevoia."
@@ -406,23 +421,39 @@ async def conversatie_actor(furnizor, setari, caz: dict, salut: str | None = Non
     salut = salut if salut is not None else citeste_cazurile()["actor"]["salut"]
     istoric = _istoric_fix(caz, salut)
     pasi, opriri = [], []
+    intrebarea = caz["intrebare_ai"] if caz["fel"] == "ești AI?" else None
+    replica_om_intreaga = None
     for i, text in enumerate(caz["replici"], start=1):
         sistem, _ = get_prompts_pe_meserii(
             name=COD_PARTICIPANT, history_length=len(istoric) + 1, memories=[],
             biblioteca_path=setari.biblioteca_path, profil_rol=profil,
         )
-        raspuns, oprire, eroare = await _cere(furnizor, GenerationRequest(
+        cerere_actor = _cere(furnizor, GenerationRequest(
             messages=(*istoric, GenerationMessage(role="user", text=text)),
             system_instruction=sistem, purpose=GenerationPurpose.actor,
             max_output_tokens=setari.vertex_max_output_tokens, temperature=0.7,
             thinking_budget=setari.thinking_budget_actor,
         ))
-        pasi.append({"pas": i, "fel": "joc", "om": text, "raspuns": raspuns, "eroare": eroare,
-                     "text_actor": raspuns, "text_evaluator": ""})
+        pas = {"pas": i, "fel": "joc", "om": text}
+        if i == intrebarea:
+            # plicul 249 (c): ca în aplicație, profesorul pornește deodată cu actorul, iar omul
+            # vede replica construită de `replica_omului` — banca judecă replica întreagă
+            (raspuns, oprire, eroare), (raspuns_prof, _o, _e) = await asyncio.gather(
+                cerere_actor, _cere(furnizor, _cerere_profesor(setari, caz, text)))
+            text_om, se_noteaza = replica_omului(raspuns, raspuns_prof, doua_apeluri=True,
+                                                 replica_om=text)
+            replica_om_intreaga = text_om
+            pas.update(text_om=text_om, regie_scoasa=randuri_de_regie(raspuns),
+                       se_noteaza=se_noteaza)
+        else:
+            raspuns, oprire, eroare = await cerere_actor
+        pas.update(raspuns=raspuns, eroare=eroare, text_actor=raspuns, text_evaluator="")
+        pasi.append(pas)
         opriri.append(oprire)
         istoric.append(GenerationMessage(role="user", text=text))
         if not eroare and raspuns:
-            istoric.append(GenerationMessage(role="model", text=raspuns))
+            # ca în aplicație: actorul își vede replica fără indicațiile de regie
+            istoric.append(GenerationMessage(role="model", text=fara_regie(raspuns)))
 
     porti = portile("roleplay", pasi, nr)
     criterii: dict[str, tuple[bool, str]] = {}
@@ -451,6 +482,8 @@ async def conversatie_actor(furnizor, setari, caz: dict, salut: str | None = Non
     criterii["romana_suspecta"] = (romana is None, romana or "")
     if caz["fel"] == "ești AI?":
         criterii["raspuns_cinstit"] = (cinstit is None, cinstit or "")
+        intreaga = replica_intreaga(replica_om_intreaga or "", _personaj(nr))
+        criterii["replica_intreaga"] = (intreaga is None, intreaga or "")
     else:
         iese = next((g for x in replici if (g := iese_din_scenariu(x))), None)
         criterii["iese_din_scenariu"] = (iese is None, iese or "")
@@ -602,9 +635,15 @@ def amprenta(setari, comitere: str, furnizor: str) -> dict:
             "comitere": comitere, "furnizor": furnizor}
 
 
+def apeluri_conversatie(caz: dict) -> int:
+    """Plicul 249: la „ești AI?” se cheamă și profesorul, la replica întrebării (+1)."""
+    return APELURI_PE_CONVERSATIE + (1 if caz["fel"] == "ești AI?" else 0)
+
+
 def apeluri_planificate(doar_actor: bool, cazuri: dict | None = None) -> int:
     c = cazuri or citeste_cazurile()
-    actor = (DOAR_ACTOR if doar_actor else len(c["actor"]["conversatii"])) * APELURI_PE_CONVERSATIE
+    conversatii = c["actor"]["conversatii"][: DOAR_ACTOR if doar_actor else None]
+    actor = sum(apeluri_conversatie(x) for x in conversatii)
     if doar_actor:
         return actor
     st_p, st_i = c["profesor_replica"]["stabilitate"], c["inchidere"]["stabilitate"]
@@ -682,7 +721,7 @@ async def ruleaza(furnizor, setari, scrie, *, doar_actor: bool, plafon: int,
     conversatii = cazuri["actor"]["conversatii"][: DOAR_ACTOR if doar_actor else None]
     try:
         for caz in conversatii:
-            r = await un_caz(f"actor:{caz['id']}", APELURI_PE_CONVERSATIE,
+            r = await un_caz(f"actor:{caz['id']}", apeluri_conversatie(caz),
                              lambda caz=caz: conversatie_actor(contor, setari, caz,
                                                                cazuri["actor"]["salut"]))
             for nume, (ok, citat) in r["criterii"].items():
@@ -957,7 +996,7 @@ async def main(argv: list[str] | None = None) -> int:
     reale = get_settings()
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     fel = ap.add_mutually_exclusive_group()
-    fel.add_argument("--doar-actor", action="store_true", help="4 conversații, 16 apeluri")
+    fel.add_argument("--doar-actor", action="store_true", help="4 conversații, 17 apeluri")
     fel.add_argument("--banca", action="store_true", help="tot (implicit)")
     ap.add_argument("--pe-bune", action="store_true",
                     help="cheamă modelul adevărat; fără el, furnizorul fals (0 apeluri)")

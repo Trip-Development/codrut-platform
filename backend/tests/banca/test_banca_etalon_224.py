@@ -239,7 +239,8 @@ async def test_pe_bune_cu_alt_model_explicit_porneste_si_scrie_setarile(
 async def test_raspunsurile_intregi_se_pastreaza_pe_fiecare_pas() -> None:
     verdict, randuri = await _ruleaza(rb.FurnizorFals("bun"), doar_actor=True)
     pasi = [p for r in randuri if r["tip"] == "sesiune" for p in r["pasi"]]
-    assert len(pasi) == 16  # plicul 227: numai replicile de joc
+    # plicul 227: numai replicile de joc; plicul 249: + profesorul la întrebarea din A04
+    assert len(pasi) == 17
     assert all(p["raspuns"] for p in pasi)
     assert pasi[0]["raspuns"] == rb.FurnizorFals._FRAZE[2] + " " + rb.FurnizorFals._FRAZE[3]
     assert verdict["raspunsuri_retinute"] == 0

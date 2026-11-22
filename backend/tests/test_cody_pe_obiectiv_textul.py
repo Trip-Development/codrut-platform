@@ -17,8 +17,9 @@ PROMPTS = (
 
 AMPRENTA_OBIECTIV_ACTOR = "677aefb6df5dcc68fe378d85fcec9992f1cdfc8d815bf5f5ab35f9351d1024c8"
 AMPRENTA_OBIECTIV_PROFESOR = "3acdc60c070dd79e3b33d52e01ceea305bbf189f310796fcbc7139feea6b4898"
-# `actor.md` nu se atinge de plicul 244 (aceeași valoare ca în paza lui)
-AMPRENTA_ACTOR_MD_AZI = "be596dc65db69f8b7cc36717ade414664a5b54c1b0d9ea6d3bf9eb6fa1e81cc4"
+# `actor.md` nu se atinge de plicul 244 (aceeași valoare ca în paza lui); plicul 249 i-a adăugat
+# propoziția aprobată [esti-ai-fara-glume] la final
+AMPRENTA_ACTOR_MD_AZI = "e0bb998ce837bc24f51ca507cb9334aa1e2d3f581ed48f0d5ebc5c9b06cf43a4"
 
 
 def _sha(cale: Path) -> str:
