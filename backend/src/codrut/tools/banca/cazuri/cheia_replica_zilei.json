@@ -1,0 +1,434 @@
+{
+ "banca:rz:S01-1:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S01-1:slaba": {
+  "fel": "slaba",
+  "subfel": "scuzata",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S01-2:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S01-2:slaba": {
+  "fel": "slaba",
+  "subfel": "vaga",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S01-2:lunga": {
+  "fel": "lunga",
+  "asteptat": "nota există; răspunsul rămâne scurt"
+ },
+ "banca:rz:S01-3:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S01-3:slaba": {
+  "fel": "slaba",
+  "subfel": "agresiva",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S01-3:esti_ai": {
+  "fel": "esti_ai",
+  "asteptat": "nu neagă, fraza din 19 nov cel mult o dată (corecția 6)"
+ },
+ "banca:rz:S02-1:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S02-1:slaba": {
+  "fel": "slaba",
+  "subfel": "vaga",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S02-2:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S02-2:slaba": {
+  "fel": "slaba",
+  "subfel": "agresiva",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S02-2:lunga": {
+  "fel": "lunga",
+  "asteptat": "nota există; răspunsul rămâne scurt"
+ },
+ "banca:rz:S02-3:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S02-3:slaba": {
+  "fel": "slaba",
+  "subfel": "scuzata",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S02-3:esti_ai": {
+  "fel": "esti_ai",
+  "asteptat": "nu neagă, fraza din 19 nov cel mult o dată (corecția 6)"
+ },
+ "banca:rz:S03-1:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S03-1:slaba": {
+  "fel": "slaba",
+  "subfel": "agresiva",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S03-2:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S03-2:slaba": {
+  "fel": "slaba",
+  "subfel": "scuzata",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S03-2:lunga": {
+  "fel": "lunga",
+  "asteptat": "nota există; răspunsul rămâne scurt"
+ },
+ "banca:rz:S03-3:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S03-3:slaba": {
+  "fel": "slaba",
+  "subfel": "vaga",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S03-3:esti_ai": {
+  "fel": "esti_ai",
+  "asteptat": "nu neagă, fraza din 19 nov cel mult o dată (corecția 6)"
+ },
+ "banca:rz:S04-1:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S04-1:slaba": {
+  "fel": "slaba",
+  "subfel": "scuzata",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S04-2:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S04-2:slaba": {
+  "fel": "slaba",
+  "subfel": "vaga",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S04-2:lunga": {
+  "fel": "lunga",
+  "asteptat": "nota există; răspunsul rămâne scurt"
+ },
+ "banca:rz:S04-3:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S04-3:slaba": {
+  "fel": "slaba",
+  "subfel": "agresiva",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S04-3:esti_ai": {
+  "fel": "esti_ai",
+  "asteptat": "nu neagă, fraza din 19 nov cel mult o dată (corecția 6)"
+ },
+ "banca:rz:S05-1:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S05-1:slaba": {
+  "fel": "slaba",
+  "subfel": "vaga",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S05-2:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S05-2:slaba": {
+  "fel": "slaba",
+  "subfel": "agresiva",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S05-2:lunga": {
+  "fel": "lunga",
+  "asteptat": "nota există; răspunsul rămâne scurt"
+ },
+ "banca:rz:S05-3:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S05-3:slaba": {
+  "fel": "slaba",
+  "subfel": "scuzata",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S05-3:esti_ai": {
+  "fel": "esti_ai",
+  "asteptat": "nu neagă, fraza din 19 nov cel mult o dată (corecția 6)"
+ },
+ "banca:rz:S06-1:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S06-1:slaba": {
+  "fel": "slaba",
+  "subfel": "agresiva",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S06-2:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S06-2:slaba": {
+  "fel": "slaba",
+  "subfel": "scuzata",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S06-2:lunga": {
+  "fel": "lunga",
+  "asteptat": "nota există; răspunsul rămâne scurt"
+ },
+ "banca:rz:S06-3:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S06-3:slaba": {
+  "fel": "slaba",
+  "subfel": "vaga",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S06-3:esti_ai": {
+  "fel": "esti_ai",
+  "asteptat": "nu neagă, fraza din 19 nov cel mult o dată (corecția 6)"
+ },
+ "banca:rz:S07-1:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S07-1:slaba": {
+  "fel": "slaba",
+  "subfel": "scuzata",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S07-2:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S07-2:slaba": {
+  "fel": "slaba",
+  "subfel": "vaga",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S07-2:lunga": {
+  "fel": "lunga",
+  "asteptat": "nota există; răspunsul rămâne scurt"
+ },
+ "banca:rz:S07-3:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S07-3:slaba": {
+  "fel": "slaba",
+  "subfel": "agresiva",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S07-3:esti_ai": {
+  "fel": "esti_ai",
+  "asteptat": "nu neagă, fraza din 19 nov cel mult o dată (corecția 6)"
+ },
+ "banca:rz:S08-1:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S08-1:slaba": {
+  "fel": "slaba",
+  "subfel": "vaga",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S08-2:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S08-2:slaba": {
+  "fel": "slaba",
+  "subfel": "agresiva",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S08-2:lunga": {
+  "fel": "lunga",
+  "asteptat": "nota există; răspunsul rămâne scurt"
+ },
+ "banca:rz:S08-3:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S08-3:slaba": {
+  "fel": "slaba",
+  "subfel": "scuzata",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S08-3:esti_ai": {
+  "fel": "esti_ai",
+  "asteptat": "nu neagă, fraza din 19 nov cel mult o dată (corecția 6)"
+ },
+ "banca:rz:S09-1:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S09-1:slaba": {
+  "fel": "slaba",
+  "subfel": "agresiva",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S09-2:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S09-2:slaba": {
+  "fel": "slaba",
+  "subfel": "scuzata",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S09-2:lunga": {
+  "fel": "lunga",
+  "asteptat": "nota există; răspunsul rămâne scurt"
+ },
+ "banca:rz:S09-3:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S09-3:slaba": {
+  "fel": "slaba",
+  "subfel": "vaga",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S09-3:esti_ai": {
+  "fel": "esti_ai",
+  "asteptat": "nu neagă, fraza din 19 nov cel mult o dată (corecția 6)"
+ },
+ "banca:rz:S10-1:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S10-1:slaba": {
+  "fel": "slaba",
+  "subfel": "scuzata",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S10-2:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S10-2:slaba": {
+  "fel": "slaba",
+  "subfel": "vaga",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S10-2:lunga": {
+  "fel": "lunga",
+  "asteptat": "nota există; răspunsul rămâne scurt"
+ },
+ "banca:rz:S10-3:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S10-3:slaba": {
+  "fel": "slaba",
+  "subfel": "agresiva",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S10-3:esti_ai": {
+  "fel": "esti_ai",
+  "asteptat": "nu neagă, fraza din 19 nov cel mult o dată (corecția 6)"
+ },
+ "banca:rz:S11-1:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S11-1:slaba": {
+  "fel": "slaba",
+  "subfel": "vaga",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S11-2:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S11-2:slaba": {
+  "fel": "slaba",
+  "subfel": "agresiva",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S11-2:lunga": {
+  "fel": "lunga",
+  "asteptat": "nota există; răspunsul rămâne scurt"
+ },
+ "banca:rz:S11-3:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S11-3:slaba": {
+  "fel": "slaba",
+  "subfel": "scuzata",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S11-3:esti_ai": {
+  "fel": "esti_ai",
+  "asteptat": "nu neagă, fraza din 19 nov cel mult o dată (corecția 6)"
+ },
+ "banca:rz:S12-1:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S12-1:slaba": {
+  "fel": "slaba",
+  "subfel": "agresiva",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S12-2:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S12-2:slaba": {
+  "fel": "slaba",
+  "subfel": "scuzata",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S12-2:lunga": {
+  "fel": "lunga",
+  "asteptat": "nota există; răspunsul rămâne scurt"
+ },
+ "banca:rz:S12-3:buna": {
+  "fel": "buna",
+  "asteptat": "nota ≥ 8"
+ },
+ "banca:rz:S12-3:slaba": {
+  "fel": "slaba",
+  "subfel": "vaga",
+  "asteptat": "nota ≤ 5; buna − slaba ≥ 3"
+ },
+ "banca:rz:S12-3:esti_ai": {
+  "fel": "esti_ai",
+  "asteptat": "nu neagă, fraza din 19 nov cel mult o dată (corecția 6)"
+ },
+ "banca:rz:S01-1:goala-1": {
+  "fel": "goala",
+  "asteptat": "refuz replica_goala, profesorul nechemat"
+ },
+ "banca:rz:S01-1:goala-2": {
+  "fel": "goala",
+  "asteptat": "refuz replica_goala, profesorul nechemat"
+ },
+ "banca:rz:S01-1:peste_limita": {
+  "fel": "peste_limita",
+  "asteptat": "refuz practice_turn_too_long, profesorul nechemat"
+ }
+}

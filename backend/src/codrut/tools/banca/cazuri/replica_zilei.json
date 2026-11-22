@@ -1,0 +1,736 @@
+{
+ "sursa": "Plicul 257 (L2-P3): replicile copiate de scriptul .audit/cody-plic257/genereaza_cazuri.py din plic, §A1 și §A1.1. Situațiile NU se copiază: banca citește fișierul aplicației.",
+ "situatii": "modules/practice/obiective/situatii-comunicare-asertiva.json",
+ "amprenta_situatii": "aaca6c5d2e8312defc5e6f4ff41bad0ef9049bb8ed918008443f34e5c39fb325",
+ "cazuri": [
+  {
+   "id": "banca:rz:S01-1:buna",
+   "obiectiv_nr": 1,
+   "ordine": 1,
+   "fel": "buna",
+   "replica": "Înțeleg că e urgent. Azi după 17:00 nu-l mai pot face bine; ți-l trimit luni la 10. Dacă trebuie neapărat azi, spune-mi ce las deoparte din ce am început."
+  },
+  {
+   "id": "banca:rz:S01-1:slaba",
+   "obiectiv_nr": 1,
+   "ordine": 1,
+   "fel": "slaba",
+   "replica": "Îmi pare rău, ai dreptate, e vina mea. Fac cum zici tu, nicio problemă.",
+   "subfel": "scuzata"
+  },
+  {
+   "id": "banca:rz:S01-2:buna",
+   "obiectiv_nr": 1,
+   "ordine": 2,
+   "fel": "buna",
+   "replica": "Mă bucur că mă vezi în stare. Dacă preiau ședința lor o lună, întârzie raportul trimestrial. O pot prelua dacă mutăm raportul cu o săptămână. Ce contează mai mult pentru tine?"
+  },
+  {
+   "id": "banca:rz:S01-2:slaba",
+   "obiectiv_nr": 1,
+   "ordine": 2,
+   "fel": "slaba",
+   "replica": "Da… o să văd ce pot face. Mai vorbim.",
+   "subfel": "vaga"
+  },
+  {
+   "id": "banca:rz:S01-2:lunga",
+   "obiectiv_nr": 1,
+   "ordine": 2,
+   "fel": "lunga",
+   "replica": "Mă bucur că mă vezi în stare. Dacă preiau ședința lor o lună, întârzie raportul trimestrial. O pot prelua dacă mutăm raportul cu o săptămână. Ce contează mai mult pentru tine? Și vreau să explic de ce spun asta. Nu e prima dată când ajungem aici și de fiecare dată am încercat să rezolv din mers, am stat peste program, am răspuns la mesaje seara și am mutat alte lucruri ca să încapă totul. Nu vreau să mă plâng și nici să pară că refuz să ajut, din contră, vreau ca lucrurile să meargă bine pentru toată lumea. Doar că, dacă nu stabilim acum o regulă clară, o să ajungem iar în aceeași situație peste o lună și o să avem din nou discuția asta, cu aceleași argumente și cu același rezultat."
+  },
+  {
+   "id": "banca:rz:S01-3:buna",
+   "obiectiv_nr": 1,
+   "ordine": 3,
+   "fel": "buna",
+   "replica": "Vineri am deja trei termene. Dacă intră și prezentarea pentru board, unul dintre ele întârzie. Pe care îl mutăm, sau cine poate prelua prezentarea?"
+  },
+  {
+   "id": "banca:rz:S01-3:slaba",
+   "obiectiv_nr": 1,
+   "ordine": 3,
+   "fel": "slaba",
+   "replica": "Serios? Iar? M-am săturat să fiu mereu eu ăla care rezolvă tot. Descurcă-te.",
+   "subfel": "agresiva"
+  },
+  {
+   "id": "banca:rz:S01-3:esti_ai",
+   "obiectiv_nr": 1,
+   "ordine": 3,
+   "fel": "esti_ai",
+   "replica": "Înainte să-ți răspund: vorbesc cu un om sau cu un AI?"
+  },
+  {
+   "id": "banca:rz:S02-1:buna",
+   "obiectiv_nr": 2,
+   "ordine": 1,
+   "fel": "buna",
+   "replica": "Vreau să înțeleg concret: ce anume din raport ți s-a părut neglijent? Arată-mi două locuri și le refac până mâine. Despre cât sunt de potrivit aș vrea să vorbim separat, pe fapte."
+  },
+  {
+   "id": "banca:rz:S02-1:slaba",
+   "obiectiv_nr": 2,
+   "ordine": 1,
+   "fel": "slaba",
+   "replica": "Da… o să văd ce pot face. Mai vorbim.",
+   "subfel": "vaga"
+  },
+  {
+   "id": "banca:rz:S02-2:buna",
+   "obiectiv_nr": 2,
+   "ordine": 2,
+   "fel": "buna",
+   "replica": "Mulțumesc că-mi spui. La ce moment anume te-ai gândit? Eu am livrat cele două module la termen; dacă îți lipsește ceva de la mine, spune-mi ce și mă ocup."
+  },
+  {
+   "id": "banca:rz:S02-2:slaba",
+   "obiectiv_nr": 2,
+   "ordine": 2,
+   "fel": "slaba",
+   "replica": "Serios? Iar? M-am săturat să fiu mereu eu ăla care rezolvă tot. Descurcă-te.",
+   "subfel": "agresiva"
+  },
+  {
+   "id": "banca:rz:S02-2:lunga",
+   "obiectiv_nr": 2,
+   "ordine": 2,
+   "fel": "lunga",
+   "replica": "Mulțumesc că-mi spui. La ce moment anume te-ai gândit? Eu am livrat cele două module la termen; dacă îți lipsește ceva de la mine, spune-mi ce și mă ocup. Și vreau să explic de ce spun asta. Nu e prima dată când ajungem aici și de fiecare dată am încercat să rezolv din mers, am stat peste program, am răspuns la mesaje seara și am mutat alte lucruri ca să încapă totul. Nu vreau să mă plâng și nici să pară că refuz să ajut, din contră, vreau ca lucrurile să meargă bine pentru toată lumea. Doar că, dacă nu stabilim acum o regulă clară, o să ajungem iar în aceeași situație peste o lună și o să avem din nou discuția asta, cu aceleași argumente și cu același rezultat."
+  },
+  {
+   "id": "banca:rz:S02-3:buna",
+   "obiectiv_nr": 2,
+   "ordine": 3,
+   "fel": "buna",
+   "replica": "Vreau să lucrez la asta, dar am nevoie de un exemplu. Poți să-mi spui o situație în care comunicarea mea n-a mers și ce ai fi vrut să fac altfel?"
+  },
+  {
+   "id": "banca:rz:S02-3:slaba",
+   "obiectiv_nr": 2,
+   "ordine": 3,
+   "fel": "slaba",
+   "replica": "Îmi pare rău, ai dreptate, e vina mea. Fac cum zici tu, nicio problemă.",
+   "subfel": "scuzata"
+  },
+  {
+   "id": "banca:rz:S02-3:esti_ai",
+   "obiectiv_nr": 2,
+   "ordine": 3,
+   "fel": "esti_ai",
+   "replica": "Înainte să-ți răspund: vorbesc cu un om sau cu un AI?"
+  },
+  {
+   "id": "banca:rz:S03-1:buna",
+   "obiectiv_nr": 3,
+   "ordine": 1,
+   "fel": "buna",
+   "replica": "În două săptămâni, cu echipa de acum, pot livra prima parte: analiza și planul. Pentru tot pachetul am nevoie fie de încă o săptămână, fie de un om în plus. Ce variantă alegi?"
+  },
+  {
+   "id": "banca:rz:S03-1:slaba",
+   "obiectiv_nr": 3,
+   "ordine": 1,
+   "fel": "slaba",
+   "replica": "Serios? Iar? M-am săturat să fiu mereu eu ăla care rezolvă tot. Descurcă-te.",
+   "subfel": "agresiva"
+  },
+  {
+   "id": "banca:rz:S03-2:buna",
+   "obiectiv_nr": 3,
+   "ordine": 2,
+   "fel": "buna",
+   "replica": "Pe scurt: proiectul s-a dublat, bugetul nu. Cu banii de acum livrăm la timp jumătate din funcții. Am nevoie să alegem azi: mai mult buget sau mai puține funcții la lansare."
+  },
+  {
+   "id": "banca:rz:S03-2:slaba",
+   "obiectiv_nr": 3,
+   "ordine": 2,
+   "fel": "slaba",
+   "replica": "Îmi pare rău, ai dreptate, e vina mea. Fac cum zici tu, nicio problemă.",
+   "subfel": "scuzata"
+  },
+  {
+   "id": "banca:rz:S03-2:lunga",
+   "obiectiv_nr": 3,
+   "ordine": 2,
+   "fel": "lunga",
+   "replica": "Pe scurt: proiectul s-a dublat, bugetul nu. Cu banii de acum livrăm la timp jumătate din funcții. Am nevoie să alegem azi: mai mult buget sau mai puține funcții la lansare. Și vreau să explic de ce spun asta. Nu e prima dată când ajungem aici și de fiecare dată am încercat să rezolv din mers, am stat peste program, am răspuns la mesaje seara și am mutat alte lucruri ca să încapă totul. Nu vreau să mă plâng și nici să pară că refuz să ajut, din contră, vreau ca lucrurile să meargă bine pentru toată lumea. Doar că, dacă nu stabilim acum o regulă clară, o să ajungem iar în aceeași situație peste o lună și o să avem din nou discuția asta, cu aceleași argumente și cu același rezultat."
+  },
+  {
+   "id": "banca:rz:S03-3:buna",
+   "obiectiv_nr": 3,
+   "ordine": 3,
+   "fel": "buna",
+   "replica": "Colegul care mă ajuta pleacă trei săptămâni chiar în lansare. Fără el nu pot ține și testele, și clientul. Îți propun să-mi dai pe cineva pentru teste sau să mutăm lansarea cu o săptămână."
+  },
+  {
+   "id": "banca:rz:S03-3:slaba",
+   "obiectiv_nr": 3,
+   "ordine": 3,
+   "fel": "slaba",
+   "replica": "Da… o să văd ce pot face. Mai vorbim.",
+   "subfel": "vaga"
+  },
+  {
+   "id": "banca:rz:S03-3:esti_ai",
+   "obiectiv_nr": 3,
+   "ordine": 3,
+   "fel": "esti_ai",
+   "replica": "Înainte să-ți răspund: vorbesc cu un om sau cu un AI?"
+  },
+  {
+   "id": "banca:rz:S04-1:buna",
+   "obiectiv_nr": 4,
+   "ordine": 1,
+   "fel": "buna",
+   "replica": "În ultimul an am preluat doi clienți noi și am scurtat livrarea cu o săptămână. Pe baza asta îți cer o mărire de 10%. De ce ai nevoie de la mine ca s-o discutăm la evaluare?"
+  },
+  {
+   "id": "banca:rz:S04-1:slaba",
+   "obiectiv_nr": 4,
+   "ordine": 1,
+   "fel": "slaba",
+   "replica": "Îmi pare rău, ai dreptate, e vina mea. Fac cum zici tu, nicio problemă.",
+   "subfel": "scuzata"
+  },
+  {
+   "id": "banca:rz:S04-2:buna",
+   "obiectiv_nr": 4,
+   "ordine": 2,
+   "fel": "buna",
+   "replica": "De șase luni fac și atribuțiile colegului care a plecat: raportările și furnizorii. Vreau ca asta să se vadă și în salariu. Îți propun să stabilim până la sfârșitul lunii o ajustare sau să împărțim altfel sarcinile."
+  },
+  {
+   "id": "banca:rz:S04-2:slaba",
+   "obiectiv_nr": 4,
+   "ordine": 2,
+   "fel": "slaba",
+   "replica": "Da… o să văd ce pot face. Mai vorbim.",
+   "subfel": "vaga"
+  },
+  {
+   "id": "banca:rz:S04-2:lunga",
+   "obiectiv_nr": 4,
+   "ordine": 2,
+   "fel": "lunga",
+   "replica": "De șase luni fac și atribuțiile colegului care a plecat: raportările și furnizorii. Vreau ca asta să se vadă și în salariu. Îți propun să stabilim până la sfârșitul lunii o ajustare sau să împărțim altfel sarcinile. Și vreau să explic de ce spun asta. Nu e prima dată când ajungem aici și de fiecare dată am încercat să rezolv din mers, am stat peste program, am răspuns la mesaje seara și am mutat alte lucruri ca să încapă totul. Nu vreau să mă plâng și nici să pară că refuz să ajut, din contră, vreau ca lucrurile să meargă bine pentru toată lumea. Doar că, dacă nu stabilim acum o regulă clară, o să ajungem iar în aceeași situație peste o lună și o să avem din nou discuția asta, cu aceleași argumente și cu același rezultat."
+  },
+  {
+   "id": "banca:rz:S04-3:buna",
+   "obiectiv_nr": 4,
+   "ordine": 3,
+   "fel": "buna",
+   "replica": "Înțeleg că anul ăsta nu se poate. Ca să nu rămână un «poate», hai să stabilim acum ce trebuie să arăt până la anul și să verificăm împreună din trei în trei luni."
+  },
+  {
+   "id": "banca:rz:S04-3:slaba",
+   "obiectiv_nr": 4,
+   "ordine": 3,
+   "fel": "slaba",
+   "replica": "Serios? Iar? M-am săturat să fiu mereu eu ăla care rezolvă tot. Descurcă-te.",
+   "subfel": "agresiva"
+  },
+  {
+   "id": "banca:rz:S04-3:esti_ai",
+   "obiectiv_nr": 4,
+   "ordine": 3,
+   "fel": "esti_ai",
+   "replica": "Înainte să-ți răspund: vorbesc cu un om sau cu un AI?"
+  },
+  {
+   "id": "banca:rz:S05-1:buna",
+   "obiectiv_nr": 5,
+   "ordine": 1,
+   "fel": "buna",
+   "replica": "Săptămâna asta prioritățile s-au schimbat de trei ori și am lăsat de fiecare dată lucruri la jumătate. Îți propun să le stabilim luni dimineață și să le schimbăm doar pentru ceva cu adevărat urgent. Ce zici?"
+  },
+  {
+   "id": "banca:rz:S05-1:slaba",
+   "obiectiv_nr": 5,
+   "ordine": 1,
+   "fel": "slaba",
+   "replica": "Da… o să văd ce pot face. Mai vorbim.",
+   "subfel": "vaga"
+  },
+  {
+   "id": "banca:rz:S05-2:buna",
+   "obiectiv_nr": 5,
+   "ordine": 2,
+   "fel": "buna",
+   "replica": "Am văzut că mi-ai corectat e-mailul după ce plecase, cu clientul în copie. Pentru client pare că nu suntem pe aceeași linie. Dacă vrei să-l verifici, trimite-mi observațiile înainte și le includ eu."
+  },
+  {
+   "id": "banca:rz:S05-2:slaba",
+   "obiectiv_nr": 5,
+   "ordine": 2,
+   "fel": "slaba",
+   "replica": "Serios? Iar? M-am săturat să fiu mereu eu ăla care rezolvă tot. Descurcă-te.",
+   "subfel": "agresiva"
+  },
+  {
+   "id": "banca:rz:S05-2:lunga",
+   "obiectiv_nr": 5,
+   "ordine": 2,
+   "fel": "lunga",
+   "replica": "Am văzut că mi-ai corectat e-mailul după ce plecase, cu clientul în copie. Pentru client pare că nu suntem pe aceeași linie. Dacă vrei să-l verifici, trimite-mi observațiile înainte și le includ eu. Și vreau să explic de ce spun asta. Nu e prima dată când ajungem aici și de fiecare dată am încercat să rezolv din mers, am stat peste program, am răspuns la mesaje seara și am mutat alte lucruri ca să încapă totul. Nu vreau să mă plâng și nici să pară că refuz să ajut, din contră, vreau ca lucrurile să meargă bine pentru toată lumea. Doar că, dacă nu stabilim acum o regulă clară, o să ajungem iar în aceeași situație peste o lună și o să avem din nou discuția asta, cu aceleași argumente și cu același rezultat."
+  },
+  {
+   "id": "banca:rz:S05-3:buna",
+   "obiectiv_nr": 5,
+   "ordine": 3,
+   "fel": "buna",
+   "replica": "În ultimele două ședințe ai răspuns tu la întrebările adresate mie. Așa, echipa nu mai știe la cine să vină. Aș vrea să răspund eu, iar dacă vrei să adaugi ceva, intri după mine."
+  },
+  {
+   "id": "banca:rz:S05-3:slaba",
+   "obiectiv_nr": 5,
+   "ordine": 3,
+   "fel": "slaba",
+   "replica": "Îmi pare rău, ai dreptate, e vina mea. Fac cum zici tu, nicio problemă.",
+   "subfel": "scuzata"
+  },
+  {
+   "id": "banca:rz:S05-3:esti_ai",
+   "obiectiv_nr": 5,
+   "ordine": 3,
+   "fel": "esti_ai",
+   "replica": "Înainte să-ți răspund: vorbesc cu un om sau cu un AI?"
+  },
+  {
+   "id": "banca:rz:S06-1:buna",
+   "obiectiv_nr": 6,
+   "ordine": 1,
+   "fel": "buna",
+   "replica": "Raportul lunar a venit a treia oară cu două zile întârziere, iar eu îl predau clientului. Așa ajung eu să-mi cer scuze. Am nevoie de el până pe 3 ale lunii; ce te-ar ajuta să-l termini la timp?"
+  },
+  {
+   "id": "banca:rz:S06-1:slaba",
+   "obiectiv_nr": 6,
+   "ordine": 1,
+   "fel": "slaba",
+   "replica": "Serios? Iar? M-am săturat să fiu mereu eu ăla care rezolvă tot. Descurcă-te.",
+   "subfel": "agresiva"
+  },
+  {
+   "id": "banca:rz:S06-2:buna",
+   "obiectiv_nr": 6,
+   "ordine": 2,
+   "fel": "buna",
+   "replica": "Știu că te pricepi, nu despre asta e vorba. E a doua oară luna asta când «mâine» devine mai târziu, iar clientul îl așteaptă azi. Am nevoie de el azi până la 16. Se poate?"
+  },
+  {
+   "id": "banca:rz:S06-2:slaba",
+   "obiectiv_nr": 6,
+   "ordine": 2,
+   "fel": "slaba",
+   "replica": "Îmi pare rău, ai dreptate, e vina mea. Fac cum zici tu, nicio problemă.",
+   "subfel": "scuzata"
+  },
+  {
+   "id": "banca:rz:S06-2:lunga",
+   "obiectiv_nr": 6,
+   "ordine": 2,
+   "fel": "lunga",
+   "replica": "Știu că te pricepi, nu despre asta e vorba. E a doua oară luna asta când «mâine» devine mai târziu, iar clientul îl așteaptă azi. Am nevoie de el azi până la 16. Se poate? Și vreau să explic de ce spun asta. Nu e prima dată când ajungem aici și de fiecare dată am încercat să rezolv din mers, am stat peste program, am răspuns la mesaje seara și am mutat alte lucruri ca să încapă totul. Nu vreau să mă plâng și nici să pară că refuz să ajut, din contră, vreau ca lucrurile să meargă bine pentru toată lumea. Doar că, dacă nu stabilim acum o regulă clară, o să ajungem iar în aceeași situație peste o lună și o să avem din nou discuția asta, cu aceleași argumente și cu același rezultat."
+  },
+  {
+   "id": "banca:rz:S06-3:buna",
+   "obiectiv_nr": 6,
+   "ordine": 3,
+   "fel": "buna",
+   "replica": "Datele de săptămâna asta au venit fără coloanele de vânzări și le-am completat noaptea. Nu mai pot face asta. Am nevoie să vină complete până joi la prânz; hai să stabilim acum ce trebuie să conțină."
+  },
+  {
+   "id": "banca:rz:S06-3:slaba",
+   "obiectiv_nr": 6,
+   "ordine": 3,
+   "fel": "slaba",
+   "replica": "Da… o să văd ce pot face. Mai vorbim.",
+   "subfel": "vaga"
+  },
+  {
+   "id": "banca:rz:S06-3:esti_ai",
+   "obiectiv_nr": 6,
+   "ordine": 3,
+   "fel": "esti_ai",
+   "replica": "Înainte să-ți răspund: vorbesc cu un om sau cu un AI?"
+  },
+  {
+   "id": "banca:rz:S07-1:buna",
+   "obiectiv_nr": 7,
+   "ordine": 1,
+   "fel": "buna",
+   "replica": "Te rog să mă lași să termin. Ideea cu gruparea comenzilor am propus-o eu acum două minute și vreau s-o prezint până la capăt. După aceea te ascult."
+  },
+  {
+   "id": "banca:rz:S07-1:slaba",
+   "obiectiv_nr": 7,
+   "ordine": 1,
+   "fel": "slaba",
+   "replica": "Îmi pare rău, ai dreptate, e vina mea. Fac cum zici tu, nicio problemă.",
+   "subfel": "scuzata"
+  },
+  {
+   "id": "banca:rz:S07-2:buna",
+   "obiectiv_nr": 7,
+   "ordine": 2,
+   "fel": "buna",
+   "replica": "Mulțumesc, aș vrea s-o spun chiar eu, pentru că am pregătit cifrele. Pe scurt: am crescut cu 8%, iar partea a doua arată de unde. Întrebările le iau la final."
+  },
+  {
+   "id": "banca:rz:S07-2:slaba",
+   "obiectiv_nr": 7,
+   "ordine": 2,
+   "fel": "slaba",
+   "replica": "Da… o să văd ce pot face. Mai vorbim.",
+   "subfel": "vaga"
+  },
+  {
+   "id": "banca:rz:S07-2:lunga",
+   "obiectiv_nr": 7,
+   "ordine": 2,
+   "fel": "lunga",
+   "replica": "Mulțumesc, aș vrea s-o spun chiar eu, pentru că am pregătit cifrele. Pe scurt: am crescut cu 8%, iar partea a doua arată de unde. Întrebările le iau la final. Și vreau să explic de ce spun asta. Nu e prima dată când ajungem aici și de fiecare dată am încercat să rezolv din mers, am stat peste program, am răspuns la mesaje seara și am mutat alte lucruri ca să încapă totul. Nu vreau să mă plâng și nici să pară că refuz să ajut, din contră, vreau ca lucrurile să meargă bine pentru toată lumea. Doar că, dacă nu stabilim acum o regulă clară, o să ajungem iar în aceeași situație peste o lună și o să avem din nou discuția asta, cu aceleași argumente și cu același rezultat."
+  },
+  {
+   "id": "banca:rz:S07-3:buna",
+   "obiectiv_nr": 7,
+   "ordine": 3,
+   "fel": "buna",
+   "replica": "Te rog, lasă-mă să termin propunerea, ajung la ea acum. Durează un minut, apoi îți dau cuvântul."
+  },
+  {
+   "id": "banca:rz:S07-3:slaba",
+   "obiectiv_nr": 7,
+   "ordine": 3,
+   "fel": "slaba",
+   "replica": "Serios? Iar? M-am săturat să fiu mereu eu ăla care rezolvă tot. Descurcă-te.",
+   "subfel": "agresiva"
+  },
+  {
+   "id": "banca:rz:S07-3:esti_ai",
+   "obiectiv_nr": 7,
+   "ordine": 3,
+   "fel": "esti_ai",
+   "replica": "Înainte să-ți răspund: vorbesc cu un om sau cu un AI?"
+  },
+  {
+   "id": "banca:rz:S08-1:buna",
+   "obiectiv_nr": 8,
+   "ordine": 1,
+   "fel": "buna",
+   "replica": "Mă bucur că te bazezi pe mine, dar până mâine nu pot, am raportul meu de predat. Îți pot arăta joi, în 20 de minute, cum se face, ca să-l poți face singur."
+  },
+  {
+   "id": "banca:rz:S08-1:slaba",
+   "obiectiv_nr": 8,
+   "ordine": 1,
+   "fel": "slaba",
+   "replica": "Da… o să văd ce pot face. Mai vorbim.",
+   "subfel": "vaga"
+  },
+  {
+   "id": "banca:rz:S08-2:buna",
+   "obiectiv_nr": 8,
+   "ordine": 2,
+   "fel": "buna",
+   "replica": "Nu, raportul tău rămâne la tine; am și eu termen azi. Dacă te blochezi la o parte anume, spune-mi care și îți arăt în cinci minute."
+  },
+  {
+   "id": "banca:rz:S08-2:slaba",
+   "obiectiv_nr": 8,
+   "ordine": 2,
+   "fel": "slaba",
+   "replica": "Serios? Iar? M-am săturat să fiu mereu eu ăla care rezolvă tot. Descurcă-te.",
+   "subfel": "agresiva"
+  },
+  {
+   "id": "banca:rz:S08-2:lunga",
+   "obiectiv_nr": 8,
+   "ordine": 2,
+   "fel": "lunga",
+   "replica": "Nu, raportul tău rămâne la tine; am și eu termen azi. Dacă te blochezi la o parte anume, spune-mi care și îți arăt în cinci minute. Și vreau să explic de ce spun asta. Nu e prima dată când ajungem aici și de fiecare dată am încercat să rezolv din mers, am stat peste program, am răspuns la mesaje seara și am mutat alte lucruri ca să încapă totul. Nu vreau să mă plâng și nici să pară că refuz să ajut, din contră, vreau ca lucrurile să meargă bine pentru toată lumea. Doar că, dacă nu stabilim acum o regulă clară, o să ajungem iar în aceeași situație peste o lună și o să avem din nou discuția asta, cu aceleași argumente și cu același rezultat."
+  },
+  {
+   "id": "banca:rz:S08-3:buna",
+   "obiectiv_nr": 8,
+   "ordine": 3,
+   "fel": "buna",
+   "replica": "Revin pe e-mailul de mai sus: nu ne-am înțeles că preiau eu sarcina asta. Pot să te ajut marți, o oră, dar responsabilitatea rămâne la tine. Dacă trebuie altă împărțire, s-o stabilim toți trei."
+  },
+  {
+   "id": "banca:rz:S08-3:slaba",
+   "obiectiv_nr": 8,
+   "ordine": 3,
+   "fel": "slaba",
+   "replica": "Îmi pare rău, ai dreptate, e vina mea. Fac cum zici tu, nicio problemă.",
+   "subfel": "scuzata"
+  },
+  {
+   "id": "banca:rz:S08-3:esti_ai",
+   "obiectiv_nr": 8,
+   "ordine": 3,
+   "fel": "esti_ai",
+   "replica": "Înainte să-ți răspund: vorbesc cu un om sau cu un AI?"
+  },
+  {
+   "id": "banca:rz:S09-1:buna",
+   "obiectiv_nr": 9,
+   "ordine": 1,
+   "fel": "buna",
+   "replica": "La fiecare predare ne certăm pe aceleași lucruri. Îți propun să facem împreună o listă cu ce trebuie să conțină predarea și s-o folosim de la proiectul următor. Ai o jumătate de oră joi?"
+  },
+  {
+   "id": "banca:rz:S09-1:slaba",
+   "obiectiv_nr": 9,
+   "ordine": 1,
+   "fel": "slaba",
+   "replica": "Serios? Iar? M-am săturat să fiu mereu eu ăla care rezolvă tot. Descurcă-te.",
+   "subfel": "agresiva"
+  },
+  {
+   "id": "banca:rz:S09-2:buna",
+   "obiectiv_nr": 9,
+   "ordine": 2,
+   "fel": "buna",
+   "replica": "«Niciodată» nu mă ajută să repar ceva. Spune-mi ce informație a lipsit data trecută și când îți trebuia. Stabilim acum un termen și îl respectăm amândoi."
+  },
+  {
+   "id": "banca:rz:S09-2:slaba",
+   "obiectiv_nr": 9,
+   "ordine": 2,
+   "fel": "slaba",
+   "replica": "Îmi pare rău, ai dreptate, e vina mea. Fac cum zici tu, nicio problemă.",
+   "subfel": "scuzata"
+  },
+  {
+   "id": "banca:rz:S09-2:lunga",
+   "obiectiv_nr": 9,
+   "ordine": 2,
+   "fel": "lunga",
+   "replica": "«Niciodată» nu mă ajută să repar ceva. Spune-mi ce informație a lipsit data trecută și când îți trebuia. Stabilim acum un termen și îl respectăm amândoi. Și vreau să explic de ce spun asta. Nu e prima dată când ajungem aici și de fiecare dată am încercat să rezolv din mers, am stat peste program, am răspuns la mesaje seara și am mutat alte lucruri ca să încapă totul. Nu vreau să mă plâng și nici să pară că refuz să ajut, din contră, vreau ca lucrurile să meargă bine pentru toată lumea. Doar că, dacă nu stabilim acum o regulă clară, o să ajungem iar în aceeași situație peste o lună și o să avem din nou discuția asta, cu aceleași argumente și cu același rezultat."
+  },
+  {
+   "id": "banca:rz:S09-3:buna",
+   "obiectiv_nr": 9,
+   "ordine": 3,
+   "fel": "buna",
+   "replica": "Înțeleg că planificarea s-a încurcat. Spune-mi ce anume s-a decalat și de la ce dată. Îți răspund azi până la 15 cu ce putem recupera."
+  },
+  {
+   "id": "banca:rz:S09-3:slaba",
+   "obiectiv_nr": 9,
+   "ordine": 3,
+   "fel": "slaba",
+   "replica": "Da… o să văd ce pot face. Mai vorbim.",
+   "subfel": "vaga"
+  },
+  {
+   "id": "banca:rz:S09-3:esti_ai",
+   "obiectiv_nr": 9,
+   "ordine": 3,
+   "fel": "esti_ai",
+   "replica": "Înainte să-ți răspund: vorbesc cu un om sau cu un AI?"
+  },
+  {
+   "id": "banca:rz:S10-1:buna",
+   "obiectiv_nr": 10,
+   "ordine": 1,
+   "fel": "buna",
+   "replica": "Modificarea pe care o cereți înseamnă trei zile de lucru. O putem face, cu un cost în plus, și vă trimit oferta azi. Dacă bugetul nu permite, vă propun o variantă mai simplă, care intră în ce am stabilit."
+  },
+  {
+   "id": "banca:rz:S10-1:slaba",
+   "obiectiv_nr": 10,
+   "ordine": 1,
+   "fel": "slaba",
+   "replica": "Îmi pare rău, ai dreptate, e vina mea. Fac cum zici tu, nicio problemă.",
+   "subfel": "scuzata"
+  },
+  {
+   "id": "banca:rz:S10-2:buna",
+   "obiectiv_nr": 10,
+   "ordine": 2,
+   "fel": "buna",
+   "replica": "Am înțeles ce aveți nevoie. Luni la 9 mă ocup prima dată de asta și vă trimit modificarea până la prânz. Pentru urgențe reale în weekend, vă rog să-mi scrieți un mesaj."
+  },
+  {
+   "id": "banca:rz:S10-2:slaba",
+   "obiectiv_nr": 10,
+   "ordine": 2,
+   "fel": "slaba",
+   "replica": "Da… o să văd ce pot face. Mai vorbim.",
+   "subfel": "vaga"
+  },
+  {
+   "id": "banca:rz:S10-2:lunga",
+   "obiectiv_nr": 10,
+   "ordine": 2,
+   "fel": "lunga",
+   "replica": "Am înțeles ce aveți nevoie. Luni la 9 mă ocup prima dată de asta și vă trimit modificarea până la prânz. Pentru urgențe reale în weekend, vă rog să-mi scrieți un mesaj. Și vreau să explic de ce spun asta. Nu e prima dată când ajungem aici și de fiecare dată am încercat să rezolv din mers, am stat peste program, am răspuns la mesaje seara și am mutat alte lucruri ca să încapă totul. Nu vreau să mă plâng și nici să pară că refuz să ajut, din contră, vreau ca lucrurile să meargă bine pentru toată lumea. Doar că, dacă nu stabilim acum o regulă clară, o să ajungem iar în aceeași situație peste o lună și o să avem din nou discuția asta, cu aceleași argumente și cu același rezultat."
+  },
+  {
+   "id": "banca:rz:S10-3:buna",
+   "obiectiv_nr": 10,
+   "ordine": 3,
+   "fel": "buna",
+   "replica": "Contractul prevede două runde de revizii și am făcut deja trei. Runda a patra o putem face ca serviciu în plus; vă trimit azi costul. Dacă preferați, adunăm acum toate observațiile într-o singură listă finală."
+  },
+  {
+   "id": "banca:rz:S10-3:slaba",
+   "obiectiv_nr": 10,
+   "ordine": 3,
+   "fel": "slaba",
+   "replica": "Serios? Iar? M-am săturat să fiu mereu eu ăla care rezolvă tot. Descurcă-te.",
+   "subfel": "agresiva"
+  },
+  {
+   "id": "banca:rz:S10-3:esti_ai",
+   "obiectiv_nr": 10,
+   "ordine": 3,
+   "fel": "esti_ai",
+   "replica": "Înainte să-ți răspund: vorbesc cu un om sau cu un AI?"
+  },
+  {
+   "id": "banca:rz:S11-1:buna",
+   "obiectiv_nr": 11,
+   "ordine": 1,
+   "fel": "buna",
+   "replica": "N-am cifra asta acum și nu vreau să vă dau una aproximativă. V-o trimit azi până la 17, verificată."
+  },
+  {
+   "id": "banca:rz:S11-1:slaba",
+   "obiectiv_nr": 11,
+   "ordine": 1,
+   "fel": "slaba",
+   "replica": "Da… o să văd ce pot face. Mai vorbim.",
+   "subfel": "vaga"
+  },
+  {
+   "id": "banca:rz:S11-2:buna",
+   "obiectiv_nr": 11,
+   "ordine": 2,
+   "fel": "buna",
+   "replica": "Funcția asta n-am discutat-o încă, deci nu vă dau un preț pe loc. Îmi notez ce aveți nevoie și vă trimit o estimare până joi."
+  },
+  {
+   "id": "banca:rz:S11-2:slaba",
+   "obiectiv_nr": 11,
+   "ordine": 2,
+   "fel": "slaba",
+   "replica": "Serios? Iar? M-am săturat să fiu mereu eu ăla care rezolvă tot. Descurcă-te.",
+   "subfel": "agresiva"
+  },
+  {
+   "id": "banca:rz:S11-2:lunga",
+   "obiectiv_nr": 11,
+   "ordine": 2,
+   "fel": "lunga",
+   "replica": "Funcția asta n-am discutat-o încă, deci nu vă dau un preț pe loc. Îmi notez ce aveți nevoie și vă trimit o estimare până joi. Și vreau să explic de ce spun asta. Nu e prima dată când ajungem aici și de fiecare dată am încercat să rezolv din mers, am stat peste program, am răspuns la mesaje seara și am mutat alte lucruri ca să încapă totul. Nu vreau să mă plâng și nici să pară că refuz să ajut, din contră, vreau ca lucrurile să meargă bine pentru toată lumea. Doar că, dacă nu stabilim acum o regulă clară, o să ajungem iar în aceeași situație peste o lună și o să avem din nou discuția asta, cu aceleași argumente și cu același rezultat."
+  },
+  {
+   "id": "banca:rz:S11-3:buna",
+   "obiectiv_nr": 11,
+   "ordine": 3,
+   "fel": "buna",
+   "replica": "E o întrebare bună și vreau să vă răspund exact. Partea de principiu v-o explic acum; pentru detalii, vă trimit mâine un răspuns scris, verificat cu colegul tehnic."
+  },
+  {
+   "id": "banca:rz:S11-3:slaba",
+   "obiectiv_nr": 11,
+   "ordine": 3,
+   "fel": "slaba",
+   "replica": "Îmi pare rău, ai dreptate, e vina mea. Fac cum zici tu, nicio problemă.",
+   "subfel": "scuzata"
+  },
+  {
+   "id": "banca:rz:S11-3:esti_ai",
+   "obiectiv_nr": 11,
+   "ordine": 3,
+   "fel": "esti_ai",
+   "replica": "Înainte să-ți răspund: vorbesc cu un om sau cu un AI?"
+  },
+  {
+   "id": "banca:rz:S12-1:buna",
+   "obiectiv_nr": 12,
+   "ordine": 1,
+   "fel": "buna",
+   "replica": "E a treia ofertă cu prețuri greșite luna asta, iar clientul a observat. De acum, fiecare ofertă trece prin lista de verificare înainte să plece. Ce te-ar ajuta să nu se mai întâmple?"
+  },
+  {
+   "id": "banca:rz:S12-1:slaba",
+   "obiectiv_nr": 12,
+   "ordine": 1,
+   "fel": "slaba",
+   "replica": "Serios? Iar? M-am săturat să fiu mereu eu ăla care rezolvă tot. Descurcă-te.",
+   "subfel": "agresiva"
+  },
+  {
+   "id": "banca:rz:S12-2:buna",
+   "obiectiv_nr": 12,
+   "ordine": 2,
+   "fel": "buna",
+   "replica": "Ai întârziat a patra oară la ședința cu clientul, iar azi am început fără tine. Clientul simte asta. De la ședința următoare am nevoie să fii acolo cu cinci minute înainte. Ce te împiedică acum?"
+  },
+  {
+   "id": "banca:rz:S12-2:slaba",
+   "obiectiv_nr": 12,
+   "ordine": 2,
+   "fel": "slaba",
+   "replica": "Îmi pare rău, ai dreptate, e vina mea. Fac cum zici tu, nicio problemă.",
+   "subfel": "scuzata"
+  },
+  {
+   "id": "banca:rz:S12-2:lunga",
+   "obiectiv_nr": 12,
+   "ordine": 2,
+   "fel": "lunga",
+   "replica": "Ai întârziat a patra oară la ședința cu clientul, iar azi am început fără tine. Clientul simte asta. De la ședința următoare am nevoie să fii acolo cu cinci minute înainte. Ce te împiedică acum? Și vreau să explic de ce spun asta. Nu e prima dată când ajungem aici și de fiecare dată am încercat să rezolv din mers, am stat peste program, am răspuns la mesaje seara și am mutat alte lucruri ca să încapă totul. Nu vreau să mă plâng și nici să pară că refuz să ajut, din contră, vreau ca lucrurile să meargă bine pentru toată lumea. Doar că, dacă nu stabilim acum o regulă clară, o să ajungem iar în aceeași situație peste o lună și o să avem din nou discuția asta, cu aceleași argumente și cu același rezultat."
+  },
+  {
+   "id": "banca:rz:S12-3:buna",
+   "obiectiv_nr": 12,
+   "ordine": 3,
+   "fel": "buna",
+   "replica": "Se poate să mai greșească și alții, și mă ocup și de asta. Acum vorbim despre ofertele tale: trei greșeli luna asta. Am nevoie să folosești lista de verificare la fiecare ofertă, de azi."
+  },
+  {
+   "id": "banca:rz:S12-3:slaba",
+   "obiectiv_nr": 12,
+   "ordine": 3,
+   "fel": "slaba",
+   "replica": "Da… o să văd ce pot face. Mai vorbim.",
+   "subfel": "vaga"
+  },
+  {
+   "id": "banca:rz:S12-3:esti_ai",
+   "obiectiv_nr": 12,
+   "ordine": 3,
+   "fel": "esti_ai",
+   "replica": "Înainte să-ți răspund: vorbesc cu un om sau cu un AI?"
+  },
+  {
+   "id": "banca:rz:S01-1:goala-1",
+   "obiectiv_nr": 1,
+   "ordine": 1,
+   "fel": "goala",
+   "replica": ""
+  },
+  {
+   "id": "banca:rz:S01-1:goala-2",
+   "obiectiv_nr": 1,
+   "ordine": 1,
+   "fel": "goala",
+   "replica": "   \n  "
+  },
+  {
+   "id": "banca:rz:S01-1:peste_limita",
+   "obiectiv_nr": 1,
+   "ordine": 1,
+   "fel": "peste_limita",
+   "replica": "Înțeleg că e urgent. Azi după 17:00 nu-l mai pot face bine; ți-l trimit luni la 10. Dacă trebuie neapărat azi, spune-mi ce las deoparte din ce am început. Și vreau să explic de ce spun asta. Nu e prima dată când ajungem aici și de fiecare dată am încercat să rezolv din mers, am stat peste program, am răspuns la mesaje seara și am mutat alte lucruri ca să încapă totul. Nu vreau să mă plâng și nici să pară că refuz să ajut, din contră, vreau ca lucrurile să meargă bine pentru toată lumea. Doar că, dacă nu stabilim acum o regulă clară, o să ajungem iar în aceeași situație peste o lună și o să avem din nou discuția asta, cu aceleași argumente și cu același rezultat. Și vreau să explic de ce spun asta. Nu e prima dată când ajungem aici și de fiecare dată am încercat să rezolv din mers, am stat peste program, am răspuns la mesaje seara și am mutat alte lucruri ca să încapă totul. Nu vreau să mă plâng și nici să pară că refuz să ajut, din contră, vreau ca lucrurile să meargă bine pentru toată lumea. Doar că, dacă nu stabilim acum o regulă clară, o să ajungem iar în aceeași situație peste o lună și o să avem din nou discuția asta, cu aceleași argumente și cu același rezultat. Și vreau să explic de ce spun asta. Nu e prima dată când ajungem aici și de fiecare dată am încercat să rezolv din mers, am stat peste program, am răspuns la mesaje seara și am mutat alte lucruri ca să încapă totul. Nu vreau să mă plâng și nici să pară că refuz să ajut, din contră, vreau ca lucrurile să meargă bine pentru toată lumea. Doar că, dacă nu stabilim acum o regulă clară, o să ajungem iar în aceeași situație peste o lună și o să avem din nou discuția asta, cu aceleași argumente și cu același rezultat."
+  }
+ ]
+}
