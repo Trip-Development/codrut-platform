@@ -9,6 +9,7 @@ import {
   submitPracticeTurn,
   endPracticeSession,
   getConversatiaNeincheiata,
+  getPracticeSessionHistory,
   type PracticeConsent,
   type PracticeSession,
   type PracticeSessionDetail,
@@ -144,6 +145,10 @@ const INCEPUT_ALTA_TEMA = "Vreau să exersăm altceva: ";
 /** Ce se trimite cand omul apasa „Da, hai". */
 const CONFIRMARE = "Da, hai.";
 
+// Plicul 247: cât de des întreabă ecranul dacă a venit nota și cât o așteaptă.
+const PAS_NOTA_MS = 2000;
+const CAT_ASTEPTAM_NOTA_MS = 45000;
+
 /**
  * Sub care replica a lui Cody apar cele doua butoane de pornire.
  *
@@ -244,6 +249,56 @@ export function PracticeWorkspace({
   }, [projectId]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Plicul 247: nota vine în fundal. Cât o replică a lui Cody are `evaluareVine`, ecranul
+  // întreabă serverul la 2 s, pe ruta istoricului, cel mult 45 s de la prima întrebare pentru
+  // replica aceea; momentul primei întrebări se ține pe `id` și nu se repornește la fiecare
+  // schimbare a replicilor. Caseta nu se blochează cât vine nota.
+  const primaIntrebareNota = useRef<Map<string, number>>(new Map());
+  const areNotaInLucru = turns.some((t) => t.evaluareVine === true);
+  useEffect(() => {
+    const sesiune = session?.id;
+    if (!sesiune || !areNotaInLucru) return;
+    let oprit = false;
+    let ceas: ReturnType<typeof setTimeout> | undefined;
+    const pas = async () => {
+      let venite: PracticeTurn[] | null = null;
+      try {
+        venite = (await getPracticeSessionHistory(sesiune)).turns;
+      } catch {
+        venite = null; // se încearcă iar la pasul următor
+      }
+      if (oprit) return;
+      const acum = Date.now();
+      setTurns((curente) => {
+        let schimbat = false;
+        const noi = curente.map((t) => {
+          if (t.evaluareVine !== true) return t;
+          if (!primaIntrebareNota.current.has(t.id)) primaIntrebareNota.current.set(t.id, acum);
+          const deLaServer = venite?.find((v) => v.id === t.id);
+          if (
+            deLaServer &&
+            (deLaServer.text !== t.text || (deLaServer.evaluareVine === true) !== t.evaluareVine)
+          ) {
+            schimbat = true;
+            return { ...t, text: deLaServer.text, evaluareVine: deLaServer.evaluareVine === true };
+          }
+          if (acum - (primaIntrebareNota.current.get(t.id) ?? acum) >= CAT_ASTEPTAM_NOTA_MS) {
+            schimbat = true;
+            return { ...t, evaluareVine: false };
+          }
+          return t;
+        });
+        return schimbat ? noi : curente;
+      });
+      if (!oprit) ceas = setTimeout(pas, PAS_NOTA_MS);
+    };
+    ceas = setTimeout(pas, PAS_NOTA_MS);
+    return () => {
+      oprit = true;
+      if (ceas) clearTimeout(ceas);
+    };
+  }, [session?.id, areNotaInLucru]);
   // Ca „Vreau alta tema" sa poata pune cursorul la capatul textului pregatit.
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const cursorDupaMicrofon = useRef(false);
@@ -714,6 +769,15 @@ export function PracticeWorkspace({
               >
                 {turn.text}
               </div>
+              {!isParticipant && turn.evaluareVine ? (
+                <div
+                  role="status"
+                  className="mt-1 px-1 text-xs text-muted-foreground flex items-center gap-2"
+                >
+                  <span className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  <span>Nota ta este…</span>
+                </div>
+              ) : null}
               {aratButoaneleDePornire(session.kind, turns, turn) ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button

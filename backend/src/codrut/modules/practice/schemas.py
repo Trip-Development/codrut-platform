@@ -51,6 +51,8 @@ class PracticeTurnResponse(BaseModel):
     role: TurnRole
     text: str
     created_at: datetime
+    # Plicul 247: nota profesorului e încă în lucru (vine în fundal).
+    evaluare_vine: bool = False
 
 
 class PracticeSessionResponse(BaseModel):

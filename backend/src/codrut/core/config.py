@@ -151,6 +151,11 @@ class Settings(BaseSettings):
     # randul asta, nu o operatie.
     practice_two_calls: bool = False
 
+    # Plicul 247 — nota vine în fundal: la jocul de rol cu două apeluri, replica personajului
+    # pleacă la om imediat, iar nota se scrie după, o singură dată. false = drumul de dinainte,
+    # neschimbat (întoarcere fără cod).
+    practice_nota_in_fundal: bool = True
+
     # Tabelul de preturi PE MODEL — plicul 120.
     #
     # Pana azi exista o singura pereche de patru preturi. Cu doua modele in aceeasi replica

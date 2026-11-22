@@ -3,13 +3,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 from redis.asyncio import Redis
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.contracts.generation import (
@@ -74,6 +75,18 @@ from codrut.modules.practice.quotas import (
 from codrut.modules.practice.scoring import nivel_din_scor
 
 logger = logging.getLogger(__name__)
+
+# Plicul 247: textul de azi pentru nota lipsă, o singură dată în cod (ambele drumuri îl folosesc).
+EVALUARE_NELIVRATA = "_Evaluare nelivrată. Replica ta e salvată; nota vine data viitoare._"
+
+# Notele care se termină în fundal (plicul 247). Ținute aici ca să nu le ia colectorul.
+_NOTE_IN_LUCRU: set[asyncio.Task] = set()
+
+
+async def asteapta_notele() -> None:
+    """Așteaptă notele în lucru — pentru teste (plicul 247)."""
+    while _NOTE_IN_LUCRU:
+        await asyncio.gather(*list(_NOTE_IN_LUCRU), return_exceptions=True)
 
 # Blocul tehnic pe care `rezumat.md` il cere modelului la finalul sintezei.
 _BLOC_JSON = re.compile(r"```json\s*\{.*?\}\s*```", re.DOTALL)
@@ -154,11 +167,19 @@ class PracticeSessionService:
         redis: Redis | None = None,
         generation_provider: GenerationProvider | None = None,
         settings: Settings | None = None,
+        session_factory=None,
     ) -> None:
         self.session = session
         self.settings = settings or get_settings()
         self._redis = redis
         self._generation_provider = generation_provider
+        # Plicul 247: nota din fundal își deschide altă sesiune — a cererii se închide după
+        # răspuns.
+        if session_factory is None:
+            from codrut.core.database import SessionLocal
+
+            session_factory = SessionLocal
+        self._session_factory = session_factory
 
     @property
     def redis(self) -> Redis:
@@ -1083,6 +1104,9 @@ class PracticeSessionService:
             now = datetime.now(UTC)
             expires_at = now + timedelta(days=program_settings.turn_retention_days)
 
+            # Plicul 247: un rând rămas „vine” după o repornire se închide cinstit aici.
+            await self._inchide_notele_ramase(session_id, numai_expirate=True)
+
             # Query existing turns for this session
             stmt_turns = (
                 select(PracticeTurn)
@@ -1280,6 +1304,13 @@ class PracticeSessionService:
                 if doar_evaluatorul:
                     request, cerere_evaluator = cerere_evaluator, None
 
+            # Plicul 247: nota în fundal numai la jocul cu două apeluri (nu /feedback, nu pornire).
+            in_fundal = cerere_evaluator is not None and self.settings.practice_nota_in_fundal
+            if cerere_evaluator is not None and any(
+                getattr(t, "evaluare_stare", None) == "vine" for t in existing_turns
+            ):
+                logger.info("practice_nota_fara_cea_de_dinainte sesiune=%s", session_id)
+
             # 7. Estimate pessimistic cost and reserve budget
             prompt_words = sum(len(m.text.split()) for m in request.messages)
             if request.system_instruction:
@@ -1328,9 +1359,23 @@ class PracticeSessionService:
                 len(messages),
                 len(messages[-1].text) if messages else 0,
             )
+            t0 = time.monotonic()
+            sarcina_notei: asyncio.Task | None = None
             try:
                 if cerere_evaluator is None:
                     result = await self.generation_provider.generate(request)
+                    rezultat_evaluator = None
+                elif in_fundal:
+                    # Plicul 247: profesorul pornește întâi (paralel, ca azi), dar omul nu-l
+                    # mai așteaptă — replica pleacă imediat ce e gata actorul.
+                    sarcina_notei = asyncio.create_task(
+                        self._evaluatorul(cerere_evaluator, session_id)
+                    )
+                    try:
+                        result = await self.generation_provider.generate(request)
+                    except BaseException:
+                        sarcina_notei.cancel()
+                        raise
                     rezultat_evaluator = None
                 else:
                     # In paralel, nu pe rand: altfel despartirea ar dubla asteptarea omului
@@ -1361,7 +1406,10 @@ class PracticeSessionService:
             text_personaj = _fara_despartitor(result.text) if doar_personajul else None
             if pornire_doar_actor:
                 text_final = text_personaj
-            if cerere_evaluator is not None:
+            if in_fundal:
+                # Plicul 247: numai personajul; nota se adaugă după, pe același rând.
+                text_final = text_personaj
+            elif cerere_evaluator is not None:
                 evaluarea = (
                     (rezultat_evaluator.text or "").strip()
                     if rezultat_evaluator is not None else ""
@@ -1369,9 +1417,7 @@ class PracticeSessionService:
                 if not evaluarea:
                     # Punctul 2e: replica personajului SE AFISEAZA oricum, iar lipsa evaluarii
                     # se spune pe fata, fara nota inventata.
-                    evaluarea = (
-                        "_Evaluare nelivrată. Replica ta e salvată; nota vine data viitoare._"
-                    )
+                    evaluarea = EVALUARE_NELIVRATA
                 text_final = f"{text_personaj}\n\n***\n\n{evaluarea}"
 
             actor_turn = PracticeTurn(
@@ -1399,6 +1445,7 @@ class PracticeSessionService:
                 # plicul 120. Coloanele de unitati de mai sus tin numai apelul actorului.
                 cost_usd=cost_real,
                 expires_at=expires_at,
+                evaluare_stare="vine" if in_fundal else None,
             )
             self.session.add(actor_turn)
 
@@ -1407,8 +1454,120 @@ class PracticeSessionService:
             current_session.turn_count += 1
 
             await self.session.commit()
+            # Plicul 247: cât a așteptat omul replica (fără textul lui — plicul 217).
+            logger.info(
+                "practice_replica_trimisa sesiune=%s ms=%d",
+                session_id, int((time.monotonic() - t0) * 1000),
+            )
+
+            if in_fundal and sarcina_notei is not None:
+                nota = asyncio.create_task(self._scrie_nota(
+                    actor_turn.id, reservation_id, sarcina_notei, text_personaj,
+                    result.estimated_usd, session_id, t0,
+                ))
+                _NOTE_IN_LUCRU.add(nota)
+                nota.add_done_callback(_NOTE_IN_LUCRU.discard)
 
             return actor_turn
+
+    async def _scrie_nota(
+        self,
+        actor_turn_id: uuid.UUID,
+        reservation_id: uuid.UUID,
+        sarcina: asyncio.Task,
+        text_personaj: str | None,
+        cost_actor: Decimal,
+        session_id: uuid.UUID,
+        t0: float,
+    ) -> None:
+        """Nota venită în fundal, scrisă O SINGURĂ DATĂ pe replică — plicul 247.
+
+        Condiția `evaluare_stare = 'vine'` e garanția: a doua scriere, de oriunde, nu mai
+        schimbă nimic. Nicio conexiune la bază nu e ținută cât se așteaptă profesorul.
+        """
+        from codrut.modules.practice.models import (
+            BudgetReservationState,
+            PracticeBudgetReservation,
+        )
+
+        def lipsa():
+            return (
+                update(PracticeTurn)
+                .where(PracticeTurn.id == actor_turn_id, PracticeTurn.evaluare_stare == "vine")
+                .values(
+                    text=f"{text_personaj}\n\n***\n\n{EVALUARE_NELIVRATA}",
+                    evaluare_stare="lipsa",
+                )
+                .execution_options(synchronize_session=False)
+            )
+
+        try:
+            rez = await sarcina
+            evaluarea = (rez.text or "").strip() if rez is not None else ""
+            async with self._session_factory() as s:
+                if evaluarea:
+                    cost = cost_actor + rez.estimated_usd
+                    schimbat = await s.execute(
+                        update(PracticeTurn)
+                        .where(
+                            PracticeTurn.id == actor_turn_id,
+                            PracticeTurn.evaluare_stare == "vine",
+                        )
+                        .values(
+                            text=f"{text_personaj}\n\n***\n\n{evaluarea}",
+                            text_evaluator=evaluarea,
+                            evaluare_stare="gata",
+                            cost_usd=cost,
+                        )
+                        .execution_options(synchronize_session=False)
+                    )
+                    stare = "gata" if schimbat.rowcount == 1 else "deja"
+                    if schimbat.rowcount == 1:
+                        await s.execute(
+                            update(PracticeBudgetReservation)
+                            .where(
+                                PracticeBudgetReservation.id == reservation_id,
+                                PracticeBudgetReservation.state
+                                == BudgetReservationState.settled,
+                            )
+                            .values(actual_usd=cost)
+                            .execution_options(synchronize_session=False)
+                        )
+                else:
+                    schimbat = await s.execute(lipsa())
+                    stare = "lipsa" if schimbat.rowcount == 1 else "deja"
+                await s.commit()
+            logger.info(
+                "practice_nota sesiune=%s stare=%s ms=%d",
+                session_id, stare, int((time.monotonic() - t0) * 1000),
+            )
+        except Exception:
+            logger.warning("practice_nota_esuata sesiune=%s", session_id, exc_info=True)
+            try:
+                async with self._session_factory() as s:
+                    await s.execute(lipsa())
+                    await s.commit()
+            except Exception:
+                logger.warning("practice_nota_esuata sesiune=%s", session_id, exc_info=True)
+
+    async def _inchide_notele_ramase(self, session_id: uuid.UUID, numai_expirate: bool) -> None:
+        """Rândurile rămase „vine” devin „lipsa”, cu textul de azi — plicul 247."""
+        conditii = [PracticeTurn.session_id == session_id, PracticeTurn.evaluare_stare == "vine"]
+        if numai_expirate:
+            cat = self.settings.vertex_timeout_evaluator_replica_seconds + 30
+            # Același ceas ca `created_at` (scris de aplicație, `utcnow`) și ca `evaluare_vine`:
+            # ceasul bazei poate fi altul decât al procesului (pe iMac, 37 s, 22 nov).
+            prag = datetime.now(UTC) - timedelta(seconds=cat)
+            conditii.append(PracticeTurn.created_at < prag)
+        await self.session.execute(
+            update(PracticeTurn)
+            .where(*conditii)
+            .values(
+                text=PracticeTurn.text + f"\n\n***\n\n{EVALUARE_NELIVRATA}",
+                evaluare_stare="lipsa",
+            )
+            .execution_options(synchronize_session="fetch")
+        )
 
     async def submit_turn(
         self,
@@ -1472,11 +1631,28 @@ class PracticeSessionService:
         )).scalar_one_or_none()
         proiect_id = _setari.project_id if _setari else None
 
+        # Plicul 247: sinteza și punctajul așteaptă nota venită în fundal (cel mult limita
+        # profesorului + 5 s). Între citiri legătura se întoarce în bazin (`commit`).
+        termen = time.monotonic() + self.settings.vertex_timeout_evaluator_replica_seconds + 5
+        while True:
+            in_lucru = (await self.session.execute(
+                select(func.count(PracticeTurn.id)).where(
+                    PracticeTurn.session_id == session_id,
+                    PracticeTurn.evaluare_stare == "vine",
+                )
+            )).scalar_one()
+            if not in_lucru or time.monotonic() >= termen:
+                break
+            await self.session.commit()
+            await asyncio.sleep(0.5)
+        await self._inchide_notele_ramase(session_id, numai_expirate=False)
+
         # Fetch turns for summary generation
         stmt_turns = (
             select(PracticeTurn)
             .where(PracticeTurn.session_id == session_id)
             .order_by(PracticeTurn.ordinal.asc())
+            .execution_options(populate_existing=True)
         )
         turns = list((await self.session.execute(stmt_turns)).scalars().all())
 

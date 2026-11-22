@@ -13,6 +13,8 @@ export type PracticeTurn = {
   text: string;
   createdAt: string;
   expiresAt: string;
+  // Plicul 247: nota profesorului e încă în lucru (vine în fundal).
+  evaluareVine?: boolean;
 };
 
 export type PracticeSession = {
@@ -160,6 +162,7 @@ export async function startPracticeSession(payload: {
           text: data.first_turn.text,
           createdAt: data.first_turn.created_at,
           expiresAt: data.first_turn.expires_at,
+          evaluareVine: data.first_turn.evaluare_vine === true,
         }
       : null,
   };
@@ -188,6 +191,7 @@ export async function submitPracticeTurn(
       text: data.participant_turn.text,
       createdAt: data.participant_turn.created_at,
       expiresAt: data.participant_turn.expires_at,
+      evaluareVine: data.participant_turn.evaluare_vine === true,
     },
     actorTurn: data.actor_turn
       ? {
@@ -198,6 +202,7 @@ export async function submitPracticeTurn(
           text: data.actor_turn.text,
           createdAt: data.actor_turn.created_at,
           expiresAt: data.actor_turn.expires_at,
+          evaluareVine: data.actor_turn.evaluare_vine === true,
         }
       : null,
     sessionState: data.session_state,
@@ -227,6 +232,7 @@ function mapSessionDetail(data: {
     text: string;
     created_at: string;
     expires_at: string;
+    evaluare_vine?: boolean;
   }[];
 }): PracticeSessionDetail {
   return {
@@ -252,6 +258,7 @@ function mapSessionDetail(data: {
       text: t.text,
       createdAt: t.created_at,
       expiresAt: t.expires_at,
+      evaluareVine: t.evaluare_vine === true,
     })),
   };
 }
