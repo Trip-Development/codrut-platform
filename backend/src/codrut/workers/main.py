@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import UTC, datetime
 
 import httpx
 from arq import cron
@@ -22,6 +23,7 @@ from codrut.modules.forms.processing import (
 )
 from codrut.modules.health.service import publish_worker_heartbeat
 from codrut.modules.identity import models as identity_models  # noqa: F401
+from codrut.modules.practice.notificare_zilnica import anunta_cheile, trimite_toate
 
 logger = logging.getLogger(__name__)
 
@@ -192,11 +194,24 @@ async def review_email_suppressions(_ctx: dict) -> dict[str, int]:
     return totals
 
 
+async def trimite_notificarile_zilnice(_ctx: dict) -> dict[str, int]:
+    """Notificarea zilnică a replicii zilei (plicul 252): mesaj gol, cel mult o dată pe zi."""
+    settings = get_settings()
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
+        return await trimite_toate(settings, datetime.now(UTC), SessionLocal, client)
+
+
+async def anunta_cheile_notificarii(_ctx: dict) -> None:
+    """Un singur rând la pornire (corecția 8 a plicului 252): „cheile se pot citi: da/nu”."""
+    anunta_cheile(get_settings())
+
+
 class WorkerSettings:
     settings = get_settings()
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     max_jobs = settings.worker_max_jobs
     functions = [health_check]
+    on_startup = anunta_cheile_notificarii
     cron_jobs = [
         cron(
             record_worker_heartbeat,
@@ -229,6 +244,14 @@ class WorkerSettings:
             minute=45,
             run_at_startup=False,
             unique=True,
+        ),
+        cron(
+            trimite_notificarile_zilnice,
+            minute={0, 10, 20, 30, 40, 50},
+            second=0,
+            run_at_startup=False,
+            unique=True,
+            timeout=240,
         ),
     ]
 

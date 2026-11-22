@@ -14,6 +14,7 @@ import {
   type ParticipantRouteSearchParams,
 } from "../participant-context";
 import { participantAccountContexts } from "../proiectele-contului";
+import { NotificareaZilnica } from "./NotificareaZilnica";
 import { ReplicaZilei } from "./ReplicaZilei";
 import { TEXTE } from "./texte";
 
@@ -56,10 +57,13 @@ export default async function ParticipantReplicaZileiPage({
         />
       }
     >
-      <ReplicaZilei
-        projectId={summary.projectId ?? ""}
-        exerseazaHref={participantScopedHref("/participant/practice", scopeParams)}
-      />
+      <>
+        <ReplicaZilei
+          projectId={summary.projectId ?? ""}
+          exerseazaHref={participantScopedHref("/participant/practice", scopeParams)}
+        />
+        {summary.projectId ? <NotificareaZilnica projectId={summary.projectId} /> : null}
+      </>
     </AppShell>
   );
 }

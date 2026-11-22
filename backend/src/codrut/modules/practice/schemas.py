@@ -533,3 +533,30 @@ class PracticeDailyReplyResponse(BaseModel):
 class PracticeDailyReplyRequest(BaseModel):
     situation_id: UUID
     replica: str
+
+
+# ---- notificarea zilnică (plicul 252, L3-P2): numai ale omului; fără nume, email sau id-uri ----
+
+
+class PracticeDailyReminderInfoResponse(BaseModel):
+    disponibila: bool
+    cheie_publica: str | None = None
+    ore: list[int]
+
+
+class PracticeDailyReminderEndpointRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    endpoint: str = Field(min_length=1, max_length=2048)
+
+
+class PracticeDailyReminderSetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    endpoint: str = Field(min_length=1, max_length=2048)
+    ora: int
+
+
+class PracticeDailyReminderStateResponse(BaseModel):
+    pornita: bool
+    ora: int | None = None

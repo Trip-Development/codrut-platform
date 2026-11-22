@@ -33,14 +33,28 @@ describe("Cody installable on the phone", () => {
     }
   });
 
-  it("ships no service worker (pages are per-request with a nonce)", () => {
+  it("the only service worker is public/sw.js: notifications only, no page cache (plicul 252)", () => {
     const registerCall = ["serviceWorker", "register"].join(".");
-    const offenders = sourceFiles(srcDir).filter((file) =>
-      readFileSync(file, "utf8").includes(registerCall),
-    );
+    const callers = sourceFiles(srcDir)
+      .filter((file) => !file.endsWith(".test.ts") && !file.endsWith(".test.tsx"))
+      .filter((file) => readFileSync(file, "utf8").includes(registerCall))
+      .map((file) => path.relative(srcDir, file));
+    expect(callers).toEqual([path.join("lib", "notificare-browser.ts")]);
 
-    expect(offenders).toEqual([]);
-    expect(existsSync(path.join(publicDir, "sw.js"))).toBe(false);
+    const lib = readFileSync(path.join(srcDir, "lib", "notificare-browser.ts"), "utf8");
+    expect(lib.split("register(").length - 1).toBe(1);
+    expect(lib).toContain('register("/sw.js"');
+
+    const sw = readFileSync(path.join(publicDir, "sw.js"), "utf8");
+    const listeners = [...sw.matchAll(/addEventListener\("([a-z]+)"/g)].map((m) => m[1]);
+    expect(listeners).toEqual(["push", "notificationclick"]);
+    expect(sw.split("addEventListener").length - 1).toBe(2);
+    for (const forbidden of ["fetch", "caches", "importScripts", "event.data", "onfetch", "oninstall", "onactivate", "onmessage", "onsync"]) {
+      expect(sw, forbidden).not.toContain(forbidden);
+    }
+
+    const publicJs = readdirSync(publicDir).filter((name) => name.endsWith(".js"));
+    expect(publicJs).toEqual(["sw.js"]);
     expect(existsSync(path.join(publicDir, "service-worker.js"))).toBe(false);
   });
 });

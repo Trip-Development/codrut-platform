@@ -15,6 +15,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -829,3 +830,38 @@ class PracticeDailyReply(TimestampMixin, Base):
     cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
     prompt_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class PracticeDailyReminder(TimestampMixin, Base):
+    """Notificarea zilnică a replicii zilei, pornită de om pe telefonul lui — plicul 252 (L3-P2).
+
+    Un rând = un telefon (adresa anonimă dată de serviciul de notificări al telefonului), omul și
+    proiectul lui, ora aleasă. Fără nume, email, text, cheile browserului, IP sau „user agent”:
+    mesajul pleacă gol. Oprirea ȘTERGE rândul.
+    """
+
+    __tablename__ = "practice_daily_reminders"
+    __table_args__ = (
+        UniqueConstraint("endpoint", name="uq_practice_daily_reminders_endpoint"),
+        CheckConstraint("ora >= 7 AND ora <= 21", name="ora_intre_7_si_21"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    participant_profile_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(
+            "participant_profiles.id", ondelete="CASCADE",
+            name="fk_practice_daily_reminders_profile",
+        ),
+        index=True,
+        nullable=False,
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(
+            "company_projects.id", ondelete="CASCADE",
+            name="fk_practice_daily_reminders_project",
+        ),
+        nullable=False,
+    )
+    endpoint: Mapped[str] = mapped_column(String(2048), nullable=False)
+    ora: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    ultima_zi_trimisa: Mapped[date | None] = mapped_column(Date, nullable=True)

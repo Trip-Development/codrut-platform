@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     outbox_backlog_max_pending: int = Field(default=5000, ge=1, le=1_000_000)
     outbox_backlog_max_age_seconds: int = Field(default=1800, ge=60, le=86_400)
     public_app_url: str = "http://localhost:3000"
+    # Notificarea zilnică a replicii zilei (plicul 252): cheile VAPID numai pe probă; fără cheia
+    # publică rutele spun `disponibila: false`, fără ambele worker-ul nu trimite nimic.
+    push_vapid_public_key: str | None = None
+    push_vapid_private_key: SecretStr | None = None
+    push_vapid_subject: str | None = None
     campaign_asset_dir: str = "var/campaign-assets"
     campaign_asset_public_path: str = "/api/campaign-assets"
     campaign_asset_max_bytes: int = 5 * 1024 * 1024

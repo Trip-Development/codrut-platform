@@ -47,6 +47,7 @@ function buildContentSecurityPolicy(nonce: string, isLocalRequest: boolean): str
     "img-src 'self' blob: data: https:;",
     "font-src 'self' data:;",
     "connect-src 'self' ws: wss:;",
+    "worker-src 'self';",
     "media-src 'self' blob: https:;",
     "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com;",
     "object-src 'none';",

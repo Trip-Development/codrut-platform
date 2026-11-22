@@ -21,6 +21,12 @@ from codrut.modules.practice.acord import da_acordul, starea_acordului
 from codrut.modules.practice.dashboard_service import PracticeDashboardService
 from codrut.modules.practice.evolution_service import PracticeEvolutionService
 from codrut.modules.practice.generation_provider import build_generation_provider
+from codrut.modules.practice.notificare_zilnica import (
+    aboneaza,
+    descrierea,
+    opreste,
+    starea,
+)
 from codrut.modules.practice.objective_service import (
     alege,
     alegerea_mea,
@@ -36,6 +42,10 @@ from codrut.modules.practice.schemas import (
     PointsEarnedItem,
     PracticeConsentRequest,
     PracticeConsentResponse,
+    PracticeDailyReminderEndpointRequest,
+    PracticeDailyReminderInfoResponse,
+    PracticeDailyReminderSetRequest,
+    PracticeDailyReminderStateResponse,
     PracticeDailyReplyRequest,
     PracticeDailyReplyResponse,
     PracticeDashboardResponse,
@@ -425,6 +435,77 @@ async def submit_daily_reply(
     finally:
         await redis.aclose()
     return PracticeDailyReplyResponse(**stare)
+
+
+# ---- notificarea zilnică a replicii zilei (plicul 252, L3-P2) ----
+# Numai ale omului, cu aceleași verificări ca la replica zilei. Omul o pornește singur și o
+# oprește oricând (rândul se șterge). Nimic despre ea la trainer, HR sau pe Tablou.
+
+
+@router.get(
+    "/projects/{project_id}/notificare-zilnica",
+    response_model=PracticeDailyReminderInfoResponse,
+)
+async def get_daily_reminder(
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> PracticeDailyReminderInfoResponse:
+    """E disponibilă notificarea, cheia publică și orele din care alege omul."""
+    return PracticeDailyReminderInfoResponse(
+        **await descrierea(session, principal, project_id, settings)
+    )
+
+
+@router.post(
+    "/projects/{project_id}/notificare-zilnica/stare",
+    response_model=PracticeDailyReminderStateResponse,
+)
+async def get_daily_reminder_state(
+    project_id: UUID,
+    payload: PracticeDailyReminderEndpointRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PracticeDailyReminderStateResponse:
+    """E pornită pe acest telefon, pentru acest om și proiect?"""
+    return PracticeDailyReminderStateResponse(
+        **await starea(session, principal, project_id, payload.endpoint)
+    )
+
+
+@router.put(
+    "/projects/{project_id}/notificare-zilnica",
+    response_model=PracticeDailyReminderStateResponse,
+)
+async def set_daily_reminder(
+    project_id: UUID,
+    payload: PracticeDailyReminderSetRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> PracticeDailyReminderStateResponse:
+    """Omul pornește notificarea sau îi schimbă ora."""
+    stare = await aboneaza(
+        session, principal, project_id, payload.endpoint, payload.ora, settings
+    )
+    await session.commit()
+    return PracticeDailyReminderStateResponse(**stare)
+
+
+@router.post(
+    "/projects/{project_id}/notificare-zilnica/opreste",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def stop_daily_reminder(
+    project_id: UUID,
+    payload: PracticeDailyReminderEndpointRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> None:
+    """Omul oprește notificarea: rândul se șterge."""
+    await opreste(session, principal, project_id, payload.endpoint)
+    await session.commit()
 
 
 # ---- configurarea exersarii pe un proiect de training (plic 29, punctele 4 si 6) ----

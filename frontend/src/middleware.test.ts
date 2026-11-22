@@ -135,6 +135,14 @@ describe("middleware", () => {
     );
   });
 
+  it("allows a service worker only from our own origin (plicul 252)", () => {
+    const policy = middleware(requestFor("/login")).headers.get("content-security-policy") ?? "";
+
+    expect(policy).toContain("worker-src 'self';");
+    expect(policy).toContain("connect-src 'self' ws: wss:;");
+    expect(policy.split("worker-src").length - 1).toBe(1);
+  });
+
   it("allows the microphone on our own pages and nothing else", () => {
     const policy = middleware(requestFor("/login")).headers.get("permissions-policy");
 
