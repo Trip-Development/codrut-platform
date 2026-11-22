@@ -112,3 +112,37 @@ async def contul_de_test_al_sedintei(
             )
         ).scalar_one_or_none()
     return adresa if e_cont_de_test(adresa) else None
+
+
+async def contul_de_test_al_profilului(
+    session: AsyncSession,
+    participant_profile_id: uuid.UUID | None,
+) -> str | None:
+    """Adresa contului de test căruia îi aparține profilul, sau `None` — plicul 250.
+
+    Același drum ca la `contul_de_test_al_sedintei`, fără ședință: contul legat al profilului
+    (`users.email`); dacă profilul nu e legat de niciun cont, adresa scrisă pe profil.
+    Un profil legat de un cont obișnuit NU devine cont de test din cauza adresei scrise pe profil.
+    """
+    if participant_profile_id is None:
+        return None
+    adresa = (
+        await session.execute(
+            select(User.email)
+            .select_from(ParticipantProfile)
+            .join(User, User.id == ParticipantProfile.user_id)
+            .where(ParticipantProfile.id == participant_profile_id)
+        )
+    ).scalar_one_or_none()
+    if adresa is None:
+        # Profil nelegat de un cont (sau inexistent): adresa scrisă pe profil.
+        adresa = (
+            await session.execute(
+                select(ParticipantProfile.email)
+                .where(
+                    ParticipantProfile.id == participant_profile_id,
+                    ParticipantProfile.user_id.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+    return adresa if e_cont_de_test(adresa) else None

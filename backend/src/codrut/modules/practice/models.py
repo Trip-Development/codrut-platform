@@ -484,6 +484,17 @@ class PracticeBudgetReservation(TimestampMixin, Base):
         index=True,
         nullable=True,
     )
+    # Plicul 250: al cui e consumul când nu e ședință (replica zilei). Gol la rezervările
+    # ședințelor și la tot ce exista înainte.
+    participant_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(
+            "participant_profiles.id",
+            ondelete="SET NULL",
+            name="fk_practice_budget_reservations_participant_profile_id",
+        ),
+        index=True,
+        nullable=True,
+    )
     reserved_usd: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
     actual_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
     state: Mapped[BudgetReservationState] = mapped_column(
