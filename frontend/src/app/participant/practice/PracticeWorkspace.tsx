@@ -256,7 +256,7 @@ export function PracticeWorkspace({
     scrollToBottom();
   }, [turns, isLoading]);
 
-  const handleStartSession = async (kind?: SessionKind) => {
+  const handleStartSession = async (kind?: SessionKind, peObiectiv?: boolean) => {
     if (!projectId) {
       setErrorMsg("Nu a fost selectat niciun proiect activ.");
       return;
@@ -270,6 +270,7 @@ export function PracticeWorkspace({
       const newSession = await startPracticeSession({
         projectId,
         kind: kind ?? selectedKind,
+        ...(peObiectiv ? { peObiectiv: true } : {}),
       });
       setSession(newSession);
       // Cody vorbeste primul. Cand modelul n-a raspuns, `firstTurn` e null si ecranul
@@ -464,7 +465,7 @@ export function PracticeWorkspace({
             projectId={projectId}
             obiectivHref={obiectivHref}
             blocat={isLoading || (acordLipsa && !bifat)}
-            onExerseaza={() => handleStartSession("roleplay")}
+            onExerseaza={() => handleStartSession("roleplay", true)}
           />
         ) : null}
 

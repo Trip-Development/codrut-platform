@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
 from codrut.core.config import Settings, get_settings
+from codrut.core.errors import DomainError
 from codrut.modules.companies.access import require_project_trainer
 from codrut.modules.companies.models import ParticipantProfile
 from codrut.modules.companies.policies import require_trainer_principal
@@ -105,6 +106,7 @@ async def start_practice_session(
         project_id=payload.project_id,
         kind=payload.kind,
         scenario_id=payload.scenario_id,
+        pe_obiectiv=payload.pe_obiectiv,
     )
     await session.commit()
     return await _raspuns_de_pornire(session, practice_session, prima_replica)
@@ -134,6 +136,12 @@ async def start_trainer_practice_session(
             detail="Not Found",
         )
     await require_project_trainer(session, principal, payload.project_id)
+    # Plicul 244: trainerul nu are obiectiv.
+    if payload.pe_obiectiv:
+        raise DomainError(
+            "Pe obiectiv exersează numai participantul.",
+            code="obiectiv_numai_pentru_participant",
+        )
 
     service = PracticeSessionService(session=session, settings=settings)
     practice_session, prima_replica = await service.start_trainer_session(

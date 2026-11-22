@@ -29,6 +29,8 @@ class PracticeSessionCreateRequest(BaseModel):
     project_id: UUID
     kind: SessionKind = SessionKind.roleplay
     scenario_id: UUID | None = None
+    # Plicul 244: „Exersează pe obiectiv” — serverul ia alegerea curentă a omului.
+    pe_obiectiv: bool = False
 
 
 class PracticeTurnCreateRequest(BaseModel):

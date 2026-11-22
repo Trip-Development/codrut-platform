@@ -5150,6 +5150,11 @@ export interface components {
             /** @default roleplay */
             kind: components["schemas"]["SessionKind"];
             /**
+             * Pe Obiectiv
+             * @default false
+             */
+            pe_obiectiv: boolean;
+            /**
              * Project Id
              * Format: uuid
              */

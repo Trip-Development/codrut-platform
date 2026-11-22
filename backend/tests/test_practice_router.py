@@ -397,7 +397,7 @@ def test_cody_prompt_content_and_version():
             "BIBLIOTECA (materialul lui Cody) nu e pe disc: in CI nu exista, nu e in depozit. "
         "Pe productie o verifica verifica-cody-dupa-urcare.sh (miezul, 1812 fisiere). Plicul 155."
         )
-    assert CODY_PROMPT_VERSION == "v3.12"
+    assert CODY_PROMPT_VERSION == "v3.13"
     roleplay_prompt = get_system_prompt_for_kind("roleplay")
     # Plicul 43: numele a fost inlocuit peste tot, 169 de aparitii. Textul e al lui
     # Andrei si nu se atinge — testul vine dupa el.

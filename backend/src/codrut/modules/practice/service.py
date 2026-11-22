@@ -45,6 +45,8 @@ from codrut.modules.practice.generation_provider import (
 from codrut.modules.practice.models import (
     OutcomeKind,
     ParticipantMemory,
+    PracticeObjective,
+    PracticeObjectiveChoice,
     PracticeOutcome,
     PracticeProgramSettings,
     PracticeSession,
@@ -231,6 +233,7 @@ class PracticeSessionService:
         project_id: uuid.UUID,
         kind: SessionKind,
         scenario_id: uuid.UUID | None = None,
+        pe_obiectiv: bool = False,
     ) -> tuple[PracticeSession, PracticeTurn | None]:
         """Start a new practice session for a participant after policy and quota checks."""
         # 1. Load project and verify project_type is training
@@ -300,6 +303,39 @@ class PracticeSessionService:
         # schimba, se cere din nou.
         await cere_acordul(self.session, profile.id, project_id)
 
+        # Plicul 244 (L1-P3): „Exersează pe obiectiv”. Serverul ia alegerea CURENTĂ a omului pe
+        # proiect — niciun id de obiectiv nu vine din afară — numai din catalogul proiectului și
+        # numai un obiectiv activ. Sesiunea rămâne pe el, chiar dacă omul își schimbă alegerea.
+        obiectiv_id: uuid.UUID | None = None
+        if pe_obiectiv:
+            if kind != SessionKind.roleplay:
+                raise DomainError(
+                    "Pe obiectiv se exersează numai jocul de rol.",
+                    code="obiectiv_numai_la_joc_de_rol",
+                )
+            obiectiv = (await self.session.execute(
+                select(PracticeObjective)
+                .join(
+                    PracticeObjectiveChoice,
+                    PracticeObjectiveChoice.objective_id == PracticeObjective.id,
+                )
+                .where(
+                    PracticeObjectiveChoice.participant_profile_id == profile.id,
+                    PracticeObjectiveChoice.project_id == project_id,
+                    PracticeObjectiveChoice.replaced_at.is_(None),
+                    PracticeObjective.is_active.is_(True),
+                    PracticeObjective.catalog == program_settings.objective_catalog,
+                )
+            )).scalars().first()
+            if obiectiv is None:
+                raise DomainError("Alege întâi un obiectiv.", code="obiectiv_neales")
+            if not (obiectiv.situation or "").strip():
+                raise DomainError(
+                    "Obiectivul ales nu are o situație de exersat.",
+                    code="obiectiv_fara_situatie",
+                )
+            obiectiv_id = obiectiv.id
+
         # 3bis. „Verificam cat ai retinut" — numai unde trainerul l-a aprins.
         #
         # Plicul 128, partea E, hotararea lui Andrei: quizul e al cursurilor. La team coaching
@@ -335,6 +371,8 @@ class PracticeSessionService:
                 PracticeSession.program_settings_id == program_settings.id,
                 PracticeSession.kind == kind,
                 PracticeSession.scenario_id.is_not_distinct_from(scenario_id),
+                # Plicul 244: o conversație goală obișnuită nu se refolosește „pe obiectiv”.
+                PracticeSession.objective_id.is_not_distinct_from(obiectiv_id),
                 PracticeSession.pack_id == program_settings.active_pack_id,
                 PracticeSession.state == SessionState.open,
                 PracticeSession.started_at >= today_start,
@@ -392,6 +430,7 @@ class PracticeSessionService:
             started_at=now,
             turn_count=0,
             prompt_version=CODY_PROMPT_VERSION,
+            objective_id=obiectiv_id,
         )
         self.session.add(practice_session)
         await self.session.flush()
@@ -814,6 +853,13 @@ class PracticeSessionService:
             "nr_sesiuni_anterioare": toate,
         }
 
+    async def _obiectivul_sesiunii(self, session_obj: PracticeSession) -> dict[str, str]:
+        """Titlul, situația și semnul obiectivului cu care a pornit sesiunea — plicul 244."""
+        o = (await self.session.execute(
+            select(PracticeObjective).where(PracticeObjective.id == session_obj.objective_id)
+        )).scalar_one()
+        return {"titlu": o.title, "situatie": o.situation, "semn_de_reusita": o.success_sign}
+
     async def _competenta_tinta(
         self,
         profile: ParticipantProfile,
@@ -1133,6 +1179,10 @@ class PracticeSessionService:
             # el, iesit din rol (Andrei, pe live, 27 septembrie). Hotaraste aplicatia: numai
             # evaluatorul. La un singur apel ramane ca pana acum — regula e in promptul combinat.
             doar_evaluatorul = doua_apeluri and este_feedback(text)
+            # Plicul 244: pe obiectiv, cele trei chemări primesc obiectivul sesiunii.
+            pe_obiectiv: dict[str, Any] = {}
+            if session_obj.objective_id is not None:
+                pe_obiectiv = {"obiectiv": await self._obiectivul_sesiunii(session_obj)}
             system_instruction = get_system_prompt_for_kind(
                 kind=session_obj.kind,
                 name=cod,
@@ -1147,6 +1197,7 @@ class PracticeSessionService:
                 memories=memorii,
                 biblioteca_path=self.settings.biblioteca_path,
                 profil_rol=await self._profilul_de_rol(profile, session_obj.id),
+                **pe_obiectiv,
             )
 
             request = GenerationRequest(
@@ -1167,15 +1218,19 @@ class PracticeSessionService:
             if pornire_doar_actor:
                 # Pasul de pornire, cu doua apeluri pornite — plicul 152: numai actorul, cu
                 # promptul si istoricul LUI. Fara regulile de evaluare, n-are de unde scrie nota.
+                # Plicul 244: pe obiectiv, obiectivul ține locul competenței țintă.
                 prompt_actor, _ = get_prompts_pe_meserii(
                     name=cod,
                     history_length=history_length,
                     memories=memorii,
                     biblioteca_path=self.settings.biblioteca_path,
                     profil_rol=await self._profilul_de_rol(profile, session_obj.id),
-                    competenta_tinta=await self._competenta_tinta(
-                        profile, principal, program_settings.project_id, competente
+                    competenta_tinta=(
+                        None if pe_obiectiv else await self._competenta_tinta(
+                            profile, principal, program_settings.project_id, competente
+                        )
                     ),
+                    **pe_obiectiv,
                 )
                 request = GenerationRequest(
                     messages=tuple(self._istoricul_unei_meserii(existing_turns, text, "actor")),
@@ -1204,6 +1259,7 @@ class PracticeSessionService:
                     memories=memorii,
                     biblioteca_path=self.settings.biblioteca_path,
                     profil_rol=await self._profilul_de_rol(profile, session_obj.id),
+                    **pe_obiectiv,
                 )
                 request = GenerationRequest(
                     messages=tuple(mesaje_actor),

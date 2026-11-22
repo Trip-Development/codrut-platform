@@ -9012,6 +9012,11 @@
             "$ref": "#/components/schemas/SessionKind",
             "default": "roleplay"
           },
+          "pe_obiectiv": {
+            "default": false,
+            "title": "Pe Obiectiv",
+            "type": "boolean"
+          },
           "project_id": {
             "format": "uuid",
             "title": "Project Id",

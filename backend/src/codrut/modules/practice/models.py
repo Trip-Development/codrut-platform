@@ -292,6 +292,12 @@ class PracticeSession(TimestampMixin, Base):
     )
     turn_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     prompt_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Plicul 244: sesiunea pornită „pe obiectiv” rămâne pe obiectivul cu care a pornit.
+    objective_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("practice_objectives.id", ondelete="RESTRICT"),
+        index=True,
+        nullable=True,
+    )
 
 
 class PracticeTurn(TimestampMixin, Base):

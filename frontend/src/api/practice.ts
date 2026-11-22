@@ -120,6 +120,7 @@ export async function startPracticeSession(payload: {
   projectId: string;
   kind: SessionKind;
   scenarioId?: string;
+  peObiectiv?: boolean;
 }): Promise<PracticeSession> {
   const res = await apiFetch(`${getApiBaseUrl()}/practice/sessions`, {
     method: "POST",
@@ -128,6 +129,8 @@ export async function startPracticeSession(payload: {
       project_id: payload.projectId,
       kind: payload.kind,
       scenario_id: payload.scenarioId,
+      // Plicul 244: numai „Exersează pe obiectiv”; altfel corpul e cel de dinainte.
+      ...(payload.peObiectiv === true ? { pe_obiectiv: true } : {}),
     }),
   });
   if (!res.ok) {
