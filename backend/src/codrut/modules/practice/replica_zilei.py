@@ -47,6 +47,7 @@ from codrut.modules.practice.pricing import estimate_pessimistic_cost
 from codrut.modules.practice.prompts import (
     _NOTA_DIN_JOC,
     CODY_PROMPT_VERSION,
+    cu_incheierea_replicii_zilei,
     get_prompts_pe_meserii,
 )
 from codrut.modules.practice.quotas import acquire_generation_lock, ensure_turn_length
@@ -54,7 +55,7 @@ from codrut.modules.practice.scoring import ziua_in_romania
 from codrut.modules.practice.service import SCENA_CELUILALT
 
 # peste pașii de pornire 1–2, deci fără regulile de salut și de confirmare; instrucțiunea
-# profesorului e cea de azi, neschimbată
+# profesorului e cea de la exersare, neschimbată, plus încheierea zilei la final (plicul 260)
 PAS_DE_JOC = 3
 
 # ---- funcțiile pure ----
@@ -349,6 +350,7 @@ async def trimite_replica(
             biblioteca_path=settings.biblioteca_path,
             profil_rol=None,
         )
+        instructiunea = cu_incheierea_replicii_zilei(instructiunea)  # plicul 260
         cerere = GenerationRequest(
             messages=(
                 GenerationMessage(

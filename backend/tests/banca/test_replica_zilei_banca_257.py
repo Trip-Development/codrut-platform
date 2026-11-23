@@ -163,7 +163,10 @@ def test_cererea_e_a_aplicatiei() -> None:
     rz = _rz()
     from codrut.contracts.generation import GenerationPurpose
     from codrut.modules.practice import replica_zilei
-    from codrut.modules.practice.prompts import get_prompts_pe_meserii
+    from codrut.modules.practice.prompts import (
+        cu_incheierea_replicii_zilei,
+        get_prompts_pe_meserii,
+    )
     from codrut.modules.practice.service import SCENA_CELUILALT
     from codrut.tools.probe_scenarii import COD_PARTICIPANT
 
@@ -172,7 +175,7 @@ def test_cererea_e_a_aplicatiei() -> None:
     _, instructiunea = get_prompts_pe_meserii(
         name=COD_PARTICIPANT, history_length=replica_zilei.PAS_DE_JOC, memories=None,
         biblioteca_path=setari.biblioteca_path, profil_rol=None)
-    assert cerere.system_instruction == instructiunea
+    assert cerere.system_instruction == cu_incheierea_replicii_zilei(instructiunea)  # plicul 260
     assert len(cerere.messages) == 1 and cerere.messages[0].role == "user"
     assert cerere.messages[0].text == f"{SCENA_CELUILALT}\nsituația\n\nreplica mea"
     assert cerere.purpose == GenerationPurpose.evaluator
@@ -187,7 +190,8 @@ def test_cererea_e_a_aplicatiei() -> None:
                    r'f"{SCENA_CELUILALT}\n{situatie_text}\n\n{text}"', "temperature=0.2",
                    "purpose=GenerationPurpose.evaluator",
                    "timeout=settings.vertex_timeout_evaluator_replica_seconds",
-                   "get_prompts_pe_meserii("):
+                   "get_prompts_pe_meserii(",
+                   "instructiunea = cu_incheierea_replicii_zilei(instructiunea)"):
         assert sursa.count(bucata) == 1, bucata
     # corecția 2: plafonul și gândirea apar și în `estimate_pessimistic_cost`; în cerere, o dată
     i = sursa.index("GenerationRequest(")
