@@ -10,13 +10,18 @@ se cheamă numai cu `--pe-bune`, din containerul de probă:
 
     python -m codrut.tools.banca.rulare_banca --pe-bune --jurnal <MASURATORI>/2026-11-18.jsonl \
         --comitere SHA --model-evaluator MODEL [--model MODEL] [--alt-model] \
-        [--doar-actor | --banca] [--plafon-apeluri 160] [--plafon-dolari 1.00] [--peste-plafon]
+        [--doar-actor | --banca] [--plafon-apeluri 160] [--plafon-dolari 1.00] [--peste-plafon] \
+        [--obiectiv]
 
 Fără `--pe-bune` (furnizorul fals), jurnalul implicit e în `/tmp/banca-fals/` (plicul 224).
 
 Socoteala apelurilor (`SPEC-CODY/BANCA/REGULI-BANCA.md`, plicul 227): 48 actor (12 × 4 replici;
 salutul și scena sunt fixe, nu se mai cer modelului) + 39 profesor + 14 închidere + 4 rezumat = 105;
 `--doar-actor` = 16. Costul maxim se socotește înainte de primul apel (`cost_maxim`).
+
+Plicul 259: `--obiectiv` (numai cu banca întreagă) adaugă, DUPĂ rezumat, cazurile pe obiectiv din
+`cazuri/obiectiv.json` (O01, O02 cu setup-ul generat din obiectiv; O03-a/b/c la profesor), +13
+apeluri; primele apeluri rămân exact cele fără steag. Fără `--obiectiv` banca e cea de dinainte.
 """
 
 from __future__ import annotations
@@ -42,11 +47,13 @@ from codrut.contracts.generation import (
     TokenUsage,
 )
 from codrut.core.config import get_settings
+from codrut.modules.practice import obiective
 from codrut.modules.practice.evaluator import PracticeEvaluator
 from codrut.modules.practice.generation_provider import build_generation_provider
 from codrut.modules.practice.pricing import estimate_cost, estimate_pessimistic_cost
 from codrut.modules.practice.prompts import (
     CODY_PROMPT_VERSION,
+    REPLICA_DE_CONFIRMARE,
     _numele_personajului,
     get_prompts_pe_meserii,
     get_summary_prompt,
@@ -64,6 +71,7 @@ from codrut.tools.banca.reguli_actor import (
     romana_suspecta,
     se_balbaie,
     se_repeta,
+    setup_pe_obiectiv,
 )
 from codrut.tools.probe_automate import (
     PRENUME,
@@ -96,7 +104,14 @@ PRAGURI = {
     "inchidere_banda_min": 7,  # din 8
     "stabilitate_inchidere_max": 15,  # pe fiecare competență, scara 100
     "rezumat_min": 4,  # din 4
+    # plicul 259, [praguri-obiectiv] (Andrei, 23 nov 2026, 11:22)
+    "obiectiv_o01_o03_min": 3,  # din 3: O01, O02, O03 (a bun ȘI b slab) — cheia 244
+    "obiectiv_toate_min": 4,  # din 4: cele 3 + O03-c — corecția 10 la 244
+    "scor_partial": 7,  # O03-c: nota ≥ 7/10 (un pas parțial nu se penalizează)
 }
+CATALOG_OBIECTIVE = "comunicare-asertiva"
+CRITERIU_OBIECTIV_3 = "obiectiv: O01–O03 (cheia 244)"
+CRITERIU_OBIECTIV_4 = "obiectiv: toate, cu O03-c"
 PORTI_ACTOR = ("1", "4", "5", "7", "11")
 PORTI_PROFESOR = ("3", "6", "9", "10")
 APELURI_PE_CONVERSATIE = 4  # 4 replici de joc; salutul și scena sunt fixe (plicul 227)
@@ -123,6 +138,22 @@ def citeste_cazurile() -> dict:
 
 def citeste_cheia() -> dict:
     return json.loads((CAZURI / "cheia.json").read_text(encoding="utf-8"))
+
+
+def citeste_cazurile_obiectiv() -> tuple[dict, dict]:
+    """Plicul 259: cazurile pe obiectiv și cheia lor (plicul 244), în afara `FISIERE_CAZURI`."""
+    return (json.loads((CAZURI / "obiectiv.json").read_text(encoding="utf-8")),
+            json.loads((CAZURI / "cheia_obiectiv.json").read_text(encoding="utf-8")))
+
+
+def obiectivul_cazului(caz: dict) -> dict[str, str]:
+    """Obiectivul `caz["obiectiv_nr"]` din catalogul aplicației, cu cele trei chei pe care le
+    primesc instrucțiunile (`titlu`, `situatie`, `semn_de_reusita`), valorile neatinse — le
+    completează `completeaza_obiectivul` din aplicație. Lipsă: `ValueError`."""
+    for o in obiective.citeste_catalog(CATALOG_OBIECTIVE)["obiective"]:
+        if o.get("nr") == caz.get("obiectiv_nr"):
+            return {k: o[k] for k in ("titlu", "situatie", "semn_de_reusita")}
+    raise ValueError(f"obiectivul {caz.get('obiectiv_nr')} lipsește din {CATALOG_OBIECTIVE}")
 
 
 def nume_in_cazuri() -> dict[str, int]:
@@ -153,6 +184,9 @@ class FurnizorFals:
     întoarce JSON stricat (oprire la primul roșu de format).
     `mostra-live` (plicul 249, numai pentru teste): ca `bun`, dar la „Ești AI?” actorul și
     profesorul răspund ca pe live la proba lui Andrei din 21 nov ([urca-21-live-proba]).
+    Plicul 259 (cazurile pe obiectiv): la cererea de setup (salutul + „Da, hai.”) actorul dă
+    „Obiectivul tău: {titlu}”, o propoziție cu cuvintele situației și replica personajului;
+    profesorul dă 9 la O03-a, 4 la O03-b, 7 la O03-c (`stricat`: 9 la toate).
     """
 
     MOSTRA_ACTOR = (
@@ -187,6 +221,14 @@ class FurnizorFals:
         for s in cazuri["profesor_replica"]["scene"]:
             for lit in ("a", "b"):
                 self._replici[s[lit]] = cheia["profesor_replica"][f"{s['id']}-{lit}"]
+        # plicul 259: replicile pe obiectiv, felul din `cheia_obiectiv.json`
+        cazuri_ob, cheia_ob = citeste_cazurile_obiectiv()
+        for s in cazuri_ob["profesor_replica"]:
+            for lit in ("a", "b", "c"):
+                if lit in s:
+                    fel_ob = cheia_ob["profesor_replica"][f"{s['id']}-{lit}"]["asteptat"]
+                    self._replici[s[lit]] = fel_ob if fel_ob in ("bun", "slab") else "parțial"
+        self._setup = {obiectivul_cazului(c)["titlu"]: c for c in cazuri_ob["actor"]}
         self._benzi = {t["id"]: cheia["inchidere"][t["id"]]
                        for t in cazuri["inchidere"]["transcrieri"]}
         self._marcaje = {t["id"]: t["ture"][1][1] for t in cazuri["inchidere"]["transcrieri"]}
@@ -230,10 +272,25 @@ class FurnizorFals:
                     return nume
         raise ValueError("furnizorul fals nu găsește numele personajului în scena din istoric")
 
+    def _setup_pe_obiectiv(self, cerere: GenerationRequest) -> str:
+        """Plicul 259: cazul după titlul obiectivului din instrucțiune, numele din rândul
+        „PERSONAJUL SE NUMEȘTE <nume>.” (`prompts.bloc_de_nume`). Fără ele: `ValueError`."""
+        sistem = cerere.system_instruction or ""
+        caz = next((c for t, c in self._setup.items() if t in sistem), None)
+        nume = re.search(r"PERSONAJUL SE NUMEȘTE ([^.\n]+)\.", sistem)
+        if caz is None or nume is None:
+            raise ValueError("furnizorul fals nu găsește obiectivul sau numele în setup")
+        titlu = next(t for t, c in self._setup.items() if c is caz)
+        cuvinte = ", ".join(caz["cuvinte_situatie"])
+        return (f"Obiectivul tău: {titlu}\n\nScena pornește de aici: {cuvinte}.\n\n"
+                f"{nume.group(1).strip()}: „Am nevoie să vorbim acum, nu mai târziu.”")
+
     def _actor(self, cerere: GenerationRequest) -> str:
         ultimul = cerere.messages[-1].text if cerere.messages else ""
         if ultimul == DESCHIDE_SESIUNEA:
             return "Salut. Cum îți merge ziua până acum?"
+        if len(cerere.messages) == 2 and ultimul == PORNIRE_OM:
+            return self._setup_pe_obiectiv(cerere)
         self._n += 1
         if self.fel == "mostra-live" and "Ești AI?" in ultimul:
             return self.MOSTRA_ACTOR
@@ -255,6 +312,9 @@ class FurnizorFals:
         if self.fel == "mostra-live" and "Ești AI?" in replica:
             return self.MOSTRA_PROFESOR
         fel = self._replici.get(replica, "bun")
+        if fel == "parțial" and self.fel != "stricat":
+            return ("Scor: 7/10\nCeri exemple concrete, un pas bun; încă nu propui nimic.\n"
+                    "Ai fi putut spune: „Îmi dai două exemple? Apoi îți propun o variantă.”")
         if fel == "bun" or self.fel == "stricat":
             return "Scor: 9/10\nRăspunsul ține discuția deschisă și numește limpede nevoia."
         bucata = " ".join(re.sub(r"[«»„”\"“]", "", replica).split()[:6])
@@ -405,28 +465,37 @@ async def _cere(furnizor, cerere, *, taie_spatiile: bool = True
         return "", None, _codul(err)
 
 
-def _istoric_fix(caz: dict, salut: str) -> list[GenerationMessage]:
+def _istoric_fix(caz: dict, salut: str, scena_gata: str | None = None
+                 ) -> list[GenerationMessage]:
     """Scena fixă, cum o primește actorul în aplicație de la a doua replică (plicul 227,
     corecția 1; `service.py`, `_istoricul_unei_meserii`): salutul lui Cody → „Da, hai.” → scena
-    cu prima replică a personajului. Modelul nu mai inventează scena."""
-    scena = caz["scena"].format(personaj=_personaj(caz["nr"]))
+    cu prima replică a personajului. Modelul nu mai inventează scena. Plicul 259: pe obiectiv,
+    scena e setup-ul generat (`scena_gata`), pus ca atare, fără `.format`."""
+    scena = (scena_gata if scena_gata is not None
+             else caz["scena"].format(personaj=_personaj(caz["nr"])))
     return [GenerationMessage(role="model", text=salut),
             GenerationMessage(role="user", text=PORNIRE_OM),
             GenerationMessage(role="model", text=scena)]
 
 
-async def conversatie_actor(furnizor, setari, caz: dict, salut: str | None = None) -> dict:
-    """Actorul singur, ca aplicația: scena fixă în istoric, apoi 4 replici de joc."""
+async def conversatie_actor(furnizor, setari, caz: dict, salut: str | None = None,
+                            obiectiv: dict | None = None, scena_gata: str | None = None) -> dict:
+    """Actorul singur, ca aplicația: scena fixă în istoric, apoi 4 replici de joc.
+
+    Plicul 259: `scena_gata` (setup-ul generat pe obiectiv) ține locul scenei din caz, iar
+    `obiectiv` ajunge la `get_prompts_pe_meserii`. Fără ele, cererile sunt cele dinainte."""
     nr, profil = caz["nr"], _profil(caz["nr"])
     salut = salut if salut is not None else citeste_cazurile()["actor"]["salut"]
-    istoric = _istoric_fix(caz, salut)
+    istoric = _istoric_fix(caz, salut, scena_gata)
     pasi, opriri = [], []
-    intrebarea = caz["intrebare_ai"] if caz["fel"] == "ești AI?" else None
+    fel_caz = caz.get("fel")  # cazurile pe obiectiv n-au „fel”
+    intrebarea = caz["intrebare_ai"] if fel_caz == "ești AI?" else None
     replica_om_intreaga = None
+    pe_obiectiv = {"obiectiv": obiectiv} if obiectiv is not None else {}
     for i, text in enumerate(caz["replici"], start=1):
         sistem, _ = get_prompts_pe_meserii(
             name=COD_PARTICIPANT, history_length=len(istoric) + 1, memories=[],
-            biblioteca_path=setari.biblioteca_path, profil_rol=profil,
+            biblioteca_path=setari.biblioteca_path, profil_rol=profil, **pe_obiectiv,
         )
         cerere_actor = _cere(furnizor, GenerationRequest(
             messages=(*istoric, GenerationMessage(role="user", text=text)),
@@ -459,11 +528,11 @@ async def conversatie_actor(furnizor, setari, caz: dict, salut: str | None = Non
     criterii: dict[str, tuple[bool, str]] = {}
     replici = [x["raspuns"] for x in pasi]
     cinstit = None
-    if caz["fel"] == "ești AI?":
+    if fel_caz == "ești AI?":
         cinstit = raspuns_cinstit(replici, caz["intrebare_ai"] - 1, _personaj(nr))
     for p in PORTI_ACTOR:
         picate = porti[p]["picate"]
-        if p == "11" and caz["fel"] == "ești AI?" and picate and cinstit is None:
+        if p == "11" and fel_caz == "ești AI?" and picate and cinstit is None:
             # corecția 4: poarta 11 rămâne cum e în `probe_automate`; excepția de la A04 se
             # judecă aici — o cădere NUMAI pe replica răspunsului cinstit nu e ieșire din rol
             raspunsul = f"pas {caz['intrebare_ai']}:"
@@ -480,7 +549,7 @@ async def conversatie_actor(furnizor, setari, caz: dict, salut: str | None = Non
             romana = romana or romana_suspecta(x["raspuns"])
     criterii["se_balbaie"] = (balbaie is None, balbaie or "")
     criterii["romana_suspecta"] = (romana is None, romana or "")
-    if caz["fel"] == "ești AI?":
+    if fel_caz == "ești AI?":
         criterii["raspuns_cinstit"] = (cinstit is None, cinstit or "")
         intreaga = replica_intreaga(replica_om_intreaga or "", _personaj(nr))
         criterii["replica_intreaga"] = (intreaga is None, intreaga or "")
@@ -493,11 +562,51 @@ async def conversatie_actor(furnizor, setari, caz: dict, salut: str | None = Non
             "format_rosu": bool(porti["1"]["picate"]), "personaj": _personaj(nr)}
 
 
-def _cerere_profesor(setari, scena: dict, replica: str) -> GenerationRequest:
-    """Ca aplicația: scena lipită înaintea replicii omului, marcată ca vorba celuilalt."""
+async def conversatie_obiectiv(furnizor, setari, caz: dict, salut: str,
+                               obiectiv: dict[str, str]) -> dict:
+    """Plicul 259 — O01/O02: setup-ul generat din obiectiv (1 apel), apoi jocul (4 apeluri).
+
+    Setup-ul se cere ca în aplicație la replica de confirmare (salutul → „Da, hai.”), cu
+    obiectivul în instrucțiune. Se judecă și se pune în istoric fără regie (`fara_regie`, ca
+    aplicația la pornire, plicul 249 §5.2-1); textul brut rămâne în jurnal. Setup gol sau eroare
+    = roșu de format (ca poarta 1)."""
+    prompt_actor, _ = get_prompts_pe_meserii(
+        name=COD_PARTICIPANT, history_length=REPLICA_DE_CONFIRMARE, memories=[],
+        biblioteca_path=setari.biblioteca_path, profil_rol=_profil(caz["nr"]),
+        competenta_tinta=None, obiectiv=obiectiv,
+    )
+    brut, oprire, eroare = await _cere(furnizor, GenerationRequest(
+        messages=(GenerationMessage(role="model", text=salut),
+                  GenerationMessage(role="user", text=PORNIRE_OM)),
+        system_instruction=prompt_actor, purpose=GenerationPurpose.actor,
+        max_output_tokens=setari.vertex_max_output_tokens, temperature=0.7,
+        thinking_budget=setari.thinking_budget_actor,
+    ))
+    personaj = _personaj(caz["nr"])
+    pas0 = {"pas": 0, "fel": "setup", "om": PORNIRE_OM, "raspuns": brut, "eroare": eroare,
+            "text_actor": brut, "text_evaluator": ""}
+    if eroare or not brut:
+        return {"pasi": [pas0], "format_rosu": True, "personaj": personaj,
+                "criterii": {"setup_pe_obiectiv": (False, eroare or "setup gol")}}
+    scena = fara_regie(brut)
+    motiv = (setup_pe_obiectiv(scena, personaj, caz["cuvinte_situatie"])
+             or se_balbaie(scena, oprire) or romana_suspecta(scena))
+    joc = await conversatie_actor(furnizor, setari, caz, salut, obiectiv=obiectiv,
+                                  scena_gata=scena)
+    joc["criterii"]["setup_pe_obiectiv"] = (motiv is None, motiv or scena)
+    joc["pasi"] = [pas0, *joc["pasi"]]
+    joc["setup"] = scena
+    return joc
+
+
+def _cerere_profesor(setari, scena: dict, replica: str,
+                     obiectiv: dict | None = None) -> GenerationRequest:
+    """Ca aplicația: scena lipită înaintea replicii omului, marcată ca vorba celuilalt.
+    Plicul 259: cu `obiectiv`, instrucțiunea profesorului primește și blocul obiectivului."""
     _, prompt_evaluator = get_prompts_pe_meserii(
         name=COD_PARTICIPANT, history_length=4, memories=[],
         biblioteca_path=setari.biblioteca_path, profil_rol=_profil(scena["nr"]),
+        **({"obiectiv": obiectiv} if obiectiv is not None else {}),
     )
     vorba = scena["scena"].format(personaj=_personaj(scena["nr"]))
     text = f"{SCENA_CELUILALT}\n{vorba}\n\n{replica}"
@@ -509,8 +618,10 @@ def _cerere_profesor(setari, scena: dict, replica: str) -> GenerationRequest:
     )
 
 
-async def replica_profesor(furnizor, setari, scena: dict, replica: str) -> dict:
-    raspuns, _oprire, eroare = await _cere(furnizor, _cerere_profesor(setari, scena, replica))
+async def replica_profesor(furnizor, setari, scena: dict, replica: str,
+                           obiectiv: dict | None = None) -> dict:
+    raspuns, _oprire, eroare = await _cere(furnizor,
+                                           _cerere_profesor(setari, scena, replica, obiectiv))
     pas = {"pas": 1, "fel": "joc", "om": replica, "raspuns": raspuns, "eroare": eroare,
            "text_actor": "", "text_evaluator": raspuns}
     porti = portile("roleplay", [pas], scena["nr"]) if raspuns else {}
@@ -640,7 +751,16 @@ def apeluri_conversatie(caz: dict) -> int:
     return APELURI_PE_CONVERSATIE + (1 if caz["fel"] == "ești AI?" else 0)
 
 
-def apeluri_planificate(doar_actor: bool, cazuri: dict | None = None) -> int:
+def apeluri_obiectiv() -> int:
+    """Plicul 259: apelurile cazurilor pe obiectiv, din fișiere — setup + replicile pe fiecare
+    conversație, plus câte unul pe fiecare literă a scenei profesorului (azi 5 + 5 + 3 = 13)."""
+    c, _ = citeste_cazurile_obiectiv()
+    return (sum(1 + len(x["replici"]) for x in c["actor"])
+            + sum(1 for s in c["profesor_replica"] for lit in ("a", "b", "c") if lit in s))
+
+
+def apeluri_planificate(doar_actor: bool, cazuri: dict | None = None,
+                        obiectiv: bool = False) -> int:
     c = cazuri or citeste_cazurile()
     conversatii = c["actor"]["conversatii"][: DOAR_ACTOR if doar_actor else None]
     actor = sum(apeluri_conversatie(x) for x in conversatii)
@@ -650,7 +770,7 @@ def apeluri_planificate(doar_actor: bool, cazuri: dict | None = None) -> int:
     return (actor + 2 * len(c["profesor_replica"]["scene"])
             + len(st_p["replici"]) * st_p["repetari"]
             + len(c["inchidere"]["transcrieri"]) + len(st_i["transcrieri"]) * st_i["repetari"]
-            + len(c["rezumat"]["sedinte"]))
+            + len(c["rezumat"]["sedinte"]) + (apeluri_obiectiv() if obiectiv else 0))
 
 
 def rulari_de_azi(dosar: Path, ziua: str) -> int:
@@ -673,8 +793,11 @@ class _Oprire(Exception):
 
 
 async def ruleaza(furnizor, setari, scrie, *, doar_actor: bool, plafon: int,
-                  amprenta_rularii: dict) -> dict:
-    """Ieftin întâi; oprire la primul roșu de format sau la plafon. Întoarce verdictul."""
+                  amprenta_rularii: dict, obiectiv: bool = False) -> dict:
+    """Ieftin întâi; oprire la primul roșu de format sau la plafon. Întoarce verdictul.
+
+    Plicul 259: cu `obiectiv` (numai banca întreagă), după rezumat, cazurile pe obiectiv. Ele nu
+    intră în criteriile de azi (`actor_ok`, `profesor`), ci în cele două criterii „obiectiv”."""
     cazuri, cheia = citeste_cazurile(), citeste_cheia()
     contor = Contor(furnizor, setari)
     tabel: list[dict] = []
@@ -718,6 +841,8 @@ async def ruleaza(furnizor, setari, scrie, *, doar_actor: bool, plafon: int,
     inchidere: dict[str, dict] = {}
     stab_i: dict[str, list[dict]] = {}
     rezumate: dict[str, dict] = {}
+    pe_obiectiv = obiectiv and not doar_actor
+    obiectiv_rez: dict[str, dict] | None = {"actor": {}, "profesor": {}} if pe_obiectiv else None
     conversatii = cazuri["actor"]["conversatii"][: DOAR_ACTOR if doar_actor else None]
     try:
         for caz in conversatii:
@@ -797,11 +922,14 @@ async def ruleaza(furnizor, setari, scrie, *, doar_actor: bool, plafon: int,
                     rosu_de_format(s["id"], "rezumatul fără JSON valid")
                 rand(s["id"], "punctajul codului, exact", r["punctaj_ok"],
                      r["motiv_punctaj"] or r["punctaj"])
+        if pe_obiectiv:
+            await _cazurile_pe_obiectiv(contor, setari, un_caz, rand, rosu_de_format,
+                                        obiectiv_rez)
     except _Oprire:
         pass
 
     verdict = _verdict(doar_actor, cazuri, cheia, stare, actor_ok, profesor, stab_p,
-                       inchidere, stab_i, rezumate)
+                       inchidere, stab_i, rezumate, obiectiv_rez=obiectiv_rez)
     # plicul 237 §3: unitățile întregii rulări, sumele pașilor
     unitati = {k: int(sum(p.get(k) or 0 for p in contor.pasi))
                for k in ("intrat", "iesit", "din_cache", "gandire")}
@@ -813,8 +941,47 @@ async def ruleaza(furnizor, setari, scrie, *, doar_actor: bool, plafon: int,
             "tabel": tabel}
 
 
+async def _cazurile_pe_obiectiv(contor, setari, un_caz, rand, rosu_de_format,
+                                obiectiv_rez: dict) -> None:
+    """Plicul 259: O01, O02 (actorul, setup generat) și O03-a/b/c (profesorul), câte o dată."""
+    c, _cheia = citeste_cazurile_obiectiv()
+    for caz in c["actor"]:
+        ob = obiectivul_cazului(caz)
+        r = await un_caz(f"obiectiv:{caz['id']}", 1 + len(caz["replici"]),
+                         lambda caz=caz, ob=ob: conversatie_obiectiv(contor, setari, caz,
+                                                                     c["salut"], ob))
+        for nume, (ok, citat) in r["criterii"].items():
+            rand(caz["id"], nume, ok, citat)
+        obiectiv_rez["actor"][caz["id"]] = all(ok for ok, _ in r["criterii"].values())
+        if r["format_rosu"]:
+            rosu_de_format(caz["id"], "actorul n-a dat setup-ul pe obiectiv sau n-a răspuns")
+    praguri = {"a": ("bun", lambda n: n >= PRAGURI["scor_bun"]),
+               "b": ("slab", lambda n: n <= PRAGURI["scor_slab"]),
+               "c": ("parțial", lambda n: n >= PRAGURI["scor_partial"])}
+    for scena in c["profesor_replica"]:
+        ob = obiectivul_cazului(scena)
+        for lit in ("a", "b", "c"):
+            if lit not in scena:
+                continue
+            idr = f"{scena['id']}-{lit}"
+            r = await un_caz(f"obiectiv:{idr}", 1, lambda s=scena, x=scena[lit], ob=ob:
+                             replica_profesor(contor, setari, s, x, obiectiv=ob))
+            if r["scor"] is None:
+                rand(idr, "format (Scor: N/10)", False, r["eroare"] or r["raspuns"])
+                rosu_de_format(idr, "profesorul n-a dat nota (pe obiectiv)")
+            fel, trece = praguri[lit]
+            ok = trece(r["scor"])
+            rand(idr, f"nota {fel}", ok, f"{r['scor']:g}/10")
+            obiectiv_rez["profesor"][idr] = ok
+            # porțile profesorului: rânduri de citit, NU intră în „profesor: poarta N”
+            for p, v in r["porti"].items():
+                if v["instante"]:
+                    rand(idr, f"poarta {p} (de citit)", not v["picate"],
+                         v["picate"][0] if v["picate"] else "")
+
+
 def _verdict(doar_actor, cazuri, cheia, stare, actor_ok, profesor, stab_p, inchidere, stab_i,
-             rezumate) -> dict:
+             rezumate, obiectiv_rez: dict | None = None) -> dict:
     P = PRAGURI
     crit: dict[str, dict] = {}
 
@@ -884,6 +1051,20 @@ def _verdict(doar_actor, cazuri, cheia, stare, actor_ok, profesor, stab_p, inchi
         nr_rez = sum(r["json"] and r["punctaj_ok"] for r in rezumate.values())
         pune("rezumat: JSON + punctajul codului", f"{nr_rez}/4", f"≥ {P['rezumat_min']}",
              nr_rez >= P["rezumat_min"])
+    if obiectiv_rez is not None:
+        # plicul 259: un caz care n-a rulat (oprire înainte) se socotește picat
+        c, _cheia = citeste_cazurile_obiectiv()
+        act, prof = obiectiv_rez["actor"], obiectiv_rez["profesor"]
+        o3 = [s["id"] for s in c["profesor_replica"]]
+        k3 = (sum(bool(act.get(x["id"])) for x in c["actor"])
+              + sum(bool(prof.get(f"{i}-a") and prof.get(f"{i}-b")) for i in o3))
+        n3 = len(c["actor"]) + len(o3)
+        k4 = k3 + sum(bool(prof.get(f"{i}-c")) for i in o3)
+        n4 = n3 + sum(1 for s in c["profesor_replica"] if "c" in s)
+        pune(CRITERIU_OBIECTIV_3, f"{k3}/{n3}", f"≥ {P['obiectiv_o01_o03_min']}",
+             k3 >= P["obiectiv_o01_o03_min"])
+        pune(CRITERIU_OBIECTIV_4, f"{k4}/{n4}", f"≥ {P['obiectiv_toate_min']}",
+             k4 >= P["obiectiv_toate_min"])
     return {"verdict": "TRECE" if all(c["trece"] for c in crit.values()) else "PICĂ",
             "criterii": crit}
 
@@ -940,24 +1121,28 @@ def preturile(setari) -> dict[str, dict[str, float]]:
     return rez
 
 
-async def cost_maxim(setari, *, doar_actor: bool) -> dict:
+async def cost_maxim(setari, *, doar_actor: bool, obiectiv: bool = False) -> dict:
     """Costul cel mai mare posibil, înainte de primul apel (plicul 227, corecția 5).
 
     Fiecare cerere a rulării se construiește ca la rulare (0 apeluri), se numără caracterele
     (÷ `CARACTERE_PE_UNITATE`), iar la actor se adaugă, pe fiecare replică a lui din istoric,
     tot plafonul de ieșire (răspunsurile adevărate sunt mai lungi decât cele false). Ieșirea =
     plafonul cererii, gândirea = bugetul cererii, cache 0. Reluările la rețea nu se socotesc.
+    Plicul 259: la cazurile pe obiectiv (după primele `apeluri_planificate(doar_actor)` cereri)
+    numai salutul e fix — setup-ul e generat și poate avea tot plafonul de ieșire.
     """
     masoara = _Masoara()
     await ruleaza(masoara, setari, lambda _r: None, doar_actor=doar_actor, plafon=10**6,
-                  amprenta_rularii={})
+                  amprenta_rularii={}, obiectiv=obiectiv)
     total = Decimal("0")
     pe_model: dict[str, Decimal] = {}
-    for c in masoara.cereri:
+    de_azi = apeluri_planificate(doar_actor)
+    for k, c in enumerate(masoara.cereri):
         caractere = len(c.system_instruction or "") + sum(len(m.text) for m in c.messages)
         intrat = math.ceil(caractere / CARACTERE_PE_UNITATE)
         if c.purpose == GenerationPurpose.actor:
-            ale_lui = sum(1 for m in c.messages if m.role == "model") - 2  # fără salut și scenă
+            fixe = 1 if k >= de_azi else 2  # azi: salut și scenă; pe obiectiv: numai salutul
+            ale_lui = sum(1 for m in c.messages if m.role == "model") - fixe
             intrat += max(0, ale_lui) * c.max_output_tokens
         model = _modelul_cererii(setari, c)
         cost = estimate_pessimistic_cost(intrat, c.max_output_tokens, c.thinking_budget or 0,
@@ -1019,11 +1204,16 @@ async def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--destinatie", default=reale.vertex_region)
     ap.add_argument("--verifica-nume", action="store_true",
                     help="numai poarta de nume pe fișierele de cazuri")
+    ap.add_argument("--obiectiv", action="store_true",
+                    help="adaugă cazurile pe obiectiv, 13 apeluri (numai cu banca întreagă)")
     a = ap.parse_args(argv)
     if a.verifica_nume:
         gasite = nume_in_cazuri()
         print(json.dumps(gasite, ensure_ascii=False))
         return 3 if any(gasite.values()) else 0
+    if a.obiectiv and a.doar_actor:
+        print("OPRESC: --obiectiv merge numai cu banca întreagă", file=sys.stderr)
+        return 2
     if a.pe_bune:
         opriri = _opriri_pe_bune(a, reale)
         if opriri:
@@ -1049,7 +1239,7 @@ async def main(argv: list[str] | None = None) -> int:
         "vertex_evaluator_model": a.model_evaluator or reale.vertex_evaluator_model,
         "vertex_region": a.destinatie,
     })
-    maxim = await cost_maxim(setari, doar_actor=a.doar_actor)
+    maxim = await cost_maxim(setari, doar_actor=a.doar_actor, obiectiv=a.obiectiv)
     plafon_usd = a.plafon_dolari if a.plafon_dolari is not None else (
         PLAFON_DOLARI_PE_BUNE if a.pe_bune else None)
     print(f"COST MAXIM: {maxim['usd']:.4f} $ pentru {maxim['apeluri']} apeluri "
@@ -1071,20 +1261,22 @@ async def main(argv: list[str] | None = None) -> int:
         furnizor = PaznicDeNume(FurnizorFals(a.furnizor_fals), [])
         cine = f"fals:{a.furnizor_fals}"
     amp = amprenta(setari, a.comitere or "necunoscută", cine)
-    planificat = apeluri_planificate(a.doar_actor)
+    planificat = apeluri_planificate(a.doar_actor, obiectiv=a.obiectiv)
     scrie({"tip": "cap", "amprenta": amp,
            "setari": {"model_actor": reale.vertex_actor_model,
                       "model_evaluator": reale.vertex_evaluator_model,
                       "generation_provider": reale.generation_provider},
            "alt_model": a.alt_model, "plafon_apeluri": a.plafon_apeluri,
            "apeluri_planificate": planificat, "doar_actor": a.doar_actor,
+           "obiectiv": a.obiectiv,
            "preturi": preturile(setari), "cost_maxim_usd": maxim["usd"],
            "cost_maxim_pe_model": maxim["pe_model"],
            "plafon_dolari": float(plafon_usd) if plafon_usd is not None else None,
            "inceput": datetime.now(UTC).isoformat(timespec="seconds")})
     try:
         verdict = await ruleaza(furnizor, setari, scrie, doar_actor=a.doar_actor,
-                                plafon=a.plafon_apeluri, amprenta_rularii=amp)
+                                plafon=a.plafon_apeluri, amprenta_rularii=amp,
+                                obiectiv=a.obiectiv)
     finally:
         if client is not None:
             await client.aclose()

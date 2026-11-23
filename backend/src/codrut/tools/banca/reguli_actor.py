@@ -263,3 +263,29 @@ def replica_intreaga(text_om: str, personaj: str | None) -> str | None:
     if len(afara) > 1:
         return f"recunoaștere de {len(afara)} ori"
     return raspuns_cinstit([text], 0, personaj)
+
+
+def setup_pe_obiectiv(text: str, personaj: str, cuvinte: list[str]) -> str | None:
+    """Setup-ul generat pe obiectiv (O01, O02) — plicul 259, după cheia propusă în plicul 244 §5.
+
+    Întoarce motivul căderii sau `None`. Pică, în ordinea asta:
+    1. textul e gol;
+    2. lipsește eticheta „Obiectivul tău” (fără deosebire de litere) — se verifică eticheta, nu
+       ce scrie după ea;
+    3. ultimul paragraf (după ultimul rând gol) nu începe cu replica personajului, „{personaj}:”;
+    4. mai puțin de 2 din `cuvinte` (ale situației din obiectiv) apar ca ÎNCEPUT de cuvânt, fără
+       deosebire de litere: „VINERI”, „Raportului”, „tabelele” se prind; „neurgent”, „vinerea”,
+       „rapoartele” nu se prind.
+    """
+    text = (text or "").strip()
+    if not text:
+        return "setup gol"
+    if "obiectivul tău" not in text.lower():
+        return "lipsește «Obiectivul tău»"
+    ultimul = re.split(r"\n\s*\n", text)[-1].strip()
+    if not ultimul.startswith(f"{personaj}:"):
+        return f"nu se încheie cu replica lui {personaj}"
+    gasite = [c for c in cuvinte if re.search(r"(?<!\w)" + re.escape(c), text, re.I)]
+    if len(gasite) < 2:
+        return f"cuvintele situației: {len(gasite)} din {len(cuvinte)} ({', '.join(gasite)})"
+    return None
