@@ -30,6 +30,8 @@ from test_practice_router import make_test_client
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "codrut" / "modules" / "practice"
 FISIERE = [SRC / "harta_echipei.py", SRC / "harta_router.py"]
+# miercuri, 14:00 la București: departe de granița săptămânii (plicul 255)
+ACUM = datetime(2026, 11, 18, 12, 0, tzinfo=UTC)
 UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I)
 
 CHEI_PERMISE = {
@@ -40,10 +42,24 @@ CHEI_PERMISE = {
 }
 
 
+@pytest.fixture
+def ceas_fix(monkeypatch):
+    """Ruta vede `ACUM`, nu ceasul calculatorului (plicul 255). Paza, calculul și răspunsul
+    rămân cele adevărate; se înlocuiește doar ora pe care ruta o dă calculului."""
+    from codrut.modules.practice import harta_router
+
+    calculul_adevarat = harta_router.harta_echipei
+
+    async def la_ora_fixa(session, project_id, *, acum):
+        return await calculul_adevarat(session, project_id, acum=ACUM)
+
+    monkeypatch.setattr(harta_router, "harta_echipei", la_ora_fixa)
+
+
 async def _sase_oameni_cu_de_toate() -> tuple[dict, list[str]]:
     """6 oameni cu ședințe, note și obiective + contul de test în proiect. Întoarce
     contextul și toate valorile care nu au voie să apară (id-uri, nume, adrese, aliasuri)."""
-    acum = datetime.now(UTC)
+    acum = ACUM
     async with SessionLocal() as s:
         ctx = await proiect_cu_oameni(s, 6)
         await adauga_om(s, ctx, email=next(iter(CONTURI_DE_TEST)), nume="Contul De Test")
@@ -89,7 +105,7 @@ async def _cere(ctx):
 
 
 @pytest.mark.asyncio
-async def test_raspunsul_nu_contine_nimic_despre_un_om(caplog) -> None:
+async def test_raspunsul_nu_contine_nimic_despre_un_om(caplog, ceas_fix) -> None:
     ctx, secrete = await _sase_oameni_cu_de_toate()
     caplog.set_level(logging.DEBUG, logger="codrut")
     inainte = len(caplog.records)
@@ -119,11 +135,12 @@ def _chei(obiect, adunate: set) -> set:
 
 
 @pytest.mark.asyncio
-async def test_cheile_sunt_exact_cele_din_plic_si_nicio_lista_pe_om() -> None:
+async def test_cheile_sunt_exact_cele_din_plic_si_nicio_lista_pe_om(ceas_fix) -> None:
     ctx, _ = await _sase_oameni_cu_de_toate()
     h = (await _cere(ctx)).json()
     assert _chei(h, set()) == CHEI_PERMISE
     assert len(h["pe_saptamani"]) == 1                  # o săptămână, nu 6 oameni
+    assert h["pe_saptamani"][0]["saptamana"] == "2026-11-16"
     assert len(h["competente"]) == len(COMPETENTE)
     assert len(h["obiective"]["cele_mai_alese"]) <= 3
     assert len(json.dumps(h)) < 5000
