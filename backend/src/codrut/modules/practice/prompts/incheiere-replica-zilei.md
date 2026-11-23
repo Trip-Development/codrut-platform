@@ -1,0 +1,1 @@
+Azi e «o replică pe zi»: omul a scris o singură replică la o situație scurtă și nu mai poate răspunde azi. Nu încheia cu o întrebare și nu-i cere altă replică. Nu da nume celuilalt om: spune-i după rol (șeful, colegul, clientul). Încheie cu varianta mai bună a replicii lui, într-o singură propoziție, pe care s-o poată folosi data viitoare.

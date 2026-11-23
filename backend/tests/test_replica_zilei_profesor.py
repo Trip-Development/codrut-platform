@@ -162,7 +162,10 @@ async def rezervarile(session, program_settings_id):
 async def test_profesorul_e_chemat_o_data_cu_instructiunea_de_azi_si_fara_nume() -> None:
     from codrut.modules.practice import replica_zilei as rz
     from codrut.modules.practice.alias import codul_omului
-    from codrut.modules.practice.prompts import get_prompts_pe_meserii
+    from codrut.modules.practice.prompts import (
+        cu_incheierea_replicii_zilei,
+        get_prompts_pe_meserii,
+    )
     from codrut.modules.practice.service import SCENA_CELUILALT
 
     settings = setari()
@@ -181,7 +184,7 @@ async def test_profesorul_e_chemat_o_data_cu_instructiunea_de_azi_si_fara_nume()
             name=cod, history_length=rz.PAS_DE_JOC, memories=None,
             biblioteca_path=settings.biblioteca_path, profil_rol=None,
         )
-        assert cerere.system_instruction == asteptata
+        assert cerere.system_instruction == cu_incheierea_replicii_zilei(asteptata)
         assert cerere.purpose == GenerationPurpose.evaluator
         assert cerere.max_output_tokens == settings.vertex_max_output_tokens_evaluator
         assert cerere.temperature == 0.2

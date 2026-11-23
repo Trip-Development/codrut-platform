@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 # v3.13 — plicul 244: Cody pe obiectiv (hotărârea lui Andrei [l1-p3-text])
 # v3.14 — plicul 249: după «ești AI?» personajul nu se mai întoarce la subiect (hotărârea lui
 # Andrei [esti-ai-fara-glume], 21 nov).
-CODY_PROMPT_VERSION = "v3.14"
+# v3.15 — plicul 260: la «o replică pe zi» profesorul încheie fără întrebare
+# (hotărârea lui Andrei [replica-zilei-instructiune], 22 nov); exersarea neschimbată.
+CODY_PROMPT_VERSION = "v3.15"
 
 # Comanda care declanseaza pornirea, pusa ULTIMA in prompt — plicul 45.
 #
@@ -232,6 +234,11 @@ EVALUARE_PROMPT = (_PROMPTS_DIR / "evaluare.md").read_text(encoding="utf-8").str
 # Plicul 244 (L1-P3): textele aprobate de Andrei ([l1-p3-text]), octet cu octet din fișă.
 OBIECTIV_ACTOR = (_PROMPTS_DIR / "obiectiv-actor.md").read_text(encoding="utf-8").strip()
 OBIECTIV_PROFESOR = (_PROMPTS_DIR / "obiectiv-profesor.md").read_text(encoding="utf-8").strip()
+# Plicul 260 — hotărârea lui Andrei [replica-zilei-instructiune], 22 nov:
+# NUMAI la «o replică pe zi».
+INCHEIERE_REPLICA_ZILEI = (
+    (_PROMPTS_DIR / "incheiere-replica-zilei.md").read_text(encoding="utf-8").strip()
+)
 _LOCURILE_OBIECTIVULUI = (
     ("{titlu}", "titlu"),
     ("{situatie}", "situatie"),
@@ -881,6 +888,18 @@ def get_prompts_pe_meserii(
         f"{EVALUARE_PROMPT}{bloc_profesor}{FARA_SCENA}"
     )
     return prompt_actor, prompt_evaluator
+
+
+def cu_incheierea_replicii_zilei(instructiunea_profesorului: str) -> str:
+    """Instrucțiunea profesorului de la exersare + încheierea zilei, ultima (plicul 260).
+
+    Se cheamă NUMAI din `replica_zilei.trimite_replica` (și din banca replicii zilei, care
+    construiește aceeași cerere). La exersare, `get_prompts_pe_meserii` și
+    `get_system_prompt_for_kind` rămân exact cum sunt: profesorul îl invită în continuare pe
+    om să răspundă. Ce e scris ultimul cântărește cel mai mult (plicul 45), de aceea stă după
+    `FARA_SCENA`.
+    """
+    return f"{instructiunea_profesorului}\n\n---\n{INCHEIERE_REPLICA_ZILEI}"
 
 
 # Plicul 199 — Andrei, 27 sept: „punctele le calculează codul, niciun AI care calculează”.

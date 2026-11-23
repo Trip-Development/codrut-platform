@@ -44,7 +44,7 @@ from codrut.modules.practice import replica_omului
 from codrut.modules.practice import replica_zilei as _replica_zilei
 from codrut.modules.practice.generation_provider import build_generation_provider
 from codrut.modules.practice.pricing import estimate_pessimistic_cost
-from codrut.modules.practice.prompts import get_prompts_pe_meserii
+from codrut.modules.practice.prompts import cu_incheierea_replicii_zilei, get_prompts_pe_meserii
 from codrut.modules.practice.quotas import ensure_turn_length
 from codrut.modules.practice.replica_zilei import PAS_DE_JOC, nota_din_text
 from codrut.modules.practice.service import SCENA_CELUILALT
@@ -135,7 +135,7 @@ def cerere_replica_zilei(setari, situatie_text: str, replica: str) -> Generation
     return GenerationRequest(
         messages=(GenerationMessage(
             role="user", text=f"{SCENA_CELUILALT}\n{situatie_text}\n\n{replica}"),),
-        system_instruction=instructiunea,
+        system_instruction=cu_incheierea_replicii_zilei(instructiunea),  # plicul 260
         purpose=GenerationPurpose.evaluator,
         max_output_tokens=setari.vertex_max_output_tokens_evaluator,
         temperature=0.2,
