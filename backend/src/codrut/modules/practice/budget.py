@@ -53,20 +53,15 @@ def _cheltuiala() -> Any:
 
 
 def _sedintele_conturilor_de_test() -> Any:
-    """Id-urile sedintelor care apartin unui cont de test (prin cont legat sau prin profil)."""
-    return (
-        select(PracticeSession.id)
-        .join(
-            ParticipantProfile,
-            ParticipantProfile.id == PracticeSession.participant_profile_id,
-        )
-        .outerjoin(User, User.id == ParticipantProfile.user_id)
-        .where(
-            or_(
-                func.lower(User.email).in_(CONTURI_DE_TEST),
-                func.lower(ParticipantProfile.email).in_(CONTURI_DE_TEST),
-            )
-        )
+    """Id-urile ședințelor unui cont de test — aceeași regulă ca `contul_de_test_al_sedintei`.
+
+    Plicul 255: ședința e de test dacă profilul ei e de test, după `_profilurile_conturilor_de_test`
+    (contul legat are întâietate; adresa scrisă pe profil contează numai când profilul nu e legat).
+    Până la 255 era „SAU”: un profil legat de un cont obișnuit, cu adresa de test scrisă pe el,
+    ieșea din punga proiectului și intra în frâna contului de test.
+    """
+    return select(PracticeSession.id).where(
+        PracticeSession.participant_profile_id.in_(_profilurile_conturilor_de_test())
     )
 
 
