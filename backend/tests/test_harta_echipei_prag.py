@@ -16,11 +16,27 @@ from codrut.modules.practice.models import PracticeObjective
 from harta_echipei_fixturi import CATALOG, COMPETENTE, alege, nota, proiect_cu_oameni, sedinta
 from test_practice_router import make_test_client
 
+# miercuri, 14:00 la București: departe de granița săptămânii (plicul 255)
+ACUM = datetime(2026, 11, 18, 12, 0, tzinfo=UTC)
 NUL = {"valoare": None, "motiv": "prea_putini"}
 
 
 def _v(valoare):
     return {"valoare": valoare, "motiv": None}
+
+
+@pytest.fixture
+def ceas_fix(monkeypatch):
+    """Ruta vede `ACUM`, nu ceasul calculatorului (plicul 255). Paza, calculul și răspunsul
+    rămân cele adevărate; se înlocuiește doar ora pe care ruta o dă calculului."""
+    from codrut.modules.practice import harta_router
+
+    calculul_adevarat = harta_router.harta_echipei
+
+    async def la_ora_fixa(session, project_id, *, acum):
+        return await calculul_adevarat(session, project_id, acum=ACUM)
+
+    monkeypatch.setattr(harta_router, "harta_echipei", la_ora_fixa)
 
 
 async def _harta(ctx) -> dict:
@@ -31,10 +47,11 @@ async def _harta(ctx) -> dict:
 
 
 async def _complet(n: int) -> dict:
-    """`n` oameni: câte 2 ședințe (în săptămâna de azi, ca lista de săptămâni să nu depindă
-    de ziua rulării), note în două zile diferite (acum−3 zile, acum−1 zi) la toate cele 7
-    competențe (ziua 1: 40+i+k, ziua 2: 60+i+k), toți cu obiectivul 3."""
-    acum = datetime.now(UTC)
+    """`n` oameni: câte 2 ședințe (în săptămâna lui `ACUM` (miercuri), ca lista de săptămâni
+    să nu depindă de ziua rulării (plicul 255)), note în două zile diferite (acum−3 zile,
+    acum−1 zi) la toate cele 7 competențe (ziua 1: 40+i+k, ziua 2: 60+i+k), toți cu
+    obiectivul 3."""
+    acum = ACUM
     async with SessionLocal() as s:
         ctx = await proiect_cu_oameni(s, n)
         for i, om in enumerate(ctx["oameni"]):
@@ -50,7 +67,7 @@ async def _complet(n: int) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_patru_oameni_nicio_cifra() -> None:
+async def test_patru_oameni_nicio_cifra(ceas_fix) -> None:
     h = await _harta(await _complet(4))
     for cheie in ("invitati", "au_exersat", "sesiuni", "minute"):
         assert h[cheie] == NUL, cheie
@@ -67,9 +84,11 @@ async def test_patru_oameni_nicio_cifra() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cinci_oameni_toate_cifrele_socotite_de_mana() -> None:
+async def test_cinci_oameni_toate_cifrele_socotite_de_mana(ceas_fix) -> None:
     h = await _harta(await _complet(5))
     assert h["prag_oameni"] == 5
+    assert h["calculat_la"].replace("Z", "+00:00") == ACUM.isoformat()
+    assert h["pe_saptamani"] == [{"saptamana": "2026-11-16", "au_exersat": _v(5)}]
     assert h["invitati"] == _v(5)
     assert h["au_exersat"] == _v(5)
     assert h["sesiuni"] == _v(10)
@@ -106,8 +125,8 @@ async def test_sase_invitati_patru_au_exersat() -> None:
 
 
 @pytest.mark.asyncio
-async def test_o_saptamana_cu_cinci_si_una_cu_patru() -> None:
-    acum = datetime.now(UTC)
+async def test_o_saptamana_cu_cinci_si_una_cu_patru(ceas_fix) -> None:
+    acum = ACUM
     async with SessionLocal() as s:
         ctx = await proiect_cu_oameni(s, 5)
         for i, om in enumerate(ctx["oameni"]):
@@ -117,6 +136,7 @@ async def test_o_saptamana_cu_cinci_si_una_cu_patru() -> None:
         await s.commit()
     h = await _harta(ctx)
     assert [sapt["au_exersat"] for sapt in h["pe_saptamani"]] == [_v(5), NUL]
+    assert [s["saptamana"] for s in h["pe_saptamani"]] == ["2026-11-09", "2026-11-16"]
 
 
 @pytest.mark.asyncio
