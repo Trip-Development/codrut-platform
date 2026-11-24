@@ -520,6 +520,7 @@ class PracticeDailyReplyToday(BaseModel):
     raspuns: str
     nota: float | None = None
     trimisa_la: datetime
+    in_lucru: bool = False  # plicul 267: răspunsul profesorului vine din fundal
 
 
 class PracticeDailyReplyResponse(BaseModel):

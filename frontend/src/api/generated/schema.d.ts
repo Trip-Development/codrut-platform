@@ -4922,6 +4922,11 @@ export interface components {
         };
         /** PracticeDailyReplyToday */
         PracticeDailyReplyToday: {
+            /**
+             * In Lucru
+             * @default false
+             */
+            in_lucru: boolean;
             /** Nota */
             nota?: number | null;
             /** Raspuns */

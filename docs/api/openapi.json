@@ -8342,6 +8342,11 @@
       },
       "PracticeDailyReplyToday": {
         "properties": {
+          "in_lucru": {
+            "default": false,
+            "title": "In Lucru",
+            "type": "boolean"
+          },
           "nota": {
             "anyOf": [
               {

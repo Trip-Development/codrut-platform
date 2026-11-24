@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MicIcon, MicOffIcon, Loader2Icon } from "lucide-react";
 import { getReplicaZilei, trimiteReplicaZilei, type StareaZilei } from "@/api/replicaZilei";
 import { PracticeError } from "@/api/practice";
@@ -15,7 +15,12 @@ import { TEXTE, formateazaNota, textulSituatiei } from "./texte";
  *
  * Totul e al omului: nimic de aici nu ajunge la trainer, la HR sau pe Tablou.
  * Răspunsul profesorului se arată întreg, exact cum l-a întors serverul (236).
+ * Plicul 267: răspunsul vine din fundal; cât e „în lucru”, ecranul întreabă serverul la 2 s.
  */
+
+const PAS_RASPUNS_MS = 2000;
+// 120 s limita generală + 30 s până se socotește lipsă + 10 s rezervă
+const CAT_ASTEPTAM_RASPUNS_MS = 160000;
 
 // Mesajele serverului (S2–S5) se arată cum vin; celelalte coduri au textul lor.
 const MESAJUL_SERVERULUI = new Set(["situatia_alta", "replica_goala", "replica_zilei_indisponibila", "profesor_indisponibil"]);
@@ -44,6 +49,58 @@ export function ReplicaZilei({ projectId, exerseazaHref }: { projectId: string; 
   const [replica, setReplica] = useState("");
   const [trimite, setTrimite] = useState(false);
   const [eroare, setEroare] = useState<string | null>(null);
+  // plicul 267: replica trimisă, ca omul s-o regăsească în casetă dacă profesorul cade
+  const replicaTrimisa = useRef("");
+  const primaIntrebare = useRef<number | null>(null);
+  const inLucru = stare?.azi?.inLucru === true;
+  if (stare?.azi) replicaTrimisa.current = stare.azi.replica;
+
+  useEffect(() => {
+    if (!inLucru) {
+      primaIntrebare.current = null;
+      return;
+    }
+    if (primaIntrebare.current === null) primaIntrebare.current = Date.now();
+    let activ = true;
+    let ceas: ReturnType<typeof setTimeout> | undefined;
+    const aplica = (s: StareaZilei) => {
+      setStare(s);
+      if (s.azi === null) {
+        // profesorul a căzut și rândul s-a șters: omul poate trimite din nou
+        setEroare(TEXTE.T35);
+        setReplica(replicaTrimisa.current);
+      }
+    };
+    const pas = async () => {
+      if (!activ) return;
+      const ultima = Date.now() - (primaIntrebare.current ?? Date.now()) >= CAT_ASTEPTAM_RASPUNS_MS;
+      try {
+        const s = await getReplicaZilei(projectId);
+        if (!activ) return;
+        if (!s.azi?.inLucru) {
+          aplica(s);
+          return;
+        }
+        if (ultima) {
+          setEroare(TEXTE.T30);
+          return;
+        }
+      } catch {
+        if (!activ) return;
+        if (ultima) {
+          setEroare(TEXTE.T30);
+          return;
+        }
+        // o eroare la întrebare se ignoră până la pasul următor
+      }
+      ceas = setTimeout(pas, PAS_RASPUNS_MS);
+    };
+    ceas = setTimeout(pas, PAS_RASPUNS_MS);
+    return () => {
+      activ = false;
+      if (ceas !== undefined) clearTimeout(ceas);
+    };
+  }, [projectId, inLucru]);
 
   useEffect(() => {
     let activ = true;
@@ -116,7 +173,19 @@ export function ReplicaZilei({ projectId, exerseazaHref }: { projectId: string; 
           </CardContent>
         </Card>
 
-        {azi ? (
+        {azi?.inLucru ? (
+          <Card>
+            <CardContent className="flex flex-col gap-4 pt-6 text-sm text-foreground">
+              <div className="flex flex-col gap-1">
+                <h2 className="font-semibold">{TEXTE.T22}</h2>
+                <p className="whitespace-pre-wrap">{azi.replica}</p>
+              </div>
+              <p role="status" className="text-sm text-muted-foreground">
+                {TEXTE.T19}
+              </p>
+            </CardContent>
+          </Card>
+        ) : azi ? (
           <Card>
             <CardContent className="flex flex-col gap-4 pt-6 text-sm text-foreground">
               {azi.nota !== null ? <p className="text-base font-semibold">{TEXTE.T21(formateazaNota(azi.nota))}</p> : null}

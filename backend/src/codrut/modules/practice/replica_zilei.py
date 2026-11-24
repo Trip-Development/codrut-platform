@@ -7,19 +7,24 @@ răspunde, cu instrucțiunea lui de azi, NESCHIMBATĂ. Nota o citește codul din
 Totul e al omului, pentru el însuși: nicio funcție de aici nu întoarce replica altcuiva, nimic
 nu ajunge la trainer, HR sau șef, nu se scrie nimic în jurnalul serverului, nu se dau puncte pe
 Tablou și nu se scrie nicio notă pe competență.
+
+Plicul 267: cu `replica_zilei_raspuns_in_fundal`, răspunsul vine din fundal, fără anulare la 15 s,
+cu limita generală; o cădere șterge rândul, ca omul să poată trimite din nou.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import uuid
 from collections.abc import Mapping, Sequence
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 from redis.asyncio import Redis
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.contracts.generation import (
@@ -27,7 +32,7 @@ from codrut.contracts.generation import (
     GenerationPurpose,
     GenerationRequest,
 )
-from codrut.core.config import Settings
+from codrut.core.config import Settings, get_settings
 from codrut.core.errors import DomainError
 from codrut.modules.companies.models import ParticipantProfile, ProjectMembership
 from codrut.modules.identity.schemas import SessionPrincipal
@@ -36,6 +41,7 @@ from codrut.modules.practice.alias import codul_omului
 from codrut.modules.practice.budget import plafonul_programului, release, reserve, settle
 from codrut.modules.practice.generation_provider import GenerationProvider
 from codrut.modules.practice.models import (
+    PracticeBudgetReservation,
     PracticeDailyReply,
     PracticeDailySituation,
     PracticeObjective,
@@ -57,6 +63,15 @@ from codrut.modules.practice.service import SCENA_CELUILALT
 # peste pașii de pornire 1–2, deci fără regulile de salut și de confirmare; instrucțiunea
 # profesorului e cea de la exersare, neschimbată, plus încheierea zilei la final (plicul 260)
 PAS_DE_JOC = 3
+
+# plicul 267: răspunsurile din fundal, ținute ca să nu le ia colectorul (ca la 247)
+_RASPUNSURI_IN_LUCRU: set[asyncio.Task] = set()
+
+
+async def asteapta_raspunsurile() -> None:
+    """Pentru teste: așteaptă răspunsurile din fundal pornite până acum."""
+    while _RASPUNSURI_IN_LUCRU:
+        await asyncio.gather(*list(_RASPUNSURI_IN_LUCRU), return_exceptions=True)
 
 # ---- funcțiile pure ----
 
@@ -93,6 +108,13 @@ def seria(zile: set[date], azi: date) -> int:
             iertate.add(saptamana)
         zi -= timedelta(days=1)
     return n
+
+
+def _ramasa(r: PracticeDailyReply, acum: datetime) -> bool:
+    """Un răspuns rămas „în lucru” după o repornire: gol și mai vechi decât limita + 30 s."""
+    return r.teacher_text == "" and r.created_at < acum - timedelta(
+        seconds=get_settings().vertex_timeout_seconds + 30
+    )
 
 
 def nota_din_text(text: str) -> Decimal | None:
@@ -181,6 +203,7 @@ async def _folosirile(
         .where(
             PracticeDailyReply.participant_profile_id == profil_id,
             PracticeDailyReply.project_id == project_id,
+            PracticeDailyReply.teacher_text != "",
         )
         .group_by(PracticeDailyReply.situation_id)
     )).all()
@@ -206,6 +229,7 @@ async def _zilele(
         select(PracticeDailyReply.day).where(
             PracticeDailyReply.participant_profile_id == profil_id,
             PracticeDailyReply.project_id == project_id,
+            PracticeDailyReply.teacher_text != "",
         )
     )).scalars().all())
 
@@ -215,13 +239,16 @@ def _situatia(s: PracticeDailySituation, o: PracticeObjective) -> dict:
 
 
 def _azi(r: PracticeDailyReply) -> dict:
-    return {
+    azi = {
         "situatie_id": r.situation_id,
         "replica": r.reply_text,
         "raspuns": r.teacher_text,
         "nota": float(r.score) if r.score is not None else None,
         "trimisa_la": r.created_at,
     }
+    if r.teacher_text == "":
+        azi["in_lucru"] = True  # plicul 267; altfel câmpul ia valoarea implicită False
+    return azi
 
 
 async def _situatia_zilei(
@@ -267,8 +294,12 @@ async def _starea(
     project_id: uuid.UUID,
     setari: PracticeProgramSettings,
     azi: date,
+    *,
+    acum: datetime,
 ) -> dict:
     replica = await _replica_din_ziua(session, profil_id, project_id, azi)
+    if replica is not None and _ramasa(replica, acum):
+        replica = None  # rămasă după o repornire: lipsă; la citire nu se șterge nimic
     perechea, motiv, din_obiectiv = await _situatia_zilei(
         session, profil_id, project_id, setari, replica
     )
@@ -290,7 +321,9 @@ async def starea_zilei(
 ) -> dict:
     """Situația zilei pentru om, replica lui de azi (dacă există) și seria."""
     profil, setari = await _omul_si_setarile(session, principal, project_id)
-    return await _starea(session, profil.id, project_id, setari, ziua_in_romania(acum))
+    return await _starea(
+        session, profil.id, project_id, setari, ziua_in_romania(acum), acum=acum
+    )
 
 
 # ---- replica ----
@@ -307,6 +340,7 @@ async def trimite_replica(
     settings: Settings,
     redis: Redis,
     acum: datetime,
+    session_factory=None,
 ) -> dict:
     """Omul trimite replica zilei; profesorul de azi îi răspunde, o singură încercare."""
     # 1. omul
@@ -315,8 +349,13 @@ async def trimite_replica(
 
     # 2. o singură replică pe zi
     azi = ziua_in_romania(acum)
-    if await _replica_din_ziua(session, profil_id, project_id, azi) is not None:
-        raise DomainError("Ai trimis deja replica de azi.", code="replica_zilei_facuta")
+    existenta = await _replica_din_ziua(session, profil_id, project_id, azi)
+    if existenta is not None:
+        if not _ramasa(existenta, acum):
+            raise DomainError("Ai trimis deja replica de azi.", code="replica_zilei_facuta")
+        # plicul 267: un răspuns rămas după o repornire se socotește lipsă
+        await session.delete(existenta)
+        await session.flush()
 
     # 3. situația zilei
     perechea, _, _ = await _situatia_zilei(session, profil_id, project_id, setari, None)
@@ -384,42 +423,135 @@ async def trimite_replica(
         )
         await session.commit()
 
-        # 8. apelul: o singură încercare
-        try:
-            rezultat = await asyncio.wait_for(
-                profesor.generate(cerere),
-                timeout=settings.vertex_timeout_evaluator_replica_seconds,
+        if settings.replica_zilei_raspuns_in_fundal:  # plicul 267
+            rand = PracticeDailyReply(
+                participant_profile_id=profil_id,
+                project_id=project_id,
+                situation_id=situation_id,
+                day=azi,
+                reply_text=text,
+                teacher_text="",
+                score=None,
+                cost_usd=None,
+                prompt_version=CODY_PROMPT_VERSION,
+                expires_at=acum + timedelta(days=retentie),
             )
-        except TimeoutError:
-            # apelul anulat la noi tot se plătește (lecția 101/210)
-            await settle(session, rezervare, actual_usd=estimare)
-            await session.commit()
-            raise DomainError(
-                "Cody nu poate răspunde acum. Replica ta nu s-a salvat; încearcă din nou.",
-                code="profesor_indisponibil",
-            ) from None
-        except Exception:
-            await release(session, rezervare)
-            await session.commit()
-            raise DomainError(
-                "Cody nu poate răspunde acum. Replica ta nu s-a salvat; încearcă din nou.",
-                code="profesor_indisponibil",
-            ) from None
+            session.add(rand)
+            try:
+                await session.flush()
+                reply_id, rezervare_id = rand.id, rezervare
+                await session.commit()
+            except IntegrityError:
+                # două trimiteri deodată: a doua nu creează nimic și nu ține banii
+                await session.rollback()
+                await release(session, rezervare)
+                await session.commit()
+                raise DomainError(
+                    "Ai trimis deja replica de azi.", code="replica_zilei_facuta"
+                ) from None
+            if session_factory is None:
+                from codrut.core.database import SessionLocal
 
-        # 9. reușit
-        await settle(session, rezervare, actual_usd=rezultat.estimated_usd)
-        session.add(PracticeDailyReply(
-            participant_profile_id=profil_id,
-            project_id=project_id,
-            situation_id=situation_id,
-            day=azi,
-            reply_text=text,
-            teacher_text=rezultat.text,
-            score=nota_din_text(rezultat.text),
-            cost_usd=rezultat.estimated_usd,
-            prompt_version=CODY_PROMPT_VERSION,
-            expires_at=acum + timedelta(days=retentie),
-        ))
-        await session.commit()
+                session_factory = SessionLocal
+            sarcina = asyncio.create_task(_raspunde_in_fundal(
+                reply_id=reply_id, rezervare_id=rezervare_id, cerere=cerere,
+                estimare=estimare, profesor=profesor, settings=settings,
+                session_factory=session_factory,
+            ))
+            _RASPUNSURI_IN_LUCRU.add(sarcina)
+            sarcina.add_done_callback(_RASPUNSURI_IN_LUCRU.discard)
+        else:
+            # 8. apelul: o singură încercare
+            try:
+                rezultat = await asyncio.wait_for(
+                    profesor.generate(cerere),
+                    timeout=settings.vertex_timeout_evaluator_replica_seconds,
+                )
+            except TimeoutError:
+                # apelul anulat la noi tot se plătește (lecția 101/210)
+                await settle(session, rezervare, actual_usd=estimare)
+                await session.commit()
+                raise DomainError(
+                    "Cody nu poate răspunde acum. Replica ta nu s-a salvat; încearcă din nou.",
+                    code="profesor_indisponibil",
+                ) from None
+            except Exception:
+                await release(session, rezervare)
+                await session.commit()
+                raise DomainError(
+                    "Cody nu poate răspunde acum. Replica ta nu s-a salvat; încearcă din nou.",
+                    code="profesor_indisponibil",
+                ) from None
 
-    return await _starea(session, profil_id, project_id, setari, azi)
+            # 9. reușit
+            await settle(session, rezervare, actual_usd=rezultat.estimated_usd)
+            session.add(PracticeDailyReply(
+                participant_profile_id=profil_id,
+                project_id=project_id,
+                situation_id=situation_id,
+                day=azi,
+                reply_text=text,
+                teacher_text=rezultat.text,
+                score=nota_din_text(rezultat.text),
+                cost_usd=rezultat.estimated_usd,
+                prompt_version=CODY_PROMPT_VERSION,
+                expires_at=acum + timedelta(days=retentie),
+            ))
+            await session.commit()
+
+    return await _starea(session, profil_id, project_id, setari, azi, acum=acum)
+
+
+async def _raspunde_in_fundal(
+    *,
+    reply_id: uuid.UUID,
+    rezervare_id: uuid.UUID,
+    cerere: GenerationRequest,
+    estimare: Decimal,
+    profesor: GenerationProvider,
+    settings: Settings,
+    session_factory,
+) -> None:
+    """Plicul 267: răspunsul profesorului, din fundal, cu limita generală; o singură scriere.
+
+    Nimic în jurnal (regula 236). `CancelledError` (o repornire) nu se prinde: rândul rămâne gol
+    și se socotește lipsă după limita + 30 s.
+    """
+    text: str | None = None
+    plata: Decimal | None = None  # None = rezervarea se eliberează
+    try:
+        rezultat = await asyncio.wait_for(
+            profesor.generate(cerere),
+            timeout=settings.vertex_timeout_seconds,
+        )
+    except TimeoutError:
+        plata = estimare  # apelul anulat la noi tot se plătește (lecția 101/210)
+    except Exception:  # noqa: BLE001
+        plata = None
+    else:
+        plata = rezultat.estimated_usd
+        if (rezultat.text or "").strip():
+            text = rezultat.text
+    al_omului = (PracticeDailyReply.id == reply_id) & (PracticeDailyReply.teacher_text == "")
+    try:
+        async with session_factory() as s:
+            if text is not None:
+                await s.execute(
+                    update(PracticeDailyReply).where(al_omului).values(
+                        teacher_text=text, score=nota_din_text(text), cost_usd=plata,
+                        updated_at=datetime.now(UTC),
+                    )
+                )
+            else:
+                await s.execute(delete(PracticeDailyReply).where(al_omului))
+            await s.get(PracticeBudgetReservation, rezervare_id)
+            if plata is None:
+                await release(s, rezervare_id)
+            else:
+                await settle(s, rezervare_id, actual_usd=plata)
+            await s.commit()
+    except Exception:  # noqa: BLE001
+        with contextlib.suppress(Exception):
+            async with session_factory() as s:
+                await s.execute(delete(PracticeDailyReply).where(al_omului))
+                await s.commit()

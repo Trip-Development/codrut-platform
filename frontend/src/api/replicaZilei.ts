@@ -14,6 +14,9 @@ export type ReplicaDeAzi = {
   raspuns: string;
   nota: number | null;
   trimisaLa: string;
+  // Plicul 267: răspunsul profesorului vine din fundal; cât e în lucru, `raspuns` e gol.
+  // Câmpul apare numai când e adevărat, ca forma de până acum să rămână neschimbată.
+  inLucru?: boolean;
 };
 
 export type StareaZilei = {
@@ -43,6 +46,7 @@ function stareDinContract(data: StareContract): StareaZilei {
           raspuns: data.azi.raspuns,
           nota: data.azi.nota ?? null,
           trimisaLa: data.azi.trimisa_la,
+          ...(data.azi.in_lucru === true ? { inLucru: true } : {}),
         }
       : null,
     serie: data.serie,

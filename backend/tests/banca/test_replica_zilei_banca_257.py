@@ -201,6 +201,10 @@ def test_cererea_e_a_aplicatiei() -> None:
                    "thinking_budget=settings.thinking_budget_evaluator"):
         assert in_cerere.count(bucata) == 1, bucata
     assert "obiectiv=" not in sursa
+    # plicul 267: calea nouă (răspunsul din fundal) are o singură setare și limita generală
+    assert sursa.count("replica_zilei_raspuns_in_fundal") == 1
+    in_fundal = inspect.getsource(replica_zilei._raspunde_in_fundal)
+    assert in_fundal.count("timeout=settings.vertex_timeout_seconds") == 1
 
 
 # ---------------------------------------------------------------- t4
@@ -355,18 +359,72 @@ def test_plafonul_tare(tmp_path) -> None:
 # ---------------------------------------------------------------- t9
 
 
-def test_timpul() -> None:
+def _o_sesiune(setari, fals):
     rz = _rz()
-    setari = get_settings().model_copy(update={"vertex_timeout_evaluator_replica_seconds": 0.01})
-    fals = _Numara(dormi=0.05)
     caz = next(c for c in rz.citeste_cazurile_rz() if c["fel"] == "buna")
     randuri: list[dict] = []
     v = asyncio.run(rz.ruleaza(fals, setari, randuri.append, cazuri=[caz], plafon_dolari=None,
                                plafon_apeluri=110, amprenta_rularii={}))
-    s = next(x for x in randuri if x["tip"] == "sesiune")
-    assert s["la_timp"] is False and fals.apeluri == 1
-    assert s["cost_maxim_adaugat_usd"] > 0
+    return next(x for x in randuri if x["tip"] == "sesiune"), v
+
+
+def test_timpul() -> None:
+    # plicul 267: banca imită aplicația — nu mai anulează la 15 s; „la timp” vine din durata reală
+    setari = get_settings().model_copy(update={"vertex_timeout_evaluator_replica_seconds": 0.01,
+                                               "vertex_timeout_seconds": 5})
+    fals = _Numara(dormi=0.05)
+    s, v = _o_sesiune(setari, fals)
+    assert s["la_timp"] is False and s["eroare"] is None and fals.apeluri == 1
+    assert s["raspuns"] and s["nota"] is not None
+    assert s["durata_s"] >= 0.05
+    assert s["cost_maxim_adaugat_usd"] == 0
     assert Decimal(str(v["cheltuit_usd"])) >= Decimal(str(s["cost_maxim_adaugat_usd"]))
+
+
+def test_peste_limita_generala() -> None:
+    setari = get_settings().model_copy(update={"vertex_timeout_seconds": 0.02})
+    s, _ = _o_sesiune(setari, _Numara(dormi=0.1))
+    assert s["eroare"] == "timeout" and s["durata_s"] < 0.1
+    assert s["cost_maxim_adaugat_usd"] > 0
+
+
+def test_calea_veche_in_banca() -> None:
+    setari = get_settings().model_copy(update={"replica_zilei_raspuns_in_fundal": False,
+                                               "vertex_timeout_evaluator_replica_seconds": 0.01})
+    s, _ = _o_sesiune(setari, _Numara(dormi=0.05))
+    assert s["eroare"] == "timeout"
+
+
+CHEILE_CRITERIILOR_257 = ["buna_nota_mare", "esti_ai", "fara_apel", "la_timp", "nota_exista",
+                          "perechi", "rulare_completa", "scurt", "slaba_nota_mica"]
+
+
+def test_durate_in_verdict(tmp_path) -> None:
+    j = tmp_path / "bun" / "rz.jsonl"
+    assert _main(["--jurnal", str(j)]) == 0
+    r = _jurnal(j)
+    assert r[0]["tip"] == "cap" and "limita_apel_s" in r[0] and "raspuns_in_fundal" in r[0]
+    sesiuni = [x for x in r if x["tip"] == "sesiune" and x["apeluri"]]
+    assert len(sesiuni) == 96 and all("durata_s" in x for x in sesiuni)
+    v = r[-1]
+    assert set(v["durate"]) == {"mediana", "p90", "maxim", "peste_15", "peste_30", "peste_60",
+                                "peste_limita"}
+    assert v["iesire"] == 0
+    assert sorted(v["criterii"]) == CHEILE_CRITERIILOR_257
+    assert "Durate reale:" in j.with_suffix(".md").read_text(encoding="utf-8")
+
+
+def test_pragurile_neatinse() -> None:
+    assert _rz().PRAGURI_RZ == {
+        "fara_apel": 3,
+        "la_timp": 94,
+        "nota_exista": 82,
+        "buna_nota_mare": 30, "scor_bun": 8,
+        "slaba_nota_mica": 30, "slaba_pe_fel": 10, "scor_slab": 5,
+        "perechi": 30, "diferenta_pereche": 3,
+        "scurt": 86, "cuvinte_scurt": 150, "cuvinte_max": 250,
+        "esti_ai": 12,
+    }
 
 
 # ---------------------------------------------------------------- t10

@@ -24,6 +24,7 @@ import hashlib
 import json
 import math
 import re
+import statistics
 import sys
 import time
 from datetime import UTC, datetime
@@ -333,14 +334,19 @@ async def ruleaza(furnizor, setari, scrie, *, cazuri: list[dict] | None = None,
                 stare["oprit_de_apeluri"] = True
                 break
             inainte = len(contor.pasi)
-            eroare, la_timp = None, True
+            eroare = None
+            # plicul 267: ca aplicația — fără anulare la 15 s când răspunsul vine din fundal
+            limita = _limita_apelului(setari)
+            t_apel = time.monotonic()
             try:
-                await asyncio.wait_for(contor.generate(cerere),
-                                       timeout=setari.vertex_timeout_evaluator_replica_seconds)
+                await asyncio.wait_for(contor.generate(cerere), timeout=limita)
             except TimeoutError:
-                eroare, la_timp = "timeout", False
+                eroare = "timeout"
             except Exception as err:  # noqa: BLE001
                 eroare = _codul(err)
+            durata_s = round(time.monotonic() - t_apel, 2)
+            # „la timp” = sub 15 s, ca la 257, dar din durata reală
+            la_timp = eroare is None and durata_s <= setari.vertex_timeout_evaluator_replica_seconds
             pasi = contor.pasi[inainte:]
             pas = pasi[-1] if pasi else {}
             incercari = 1 + (1 if pas.get("reluat") else 0)
@@ -351,7 +357,8 @@ async def ruleaza(furnizor, setari, scrie, *, cazuri: list[dict] | None = None,
             raspuns = pas.get("raspuns") if eroare is None else None
             nota = nota_din_text(raspuns or "") if raspuns and raspuns != RETINUT else None
             r.update(
-                apeluri=incercari, la_timp=la_timp, reluat=pas.get("reluat"), eroare=eroare,
+                apeluri=incercari, la_timp=la_timp, durata_s=durata_s, reluat=pas.get("reluat"),
+                eroare=eroare,
                 prima_incercare=eroare is None and la_timp and not pas.get("reluat"),
                 raspuns=raspuns, nota=float(nota) if nota is not None else None,
                 cuvinte=cuvinte(raspuns), cere_alta_replica=cere_alta_replica(raspuns),
@@ -367,6 +374,7 @@ async def ruleaza(furnizor, setari, scrie, *, cazuri: list[dict] | None = None,
                "amprenta": amprenta_rularii})
 
     verdict = _verdict_rz(rezultate, stare)
+    verdict["durate"] = _durate(rezultate, _limita_apelului(setari))  # informativ (plicul 267)
     unitati = {k: int(sum(p.get(k) or 0 for p in contor.pasi))
                for k in ("intrat", "iesit", "din_cache", "gandire")}
     verdict.update(apeluri=stare["apeluri"], cost_usd=float(contor.cost),
@@ -377,6 +385,29 @@ async def ruleaza(furnizor, setari, scrie, *, cazuri: list[dict] | None = None,
                    raspunsuri_retinute=contor.retinute,
                    nume_trimise=getattr(furnizor, "gasite", 0), amprenta=amprenta_rularii)
     return verdict
+
+
+def _limita_apelului(setari) -> float:
+    """Limita unui apel, ca în aplicație (plicul 267)."""
+    if setari.replica_zilei_raspuns_in_fundal:
+        return setari.vertex_timeout_seconds
+    return setari.vertex_timeout_evaluator_replica_seconds
+
+
+def _durate(rezultate: list[dict], limita: float) -> dict:
+    """Duratele reale ale apelurilor făcute; nu intră în criterii și nu schimbă ieșirea."""
+    d = sorted(r["durata_s"] for r in rezultate if r.get("apeluri") and "durata_s" in r)
+
+    def peste(prag: float) -> int:
+        return sum(1 for x in d if x > prag)
+
+    return {
+        "mediana": statistics.median(d) if d else None,
+        "p90": d[min(len(d) - 1, math.ceil(0.9 * len(d)) - 1)] if d else None,
+        "maxim": d[-1] if d else None,
+        "peste_15": peste(15), "peste_30": peste(30), "peste_60": peste(60),
+        "peste_limita": peste(limita),
+    }
 
 
 def _verdict_rz(rezultate: list[dict], stare: dict) -> dict:
@@ -487,6 +518,11 @@ def tabel_markdown(verdict: dict) -> str:
              f"{verdict['iesit']} · gândire {verdict['gandire']}"]
     if "iesire" in verdict:
         linii.append(f"Ieșirea: {verdict['iesire']}")
+    if verdict.get("durate"):
+        d = verdict["durate"]
+        linii.append(f"Durate reale: mediana {d['mediana']} s · p90 {d['p90']} s · maxim "
+                     f"{d['maxim']} s · peste 15 s: {d['peste_15']} · peste 30 s: {d['peste_30']}"
+                     f" · peste 60 s: {d['peste_60']} · peste limită: {d['peste_limita']}")
     n = verdict["cere_alta_replica"]["n"]
     linii += ["", f"**Profesorul a cerut altă replică la {n} din {APELURI_PLANIFICATE}**", "",
               "| criteriu | n | din | prag | trece | primele căderi |", "|---|---|---|---|---|---|"]
@@ -578,6 +614,8 @@ async def main(argv: list[str] | None = None) -> int:
     amp = {**amprenta(setari, a.comitere or "necunoscută", cine),
            "amprenta_situatii": AMPRENTA_SITUATII}
     scrie({"tip": "cap", "unealta": "replica_zilei_banca", "amprenta": amp,
+           "limita_apel_s": _limita_apelului(setari),
+           "raspuns_in_fundal": setari.replica_zilei_raspuns_in_fundal,
            "setari": {"model_evaluator": reale.vertex_evaluator_model,
                       "generation_provider": reale.generation_provider,
                       "timeout_replica_s": reale.vertex_timeout_evaluator_replica_seconds},

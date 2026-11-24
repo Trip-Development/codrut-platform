@@ -52,6 +52,7 @@ async def test_dupa_replica_zilei_paginile_trainerului_si_tabloul_nu_se_schimba(
     from codrut.modules.practice import router as ruta
 
     monkeypatch.setattr(ruta, "build_generation_provider", lambda _s: ProfesorFals(TEXT_PROFESOR))
+    monkeypatch.setenv("CODRUT_REPLICA_ZILEI_RASPUNS_IN_FUNDAL", "false")  # plicul 267: calea veche
     async with SessionLocal() as session:
         ctx = await setup_practice_context(session)
     async with SessionLocal() as session:

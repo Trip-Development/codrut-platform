@@ -161,6 +161,10 @@ class Settings(BaseSettings):
     # neschimbat (întoarcere fără cod).
     practice_nota_in_fundal: bool = True
 
+    # plicul 267 — la «o replică pe zi» răspunsul vine din fundal, fără anulare la 15 s;
+    # false = drumul de dinainte, neschimbat (întoarcere fără cod). Exersarea nu-l citește.
+    replica_zilei_raspuns_in_fundal: bool = True
+
     # Tabelul de preturi PE MODEL — plicul 120.
     #
     # Pana azi exista o singura pereche de patru preturi. Cu doua modele in aceeasi replica

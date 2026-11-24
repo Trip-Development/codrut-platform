@@ -79,7 +79,7 @@ class ProfesorFals:
 
 
 def setari(**schimbari) -> Settings:
-    baza = Settings(generation_provider="local")
+    baza = Settings(generation_provider="local", replica_zilei_raspuns_in_fundal=False)
     return baza.model_copy(update=schimbari) if schimbari else baza
 
 
