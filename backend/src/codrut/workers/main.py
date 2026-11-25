@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import sys
 from datetime import UTC, datetime
 
 import httpx
@@ -201,8 +202,25 @@ async def trimite_notificarile_zilnice(_ctx: dict) -> dict[str, int]:
         return await trimite_toate(settings, datetime.now(UTC), SessionLocal, client)
 
 
+JURNALUL_NOTIFICARII = "codrut.modules.practice.notificare_zilnica"
+
+
+def porneste_jurnalul_notificarii() -> None:
+    """Plicul 271: rândurile INFO ale notificării ajung în `docker logs`. Numai acest logger:
+    rădăcina, `httpx` și celelalte module rămân cum sunt (regula 236)."""
+    jurnal = logging.getLogger(JURNALUL_NOTIFICARII)
+    if not any(getattr(h, "cody_271", False) for h in jurnal.handlers):
+        h = logging.StreamHandler(sys.stderr)
+        h.cody_271 = True  # type: ignore[attr-defined]
+        h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+        jurnal.addHandler(h)
+    jurnal.setLevel(logging.INFO)
+    jurnal.disabled = False
+
+
 async def anunta_cheile_notificarii(_ctx: dict) -> None:
     """Un singur rând la pornire (corecția 8 a plicului 252): „cheile se pot citi: da/nu”."""
+    porneste_jurnalul_notificarii()
     anunta_cheile(get_settings())
 
 

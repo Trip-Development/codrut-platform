@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -42,8 +44,9 @@ from codrut.modules.practice.web_push import (
     din_b64url,
     gazda_pentru_jurnal,
     gazda_permisa,
+    motiv_pentru_jurnal,
     semnatura_vapid,
-    trimite_goala,
+    trimite_goala_cu_raspuns,
 )
 
 logger = logging.getLogger(__name__)
@@ -314,29 +317,42 @@ async def trimite_toate(
     if not cheile_se_pot_citi(settings):
         if _vreo_cheie_pusa(settings):
             logger.warning("cheile notificarii nu se pot citi")
+        _rezumat(gol)
         return gol
     privata = settings.push_vapid_private_key.get_secret_value()  # type: ignore[union-attr]
     publica = settings.push_vapid_public_key or ""
     subiect = subiectul(settings) or ""
     luate = await _ia_randurile(sesiuni, acum)
     if not luate:
+        _rezumat(gol)
         return gol
     semafor = asyncio.Semaphore(DEODATA)
 
     async def unul(luat: _Luat) -> str:
         async with semafor:
-            if gazda_permisa(luat.endpoint) is None:
+            gazda = gazda_permisa(luat.endpoint)
+            if gazda is None:
+                _jurnal_trimitere("necunoscuta", "-", "sterge", lambda: "gazda nepermisa")
                 return "sterge"
+            antet = ""
             try:
                 antet = semnatura_vapid(luat.endpoint, privata, publica, subiect, acum)
-                cod = await trimite_goala(client, luat.endpoint, antet)
-            except (httpx.HTTPError, ValueError):
+                cod, corp = await trimite_goala_cu_raspuns(client, luat.endpoint, antet)
+            except (httpx.HTTPError, ValueError) as eroare:
+                nume = type(eroare).__name__
+                _jurnal_trimitere(gazda, "eroare", "respinsa", lambda: nume)
                 return "respinsa"
             if cod in (200, 201, 202):
-                return "trimisa"
-            if cod in (404, 410):
-                return "sterge"
-            return "respinsa"
+                rezultat = "trimisa"
+            elif cod in (404, 410):
+                rezultat = "sterge"
+            else:
+                rezultat = "respinsa"
+            _jurnal_trimitere(
+                gazda, str(cod), rezultat,
+                lambda: motiv_pentru_jurnal(corp, _de_ascuns(luat.endpoint, antet, publica)),
+            )
+            return rezultat
 
     rezultate = await asyncio.gather(*(unul(luat) for luat in luate))
     de_sters = [luat.id for luat, r in zip(luate, rezultate, strict=True) if r == "sterge"]
@@ -352,11 +368,39 @@ async def trimite_toate(
         "sterse": len(de_sters),
         "respinse": sum(r == "respinsa" for r in rezultate),
     }
+    _rezumat(numere)
+    return numere
+
+
+def _rezumat(numere: dict[str, int]) -> None:
+    """Rândul rezumat, pe orice drum al lui `trimite_toate` (plicul 271), și cu zero."""
     logger.info(
         "notificarea zilnica de_anuntat=%d trimise=%d sterse=%d respinse=%d",
         numere["de_anuntat"], numere["trimise"], numere["sterse"], numere["respinse"],
     )
-    return numere
+
+
+def _de_ascuns(endpoint: str, antet: str, publica: str) -> tuple[str, ...]:
+    """Șirurile care nu au voie în jurnal: adresa, calea ei, antetul, bucata `t=`, cheia publică."""
+    cale = httpx.URL(endpoint).path
+    bucata_t = re.search(r"t=([^,\s]+)", antet)
+    return (
+        endpoint, cale, cale.lstrip("/"), antet,
+        bucata_t.group(1) if bucata_t else "", publica,
+    )
+
+
+def _jurnal_trimitere(gazda: str, cod: str, rezultat: str, motiv: Callable[[], str]) -> None:
+    """Un rând pe trimitere (plicul 271). Rezultatul e deja hotărât din cod; jurnalul nu are voie
+    să-l schimbe și nici să oprească rularea (corecția 4)."""
+    try:
+        nivel = logging.INFO if rezultat == "trimisa" else logging.WARNING
+        logger.log(
+            nivel, "notificarea zilnica: trimitere gazda=%s cod=%s rezultat=%s motiv=%s",
+            gazda, cod, rezultat, motiv(),
+        )
+    except Exception:  # noqa: S110 - jurnalul nu oprește trimiterea
+        pass
 
 
 def anunta_cheile(settings: Settings) -> bool:

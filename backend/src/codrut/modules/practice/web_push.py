@@ -13,6 +13,8 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
+from collections.abc import Iterable
 from datetime import datetime, timedelta
 
 import httpx
@@ -124,8 +126,14 @@ def semnatura_vapid(
     return f"vapid t={de_semnat}.{b64url(semnatura)}, k={cheia_publica}"
 
 
-async def trimite_goala(client: httpx.AsyncClient, endpoint: str, antet: str) -> int:
-    """`POST endpoint` cu corp gol; întoarce codul de răspuns. Adresa se verifică din nou aici."""
+async def trimite_goala_cu_raspuns(
+    client: httpx.AsyncClient, endpoint: str, antet: str
+) -> tuple[int, str]:
+    """`POST endpoint` cu corp gol; întoarce (codul, corpul răspunsului).
+
+    Adresa se verifică din nou aici. Corpul se întoarce întreg (plicul 271, corecția 3):
+    îl curăță `motiv_pentru_jurnal`.
+    """
     if gazda_permisa(endpoint) is None:
         raise ValueError("adresa notificarii nu e permisa")
     raspuns = await client.post(
@@ -138,7 +146,38 @@ async def trimite_goala(client: httpx.AsyncClient, endpoint: str, antet: str) ->
             "Content-Length": "0",
         },
     )
-    return raspuns.status_code
+    return raspuns.status_code, raspuns.text
+
+
+async def trimite_goala(client: httpx.AsyncClient, endpoint: str, antet: str) -> int:
+    """`POST endpoint` cu corp gol; întoarce codul de răspuns. Adresa se verifică din nou aici."""
+    cod, _corp = await trimite_goala_cu_raspuns(client, endpoint, antet)
+    return cod
+
+
+_ADRESA = re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*://\S+")
+_LUNG = re.compile(r"[A-Za-z0-9_\-=+/.]{40,}")
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+_SPATII = re.compile(r" {2,}")
+MOTIV_CEL_MULT = 80
+
+
+def motiv_pentru_jurnal(corp: str, ascunse: Iterable[str]) -> str:
+    """Motivul din răspunsul serviciului, curățat pentru jurnal (plicul 271, regula 236).
+
+    0. `\\/` devine `/`; 1. fiecare șir din `ascunse` devine `<ascuns>`; 2. orice adresă devine
+    `<adresa>`; 3. orice șir de cel puțin 40 de caractere de jeton devine `<lung>`; 4. caracterele
+    de control devin spațiu, spațiile repetate se strâng; 5. tăiat la 80; 6. gol -> `-`.
+    Nicio funcție de aici nu scrie în jurnal.
+    """
+    text = corp.replace("\\/", "/")
+    for sir in sorted((s for s in ascunse if s), key=len, reverse=True):
+        text = text.replace(sir, "<ascuns>")
+    text = _ADRESA.sub("<adresa>", text)
+    text = _LUNG.sub("<lung>", text)
+    text = _SPATII.sub(" ", _CONTROL.sub(" ", text))
+    text = text[:MOTIV_CEL_MULT]
+    return text if text.strip() else "-"
 
 
 def pereche_noua() -> tuple[str, str]:
